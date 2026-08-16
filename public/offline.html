@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Meu Ponto — offline</title>
+  </head>
+  <body
+    style="
+      font-family: system-ui;
+      background: #f0f2f5;
+      color: #1e293b;
+      display: grid;
+      place-items: center;
+      min-height: 100vh;
+      margin: 0;
+    "
+  >
+    <main style="max-width: 32rem; padding: 2rem; text-align: center">
+      <h1>Você está offline</h1>
+      <p>
+        Os dados funcionais não são armazenados no cache do navegador.
+        Reconecte-se para acessar o sistema com segurança.
+      </p>
+      <button
+        onclick="location.reload()"
+        style="
+          background: #1e293b;
+          color: white;
+          border: 0;
+          border-radius: 0.5rem;
+          padding: 0.75rem 1rem;
+        "
+      >
+        Tentar novamente
+      </button>
+    </main>
+  </body>
+</html>

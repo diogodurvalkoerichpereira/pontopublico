@@ -1,0 +1,19 @@
+{
+  "name": "Meu Ponto — Gestão Pública",
+  "short_name": "Meu Ponto",
+  "description": "Ponto, RH, folha e gestão pública em um único aplicativo.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f0f2f5",
+  "theme_color": "#183c5a",
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "/pwa-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
