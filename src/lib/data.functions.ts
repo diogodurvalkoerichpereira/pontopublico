@@ -840,7 +840,8 @@ export const adminDeleteUser = createServerFn({ method: "POST" })
     if (!ctx.roles.includes("admin")) throw new Error("Apenas administradores");
     if (data.user_id === context.userId)
       throw new Error("Você não pode excluir a si mesmo");
-    // limpeza em cascata manual (sem FKs para app_users)
+    // limpeza em cascata manual; as FKs de atestados e audit_logs para app_users
+    // (20260818090000) cuidam do restante via cascade e set null
     await query("DELETE FROM public.user_roles WHERE user_id = $1", [
       data.user_id,
     ]);

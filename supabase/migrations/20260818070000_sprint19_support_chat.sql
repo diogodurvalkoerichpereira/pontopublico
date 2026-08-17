@@ -16,7 +16,7 @@ create policy support_conversation_owner on public.support_conversations for all
 create policy support_message_participant on public.support_messages for all to authenticated using(exists(select 1 from public.support_conversations c where c.id=conversation_id and c.user_id=(select auth.uid()))) with check(sender_id=(select auth.uid()) and exists(select 1 from public.support_conversations c where c.id=conversation_id and c.user_id=(select auth.uid())));
 revoke all on public.support_articles,public.support_conversations,public.support_messages from anon;grant select on public.support_articles to authenticated;grant select,insert,update on public.support_conversations to authenticated;grant select,insert on public.support_messages to authenticated;
 insert into public.support_articles(tenant_id,slug,title,content,route_pattern,tags) values
-(null,'trocar-entidade','Como trocar a entidade ativa','Use o seletor no topo da tela. Seus dados e permissões são recalculados para a entidade escolhida.','/',['entidade','acesso']),
-(null,'reconciliar-data-mart','Como reconciliar o data mart','Abra Administração > Data mart e execute Atualizar e reconciliar. Divergências devem ser investigadas antes de usar os painéis.','/admin/data-mart',['data mart','reconciliação']),
-(null,'entender-lrf','Como interpretar o painel LRF','O painel usa uma janela móvel de até 12 meses e parâmetros auditáveis. Confira os valores com o controle interno.','/gestor/lrf',['lrf','rcl'])
+(null,'trocar-entidade','Como trocar a entidade ativa','Use o seletor no topo da tela. Seus dados e permissões são recalculados para a entidade escolhida.','/',ARRAY['entidade','acesso']),
+(null,'reconciliar-data-mart','Como reconciliar o data mart','Abra Administração > Data mart e execute Atualizar e reconciliar. Divergências devem ser investigadas antes de usar os painéis.','/admin/data-mart',ARRAY['data mart','reconciliação']),
+(null,'entender-lrf','Como interpretar o painel LRF','O painel usa uma janela móvel de até 12 meses e parâmetros auditáveis. Confira os valores com o controle interno.','/gestor/lrf',ARRAY['lrf','rcl'])
 on conflict(tenant_id,slug) do nothing;

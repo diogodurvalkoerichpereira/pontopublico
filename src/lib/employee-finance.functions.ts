@@ -6,7 +6,7 @@ export const getMyFinancialPortal = createServerFn({ method: "POST" })
   .middleware([requireAuth])
   .handler(async ({ context }) => {
     const links = await query<any>(
-      `select l.id,l.registration_number,l.tenant_id,p.full_name from public.employment_links l join public.persons p on p.id=l.person_id where l.legacy_profile_id=$1 order by l.registration_number`,
+      `select l.id,l.registration_number,l.tenant_id,p.full_name from public.employment_links l join public.persons p on p.id=l.person_id where l.source_profile_id=$1 order by l.registration_number`,
       [context.userId],
     );
     const ids = links.map((l: any) => l.id);

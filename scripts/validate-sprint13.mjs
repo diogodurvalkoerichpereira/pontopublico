@@ -13,7 +13,7 @@ const [s, m] = await Promise.all([
   ),
 ]);
 for (const t of [
-  "legacy_profile_id=auth.uid()",
+  "source_profile_id=auth.uid()",
   "contracheque",
   "informe_rendimentos",
   "verification_code",
