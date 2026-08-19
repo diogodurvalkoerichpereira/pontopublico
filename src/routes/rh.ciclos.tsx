@@ -12,7 +12,6 @@ import {
   WalletCards,
 } from "lucide-react";
 import { toast } from "sonner";
-import { AppShell } from "@/components/AppShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,11 +41,7 @@ function Page() {
     else if (!hasTenantPermission("payroll.cycles.read")) nav({ to: "/app" });
   }, [session, loading, hasTenantPermission, nav]);
   if (!session) return null;
-  return (
-    <AppShell>
-      <Content />
-    </AppShell>
-  );
+  return <Content />;
 }
 
 const statusLabel: Record<string, string> = {
