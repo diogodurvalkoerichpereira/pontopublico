@@ -7,6 +7,7 @@
     "dev": "node --env-file-if-exists=.env node_modules/vite/bin/vite.js dev",
     "build": "vite build",
     "build:dev": "vite build --mode development",
+    "start": "node .output/server/index.mjs",
     "preview": "node --env-file-if-exists=.env node_modules/vite/bin/vite.js preview",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",

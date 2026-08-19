@@ -1,0 +1,22 @@
+# Nunca enviar para o contexto de build: node_modules do host tem binários de
+# outra plataforma e .output seria sobrescrito pelo build de dentro da imagem.
+node_modules
+.output
+dist
+.vite
+
+# Segredos e ambiente local.
+.env
+.env.*
+!.env.example
+
+# Ruído de repositório.
+.git
+.gitignore
+.claude
+*.log
+npm-debug.log*
+
+# Documentação de sprint: não participa do build.
+SPRINT*.md
+RELATORIO_*.md

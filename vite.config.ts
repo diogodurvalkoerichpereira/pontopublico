@@ -8,14 +8,28 @@ import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
 // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
 // @cloudflare/vite-plugin builds from this — wrangler.jsonc main alone is insufficient.
+//
+// nitro explícito porque o plugin do Lovable só ativa o Nitro dentro do sandbox
+// dele (shouldRunNitro = explicitNitro || isSandbox). Sem isto, `vite build`
+// fora do Lovable não emite servidor algum e não há o que subir em container.
+// Preset node-server: o deploy é Docker/Coolify, não Cloudflare Worker.
+//
+// allowedHosts por ambiente para não fixar domínio no código.
+const previewHosts = (process.env.PREVIEW_ALLOWED_HOSTS ?? "")
+  .split(",")
+  .map((h) => h.trim())
+  .filter(Boolean);
+
 export default defineConfig({
   tanstackStart: {
     server: { entry: "server" },
   },
+  nitro: {
+    preset: "node-server",
+  },
   vite: {
     preview: {
-      // Host público do deploy — sobrescrever conforme o ambiente.
-      allowedHosts: ["meuponto.exemplo.com"],
+      allowedHosts: previewHosts,
     },
   },
 });
