@@ -77,3 +77,31 @@ da área. Quando o termo tem tabela correspondente, ela está indicada.
 - **Dívida ativa** — créditos não pagos, inscritos para cobrança.
 - **CDA** — Certidão de Dívida Ativa; o título que embasa a execução fiscal.
 - **NFS-e** — Nota Fiscal de Serviços eletrônica (padrão nacional).
+
+## Modelo de identidade e vínculo
+
+Três tabelas distintas, de propósito (ADR 0004) — não confundir:
+
+- **`profiles`** — a **identidade de login**: quem autentica. 1:1 com a conta
+  (`profiles.id = app_users.id`). Carrega dados de acesso, não o registro civil.
+- **`persons`** — o **registro civil**: quem a pessoa é (CPF, nome, nascimento,
+  dados sensíveis). Uma pessoa existe independentemente de ter login. Ligada ao
+  login por `profiles.person_id → persons.id`.
+- **`employment_links`** — o **vínculo** (o contrato/lotação numa entidade):
+  `person_id → persons.id` (a pessoa) e `tenant_id` (o ente). A folha, o ponto e
+  as movimentações penduram no vínculo, não no login.
+
+Topologia: `app_users.id = profiles.id`; `profiles.person_id → persons.id`;
+`employment_links.person_id → persons.id` e `employment_links.source_profile_id
+→ profiles.id` (elo legado). O caminho novo (pessoas, folha por ciclo) lê o
+civil de `persons` e o emprego de `employment_links`, nunca de `profiles`.
+
+## Folha — geração válida
+
+- **`payroll_cycles`** (+ `payroll_cycle_results`) — a **folha válida**: grão
+  competência por ente, com resultado por vínculo, ciclo auditável
+  (prévia → conferência → aprovação → fechamento → reabertura), versão e trilha.
+  Tela: `/rh/ciclos`.
+- **`payroll_periods`** — a folha **legada**, congelada no O0-13 (grão
+  usuário/mês com horas). Preservada só como leitura; sem tela e fora do shim.
+  Ver ADR 0005 e 0017.

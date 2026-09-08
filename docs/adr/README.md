@@ -25,3 +25,4 @@ Formato: contexto · decisão · consequências · alternativas descartadas.
 | [0014](0014-aposentar-ponte-legada.md)   | Aposentar a ponte legada de permissões (reconciliação + flag)      | aceito |
 | [0015](0015-auditoria-central.md)        | Escrita de auditoria por um único helper                           | aceito |
 | [0016](0016-testes-reais-pglite.md)      | Testes de comportamento em PGlite no lugar dos validadores de grep | aceito |
+| [0017](0017-congelar-in-place.md)        | Congelar `payroll_periods` in-place (refina ADR 0005)              | aceito |

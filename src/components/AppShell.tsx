@@ -9,7 +9,6 @@ import {
   FolderOpen,
   Clock,
   Calendar,
-  Wallet,
   UserCog,
   Menu,
   ChevronRight,
@@ -283,13 +282,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         icon: Calendar,
         section: "Recursos Humanos",
       });
-    if (hasPermission("close_payroll"))
-      items.push({
-        to: "/rh/folha",
-        label: "Folha",
-        icon: Wallet,
-        section: "Recursos Humanos",
-      });
+    // A folha legada (/rh/folha, payroll_periods) foi aposentada no O0-13; a
+    // única folha é /rh/ciclos (payroll_cycles). Ver ADR 0005 e 0017.
     if (hasPermission("manage_employees"))
       items.push({
         to: "/rh/vt-va",

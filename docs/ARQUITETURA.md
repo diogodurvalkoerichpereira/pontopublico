@@ -31,15 +31,21 @@ A autorização acontece **na aplicação**, não no banco. Ver
 
 O projeto está em migração de uma geração para outra, e as duas convivem:
 
-| | Caminho legado | Caminho atual |
-|---|---|---|
-| Entrada | shim `@/integrations/supabase/client` | `createServerFn` em `*.functions.ts` |
+|             | Caminho legado                                              | Caminho atual                            |
+| ----------- | ----------------------------------------------------------- | ---------------------------------------- |
+| Entrada     | shim `@/integrations/supabase/client`                       | `createServerFn` em `*.functions.ts`     |
 | Autorização | `policyFor()` em `pgrest.server.ts`, por papéis **globais** | `loadTenantAccess`, por tenant e unidade |
-| Tabelas | 13 legadas (`profiles`, `unidades`, `time_entries`…) | todo o modelo novo |
-| Problema | **sem noção de tenant** — vaza entre entes | correto |
+| Tabelas     | 13 legadas (`profiles`, `unidades`, `time_entries`…)        | todo o modelo novo                       |
+| Problema    | **sem noção de tenant** — vaza entre entes                  | correto                                  |
 
 O caminho legado está sendo aposentado (backlog O0-06 e O0-13). Enquanto existir,
 trate-o como área de risco.
+
+**Identidade e vínculo** (ADR 0004, glossário): `profiles` = login,
+`persons` = registro civil, `employment_links` = vínculo (contrato numa
+entidade). O caminho novo lê o civil de `persons` e o emprego de
+`employment_links`, nunca de `profiles`. **Folha:** a válida é `payroll_cycles`
+(`/rh/ciclos`); a legada `payroll_periods` foi congelada no O0-13 (ADR 0017).
 
 ### O shim Supabase — leia antes de "consertar"
 
@@ -56,15 +62,15 @@ aplicação inteira. Manter o shim é decisão consciente — [ADR 0012](adr/001
 
 ## Modelo de dados por domínio
 
-| Domínio | Tabelas centrais |
-|---|---|
-| Multi-tenant / RBAC | `tenants`, `tenant_memberships`, `security_permissions`, `security_roles`, `security_user_roles`, `security_user_unit_scopes` |
-| Estrutura organizacional | `unidades` (árvore com anti-ciclo) |
-| Pessoas e vínculos | `persons`, `employment_links`, `person_dependents`, `pension_beneficiaries` |
-| Folha | `payroll_rubrics` → `payroll_rubric_versions` (AST) → `payroll_cycles` → `payroll_cycle_results` |
-| Ponto | `time_entries`, `work_schedules` (geração legada, fora do multi-tenant) |
-| Auditoria | `audit_events` |
-| Analítico | schema `analytics`: `fact_payroll`, `fact_payroll_item`, `fact_movement` |
+| Domínio                  | Tabelas centrais                                                                                                              |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| Multi-tenant / RBAC      | `tenants`, `tenant_memberships`, `security_permissions`, `security_roles`, `security_user_roles`, `security_user_unit_scopes` |
+| Estrutura organizacional | `unidades` (árvore com anti-ciclo)                                                                                            |
+| Pessoas e vínculos       | `persons`, `employment_links`, `person_dependents`, `pension_beneficiaries`                                                   |
+| Folha                    | `payroll_rubrics` → `payroll_rubric_versions` (AST) → `payroll_cycles` → `payroll_cycle_results`                              |
+| Ponto                    | `time_entries`, `work_schedules` (geração legada, fora do multi-tenant)                                                       |
+| Auditoria                | `audit_events`                                                                                                                |
+| Analítico                | schema `analytics`: `fact_payroll`, `fact_payroll_item`, `fact_movement`                                                      |
 
 Duas gerações de identidade e de folha coexistem — `profiles` vs
 `persons`/`employment_links`, `payroll_periods` vs `payroll_cycles`. A

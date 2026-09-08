@@ -24,7 +24,8 @@ const TABLE_REGISTRY = {
   employee_documents: { strategy: "via_member", column: "user_id" },
   document_checklist: { strategy: "via_member", column: "user_id" },
   time_entries: { strategy: "via_member", column: "user_id" },
-  payroll_periods: { strategy: "via_member", column: "user_id" },
+  // payroll_periods (folha legada) foi congelada no O0-13: sem registro aqui, o
+  // shim não a alcança — vira arquivo read-only. A folha válida é payroll_cycles.
   audit_logs: { strategy: "via_member", column: "actor_id" },
   user_roles: { strategy: "global" }, // papéis globais; lido no bootstrap do login
   rh_permissions: { strategy: "global" }, // idem
@@ -183,10 +184,6 @@ function policyFor(req: QueryReq, ctx: AccessCtx | null): Policy {
         denied: "Edição e exclusão de ponto são feitas pelo módulo de ponto",
       };
     }
-
-    case "payroll_periods":
-      if (a === "select") return isRh ? {} : { extraFilters: [own] };
-      return can("close_payroll") ? {} : { denied: "Sem permissão para folha" };
 
     case "payroll_config":
       if (a === "select") return {};

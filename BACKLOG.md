@@ -186,14 +186,25 @@ antigo não pegava). Deletados os 4 validadores e seus scripts. Ver ADR 0016.
 receita; deletar cada validador ao substituir. Os validadores reais das Sprints
 1-6 ficam como estão (já executam). Os 6 `reconcile-sprint*.sql` órfãos são P2.
 
-### O0-13 — Unificar as duas gerações de modelo
+### ✅ O0-13 — Unificar as duas gerações de modelo
 
-P1 · 5 dias · depende de O0-06
+P1 · feito. **Uma folha só.** A folha legada `payroll_periods` (grão usuário/mês,
+tela `/rh/folha`) foi aposentada: rota deletada, item de menu removido
+(`AppShell.tsx`), `payroll_periods` retirada do `TABLE_REGISTRY`/política do shim
+(`pgrest.server.ts`) — sem registro, `dbQuery` não a alcança, e ela vira arquivo
+read-only (**congelar in-place**, ADR 0017 refinando ADR 0005; sem cópia frágil
+para `historical_records`, que é acoplado ao motor de jobs e vazio no deploy).
+`payroll_config` e `@/lib/payroll` foram **mantidos** (compartilhados com a folha
+nova). `routeTree.gen.ts` regenerado pelo build. A folha válida é `payroll_cycles`
+(`/rh/ciclos`). Identidade (`profiles`=login, `persons`=civil,
+`employment_links`=vínculo) já estava separada por ADR 0004 + esquema — documentada
+agora no GLOSSARIO e ARQUITETURA, e corrigida a coluna-fantasma da ADR 0004 (o elo
+é `profiles.person_id`). `tests/folha-unica.test.mjs` (comportamento: shim recusa
+`payroll_periods`; lint: `/rh/folha` fora do menu e do código), verificado por
+mutação. **Fecha a Onda 0.**
 
-Abordagem. Separar semanticamente (não fundir): `profiles`=login,
-`persons`=registro civil, `employment_links`=vínculo. Congelar `payroll_periods`
-(copiar para `historical_records`) e **remover `/rh/folha` do menu** — duas telas
-de folha inviabilizam demonstração de PoC.
+Fora de escopo: cópia real para `historical_records` (se houver dados legados; o
+motor genérico já existe); endurecer o atalho `personId=id` (sem CPF).
 
 ### Dívidas menores registradas (P2)
 

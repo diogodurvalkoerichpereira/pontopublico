@@ -25,7 +25,6 @@ import { Route as RhMovimentacoesRouteImport } from './routes/rh.movimentacoes'
 import { Route as RhImportacoesRouteImport } from './routes/rh.importacoes'
 import { Route as RhFuncionariosRouteImport } from './routes/rh.funcionarios'
 import { Route as RhFolhasEspeciaisRouteImport } from './routes/rh.folhas-especiais'
-import { Route as RhFolhaRouteImport } from './routes/rh.folha'
 import { Route as RhFeriasRouteImport } from './routes/rh.ferias'
 import { Route as RhFamiliaRouteImport } from './routes/rh.familia'
 import { Route as RhEventosFuncionaisRouteImport } from './routes/rh.eventos-funcionais'
@@ -121,11 +120,6 @@ const RhFuncionariosRoute = RhFuncionariosRouteImport.update({
 const RhFolhasEspeciaisRoute = RhFolhasEspeciaisRouteImport.update({
   id: '/folhas-especiais',
   path: '/folhas-especiais',
-  getParentRoute: () => RhRoute,
-} as any)
-const RhFolhaRoute = RhFolhaRouteImport.update({
-  id: '/folha',
-  path: '/folha',
   getParentRoute: () => RhRoute,
 } as any)
 const RhFeriasRoute = RhFeriasRouteImport.update({
@@ -233,7 +227,6 @@ export interface FileRoutesByFullPath {
   '/rh/eventos-funcionais': typeof RhEventosFuncionaisRoute
   '/rh/familia': typeof RhFamiliaRoute
   '/rh/ferias': typeof RhFeriasRoute
-  '/rh/folha': typeof RhFolhaRoute
   '/rh/folhas-especiais': typeof RhFolhasEspeciaisRoute
   '/rh/funcionarios': typeof RhFuncionariosRouteWithChildren
   '/rh/importacoes': typeof RhImportacoesRoute
@@ -268,7 +261,6 @@ export interface FileRoutesByTo {
   '/rh/eventos-funcionais': typeof RhEventosFuncionaisRoute
   '/rh/familia': typeof RhFamiliaRoute
   '/rh/ferias': typeof RhFeriasRoute
-  '/rh/folha': typeof RhFolhaRoute
   '/rh/folhas-especiais': typeof RhFolhasEspeciaisRoute
   '/rh/funcionarios': typeof RhFuncionariosRouteWithChildren
   '/rh/importacoes': typeof RhImportacoesRoute
@@ -304,7 +296,6 @@ export interface FileRoutesById {
   '/rh/eventos-funcionais': typeof RhEventosFuncionaisRoute
   '/rh/familia': typeof RhFamiliaRoute
   '/rh/ferias': typeof RhFeriasRoute
-  '/rh/folha': typeof RhFolhaRoute
   '/rh/folhas-especiais': typeof RhFolhasEspeciaisRoute
   '/rh/funcionarios': typeof RhFuncionariosRouteWithChildren
   '/rh/importacoes': typeof RhImportacoesRoute
@@ -341,7 +332,6 @@ export interface FileRouteTypes {
     | '/rh/eventos-funcionais'
     | '/rh/familia'
     | '/rh/ferias'
-    | '/rh/folha'
     | '/rh/folhas-especiais'
     | '/rh/funcionarios'
     | '/rh/importacoes'
@@ -376,7 +366,6 @@ export interface FileRouteTypes {
     | '/rh/eventos-funcionais'
     | '/rh/familia'
     | '/rh/ferias'
-    | '/rh/folha'
     | '/rh/folhas-especiais'
     | '/rh/funcionarios'
     | '/rh/importacoes'
@@ -411,7 +400,6 @@ export interface FileRouteTypes {
     | '/rh/eventos-funcionais'
     | '/rh/familia'
     | '/rh/ferias'
-    | '/rh/folha'
     | '/rh/folhas-especiais'
     | '/rh/funcionarios'
     | '/rh/importacoes'
@@ -554,13 +542,6 @@ declare module '@tanstack/react-router' {
       path: '/folhas-especiais'
       fullPath: '/rh/folhas-especiais'
       preLoaderRoute: typeof RhFolhasEspeciaisRouteImport
-      parentRoute: typeof RhRoute
-    }
-    '/rh/folha': {
-      id: '/rh/folha'
-      path: '/folha'
-      fullPath: '/rh/folha'
-      preLoaderRoute: typeof RhFolhaRouteImport
       parentRoute: typeof RhRoute
     }
     '/rh/ferias': {
@@ -709,7 +690,6 @@ interface RhRouteChildren {
   RhEventosFuncionaisRoute: typeof RhEventosFuncionaisRoute
   RhFamiliaRoute: typeof RhFamiliaRoute
   RhFeriasRoute: typeof RhFeriasRoute
-  RhFolhaRoute: typeof RhFolhaRoute
   RhFolhasEspeciaisRoute: typeof RhFolhasEspeciaisRoute
   RhFuncionariosRoute: typeof RhFuncionariosRouteWithChildren
   RhImportacoesRoute: typeof RhImportacoesRoute
@@ -726,7 +706,6 @@ const RhRouteChildren: RhRouteChildren = {
   RhEventosFuncionaisRoute: RhEventosFuncionaisRoute,
   RhFamiliaRoute: RhFamiliaRoute,
   RhFeriasRoute: RhFeriasRoute,
-  RhFolhaRoute: RhFolhaRoute,
   RhFolhasEspeciaisRoute: RhFolhasEspeciaisRoute,
   RhFuncionariosRoute: RhFuncionariosRouteWithChildren,
   RhImportacoesRoute: RhImportacoesRoute,

@@ -18,6 +18,12 @@ Não fundir. Declarar três papéis distintos e documentá-los:
 Ligar por `persons.identity_profile_id` quando necessário, sem colapsar as
 tabelas.
 
+> **Correção (O0-13).** O elo real construído é o inverso:
+> **`profiles.person_id → persons.id`** (adicionado na Sprint 2). A coluna
+> `persons.identity_profile_id` nunca existiu no esquema. A decisão de **separar**
+> permanece; só o nome do elo aqui estava errado. `employment_links` aponta para
+> ambas: `person_id → persons.id` e `source_profile_id → profiles.id` (elo legado).
+
 ## Consequências
 
 - As três respondem a perguntas diferentes; misturá-las confunde login com
