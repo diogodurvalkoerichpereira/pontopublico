@@ -90,6 +90,7 @@ o motivo está aqui.
 - **`db:migrate` antes de `dev`.** A app sobe sem banco; a falha só aparece ao logar.
 - **`SESSION_SECRET` ≥32 caracteres**, senão `auth.server.ts` lança na subida.
 - **`MFA_ENC_KEY` ≥32 caracteres** (ideal 32 bytes em base64) cifra o segredo TOTP em repouso (`mfa.server.ts`). Sem ela, MFA falha ao cadastrar/verificar; trocá-la depois torna ilegíveis os segredos já cadastrados. Configure no Coolify **antes** do deploy.
+- **`LEGACY_ROLE_BRIDGE`** (default `on`) liga a ponte de compatibilidade dos papéis legados em `tenant-access.server.ts`. Vira `off` (etapa só de env) para fechar a escalação cross-tenant do admin legado, depois que a telemetria `LEGACY_BRIDGE_DEPENDENCY` zerar (O0-10). O RH já foi reconciliado no papel `rh_operador`.
 - **Sem seed.** O primeiro admin nasce de `ADMIN_EMAILS` no cadastro.
 - **SMTP vive na tabela `email_settings`**, não em variável de ambiente.
 - **`TZ`/tzdata**: sem tzdata, `TZ=America/Sao_Paulo` cai em UTC em silêncio — erro de competência em folha. O `Dockerfile` já instala; ambiente local precisa ter.

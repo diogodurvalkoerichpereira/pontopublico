@@ -115,16 +115,38 @@ Aceite.
 - [ ] reset de MFA por admin quando o usuário perde o TOTP (P2 — hoje `disableMfa`
       exige um código válido)
 
-### O0-10 — Aposentar a ponte legada de permissões
+### ◑ O0-10 — Aposentar a ponte legada de permissões
 
-P1 · 3 dias · depende de O0-08
+P1 · Incremento 1 **feito**; Incrementos 2-3 pendentes.
 
-Problema. `tenant-access.server.ts:106-189` concede as 52 permissões a quem for
-`admin` legado — escalação de privilégio entre entes.
+Problema. `tenant-access.server.ts` concedia o catálogo inteiro a quem fosse
+`admin` legado, em **todo** tenant do qual é membro — escalação de privilégio
+entre entes.
 
-Abordagem. Migration que materializa cada regra como papel real; flag
-`LEGACY_ROLE_BRIDGE` com telemetria; virar `off`; deletar. Último consumidor a
-migrar: `AppShell.tsx`.
+**Incremento 1 (feito).** Migration `20260908050000_o0_10_reconcile_legacy_roles`
+materializa a união do RH legado no papel real `rh_operador` (47 permissões =
+catálogo exceto `tenant.manage`/`security.manage`/`audit.read`), reafirma
+`tenant_admin` completo e faz backfill do RH; **sem backfill de admin**. Flag
+`LEGACY_ROLE_BRIDGE` (default `on`) gira a união legada; `loadTenantAccess` emite
+telemetria `LEGACY_BRIDGE_DEPENDENCY` (on **e** off) de quem só a ponte
+concederia. `adminCreateUser` passa a atribuir `rh_operador` ao RH novo. Teste de
+comportamento (A/B/C) verificado por mutação; verificado em PostgreSQL 16 real
+(rh_operador=47, tenant_admin=50). Ver ADR 0014.
+
+**Incremento 2 (só env).** `LEGACY_ROLE_BRIDGE=off` no Coolify quando a telemetria
+zerar; remover o curto-circuito `isAdmin ||` de `hasTenantPermission`
+(`auth-context.tsx:171-172`). Rollback instantâneo pela env.
+
+**Incremento 3 (limpeza).** Deletar o bloco da ponte e a chamada `loadAccess` de
+`tenant-access.server.ts`; remover a flag; migrar o `hasPermission` legado do
+menu — **`AppShell.tsx` por último**. `configure_schedules`/escalas fica legado
+até haver `schedules.*`.
+
+**Follow-ups à parte.** O0-10b — migrar os gates de **admin global**
+(`adminCreateUser`, `adminResetPassword`, `adminUpdateUserEmail`,
+`adminDeleteUser`, `rhUploadEmployeeDocument`, `requireAdmin` do SMTP) para um
+conceito de _platform admin_ (hoje autorizam por admin legado global, não pela
+ponte). `pgrest.policyFor` (motor de política do shim) → Onda 2.
 
 ### O0-11 — Helper de auditoria compartilhado
 

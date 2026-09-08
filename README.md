@@ -61,6 +61,11 @@ Edite o `.env`:
 - **`ADMIN_EMAILS`** — o e-mail que você vai cadastrar. **É o único caminho para
   ter acesso administrativo**: quem se cadastra com um e-mail desta lista vira
   admin. Sem isso, o banco novo não tem administrador.
+- **`LEGACY_ROLE_BRIDGE`** (default `on`) — mantém a ponte de compatibilidade dos
+  papéis legados. Deixe `on`. Vire `off` só depois que os logs não mostrarem mais
+  a tag `LEGACY_BRIDGE_DEPENDENCY`; isso fecha a escalação de privilégio entre
+  entes do admin legado (O0-10). O RH já foi reconciliado no papel `rh_operador`,
+  então `off` não retira acesso do RH.
 
 ```bash
 # 3. Subir o banco (postgres:17-alpine em 127.0.0.1:5433)

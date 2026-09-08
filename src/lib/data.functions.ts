@@ -525,11 +525,13 @@ export const adminCreateUser = createServerFn({ method: "POST" })
          VALUES ($1,$2,'ativo',true) ON CONFLICT (tenant_id, user_id) DO NOTHING`,
         [targetTenant.id, id],
       );
+      // RH novo recebe rh_operador (papel que materializa o RH legado, O0-10),
+      // para não depender da ponte de compatibilidade em loadTenantAccess.
       const tenantRole =
         data.role === "admin"
           ? "tenant_admin"
           : data.role === "rh"
-            ? "sector_manager"
+            ? "rh_operador"
             : "employee";
       await client.query(
         `INSERT INTO public.security_user_roles (tenant_id, user_id, role_id, created_by)

@@ -22,3 +22,4 @@ Formato: contexto · decisão · consequências · alternativas descartadas.
 | [0011](0011-workflow-como-motor.md)      | Reusar o workflow de `payroll_cycles` como motor de documentos    | aceito |
 | [0012](0012-manter-shim-supabase.md)     | Manter o shim Supabase deliberadamente                            | aceito |
 | [0013](0013-mfa-alto-risco.md)           | MFA (TOTP) restrito a operações de alto risco, uma vez por sessão | aceito |
+| [0014](0014-aposentar-ponte-legada.md)   | Aposentar a ponte legada de permissões (reconciliação + flag)     | aceito |

@@ -1,6 +1,12 @@
 import { query, queryOne } from "./db.server";
 import { loadAccess } from "./pgrest.server";
 
+// Ponte de compatibilidade dos papéis legados (user_roles/rh_permissions). Ligada
+// por padrão para não retirar acesso de ninguém no deploy; a telemetria abaixo
+// mede quem ainda depende dela. Vira "off" numa etapa só de env quando a
+// dependência zerar (O0-10, Incremento 2). Ver ADR 0014.
+const LEGACY_ROLE_BRIDGE = (process.env.LEGACY_ROLE_BRIDGE ?? "on") !== "off";
+
 export const TENANT_PERMISSION_CODES = [
   "tenant.read",
   "tenant.manage",
@@ -104,89 +110,34 @@ export async function loadTenantAccess(
   ]);
 
   const legacyAdmin = legacy.roles.includes("admin");
-  const permissions = new Set<TenantPermission>(
+
+  // Fonte de verdade: as permissões vindas do RBAC por tenant.
+  const rbac = new Set<TenantPermission>(
     permissionRows.map((row) => row.codigo),
   );
+  const permissions = new Set<TenantPermission>(rbac);
 
-  // Compatibilidade durante a transição dos papéis legados.
-  if (legacyAdmin)
-    TENANT_PERMISSION_CODES.forEach((code) => permissions.add(code));
-  if (legacy.roles.includes("rh")) {
-    permissions.add("tenant.read");
-    permissions.add("org.read");
-    permissions.add("security.read");
-    permissions.add("people.read");
-    permissions.add("people.sensitive.read");
-    permissions.add("family.read");
-    permissions.add("movements.read");
-    permissions.add("payroll.catalog.read");
-    permissions.add("payroll.assignments.read");
-    permissions.add("payroll.cycles.read");
-    permissions.add("payroll.special.read");
-    permissions.add("employment.special.read");
-    permissions.add("termination.read");
-    permissions.add("vacation.read");
-    permissions.add("payroll.import.read");
-    permissions.add("bank.remittance.read");
-    permissions.add("official.export.read");
-    permissions.add("esocial.read");
-    permissions.add("manager.dashboard.read");
-    permissions.add("analytics.read");
-    permissions.add("fiscal.read");
-    permissions.add("ai.analytics.use");
-    permissions.add("support.use");
+  // O que a ponte legada *acrescentaria*, calculado num conjunto à parte para
+  // saber exatamente o que só ela concede (vs. o que o RBAC já dá).
+  const bridged = computeLegacyBridge(legacy);
+
+  const bridgeOnly = [...bridged].filter((code) => !rbac.has(code));
+  if (bridgeOnly.length > 0) {
+    // Telemetria: registra sempre (on ou off) quem ainda depende da ponte, para
+    // que virar LEGACY_ROLE_BRIDGE=off seja observável. Barato, sem tocar o banco.
+    console.warn(
+      JSON.stringify({
+        tag: "LEGACY_BRIDGE_DEPENDENCY",
+        bridgeEnabled: LEGACY_ROLE_BRIDGE,
+        userId,
+        tenantId,
+        legacyAdmin,
+        bridgeOnlyPermissions: bridgeOnly,
+      }),
+    );
   }
-  if (legacy.perms.includes("manage_employees")) {
-    permissions.add("org.manage");
-    permissions.add("people.read");
-    permissions.add("people.manage");
-    permissions.add("people.sensitive.read");
-    permissions.add("family.read");
-    permissions.add("family.manage");
-    permissions.add("movements.read");
-    permissions.add("movements.manage");
-    permissions.add("payroll.catalog.read");
-    permissions.add("payroll.assignments.read");
-    permissions.add("payroll.assignments.manage");
-  }
-  if (legacy.perms.includes("close_payroll")) {
-    permissions.add("payroll.catalog.read");
-    permissions.add("payroll.catalog.manage");
-    permissions.add("payroll.assignments.read");
-    permissions.add("payroll.assignments.manage");
-    permissions.add("payroll.simulate");
-    permissions.add("payroll.cycles.read");
-    permissions.add("payroll.cycles.prepare");
-    permissions.add("payroll.cycles.approve");
-    permissions.add("payroll.cycles.close");
-    permissions.add("payroll.cycles.reopen");
-    permissions.add("payroll.special.read");
-    permissions.add("payroll.special.manage");
-    permissions.add("employment.special.read");
-    permissions.add("employment.special.manage");
-    permissions.add("termination.read");
-    permissions.add("termination.manage");
-    permissions.add("vacation.read");
-    permissions.add("vacation.manage");
-    permissions.add("payroll.import.read");
-    permissions.add("payroll.import.manage");
-    permissions.add("bank.remittance.read");
-    permissions.add("bank.remittance.manage");
-    permissions.add("official.export.read");
-    permissions.add("official.export.manage");
-    permissions.add("esocial.read");
-    permissions.add("esocial.manage");
-    permissions.add("manager.dashboard.read");
-    permissions.add("mobile.push.manage");
-    permissions.add("analytics.read");
-    permissions.add("analytics.manage");
-    permissions.add("fiscal.read");
-    permissions.add("fiscal.manage");
-    permissions.add("ai.analytics.use");
-    permissions.add("support.use");
-    permissions.add("migration.read");
-    permissions.add("migration.manage");
-  }
+
+  if (LEGACY_ROLE_BRIDGE) bridged.forEach((code) => permissions.add(code));
 
   return {
     userId,
@@ -195,6 +146,101 @@ export async function loadTenantAccess(
     roleCodes: roleRows.map((row) => row.codigo),
     legacyAdmin,
   };
+}
+
+interface LegacyAccess {
+  roles: string[];
+  perms: string[];
+}
+
+/**
+ * Permissões que a ponte legada concede a partir de user_roles/rh_permissions.
+ * Isolada do caminho do RBAC de propósito (O0-10): é o que O0-10 aposenta. A
+ * migration de reconciliação materializa exatamente estes conjuntos em papéis
+ * reais (tenant_admin já tem o catálogo; rh_operador recebe a união rh +
+ * manage_employees + close_payroll).
+ */
+function computeLegacyBridge(legacy: LegacyAccess): Set<TenantPermission> {
+  const bridged = new Set<TenantPermission>();
+  if (legacy.roles.includes("admin"))
+    TENANT_PERMISSION_CODES.forEach((code) => bridged.add(code));
+  if (legacy.roles.includes("rh")) {
+    bridged.add("tenant.read");
+    bridged.add("org.read");
+    bridged.add("security.read");
+    bridged.add("people.read");
+    bridged.add("people.sensitive.read");
+    bridged.add("family.read");
+    bridged.add("movements.read");
+    bridged.add("payroll.catalog.read");
+    bridged.add("payroll.assignments.read");
+    bridged.add("payroll.cycles.read");
+    bridged.add("payroll.special.read");
+    bridged.add("employment.special.read");
+    bridged.add("termination.read");
+    bridged.add("vacation.read");
+    bridged.add("payroll.import.read");
+    bridged.add("bank.remittance.read");
+    bridged.add("official.export.read");
+    bridged.add("esocial.read");
+    bridged.add("manager.dashboard.read");
+    bridged.add("analytics.read");
+    bridged.add("fiscal.read");
+    bridged.add("ai.analytics.use");
+    bridged.add("support.use");
+  }
+  if (legacy.perms.includes("manage_employees")) {
+    bridged.add("org.manage");
+    bridged.add("people.read");
+    bridged.add("people.manage");
+    bridged.add("people.sensitive.read");
+    bridged.add("family.read");
+    bridged.add("family.manage");
+    bridged.add("movements.read");
+    bridged.add("movements.manage");
+    bridged.add("payroll.catalog.read");
+    bridged.add("payroll.assignments.read");
+    bridged.add("payroll.assignments.manage");
+  }
+  if (legacy.perms.includes("close_payroll")) {
+    bridged.add("payroll.catalog.read");
+    bridged.add("payroll.catalog.manage");
+    bridged.add("payroll.assignments.read");
+    bridged.add("payroll.assignments.manage");
+    bridged.add("payroll.simulate");
+    bridged.add("payroll.cycles.read");
+    bridged.add("payroll.cycles.prepare");
+    bridged.add("payroll.cycles.approve");
+    bridged.add("payroll.cycles.close");
+    bridged.add("payroll.cycles.reopen");
+    bridged.add("payroll.special.read");
+    bridged.add("payroll.special.manage");
+    bridged.add("employment.special.read");
+    bridged.add("employment.special.manage");
+    bridged.add("termination.read");
+    bridged.add("termination.manage");
+    bridged.add("vacation.read");
+    bridged.add("vacation.manage");
+    bridged.add("payroll.import.read");
+    bridged.add("payroll.import.manage");
+    bridged.add("bank.remittance.read");
+    bridged.add("bank.remittance.manage");
+    bridged.add("official.export.read");
+    bridged.add("official.export.manage");
+    bridged.add("esocial.read");
+    bridged.add("esocial.manage");
+    bridged.add("manager.dashboard.read");
+    bridged.add("mobile.push.manage");
+    bridged.add("analytics.read");
+    bridged.add("analytics.manage");
+    bridged.add("fiscal.read");
+    bridged.add("fiscal.manage");
+    bridged.add("ai.analytics.use");
+    bridged.add("support.use");
+    bridged.add("migration.read");
+    bridged.add("migration.manage");
+  }
+  return bridged;
 }
 
 export interface TenantUnitScope {
