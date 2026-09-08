@@ -31,7 +31,7 @@ Legenda: 🟢 atende · 🟡 atende parcialmente · 🔴 não atende.
 | Rubricas versionadas e memória de cálculo | 🟢 | AST auditável com checksum |
 | Ciclo de folha com aprovação e fechamento | 🟢 | Segregação de funções, lock otimista |
 | Tabelas fiscais versionadas por vigência | 🟢 | `fiscal_tables`/`fiscal_table_versions` por vigência e ente, checksum na memória (O1-01/O1-01b); `payroll_config` aposentado |
-| RPPS | 🔴 | Inexistente (O1-02) |
+| RPPS | 🟡 | Computável por configuração: write-path de tabela do ente + `table_lookup` (O1-02a). Falta a entidade de regime e a atribuição por regime (O1-02b) |
 | Ponto eletrônico Portaria 671 (AFD/AEJ/NSR) | 🔴 | Só batida manual sem valor probatório (O1-03) |
 | Rescisão e férias com INSS/IRRF | 🟡 | Aritmética simplificada (O1-05) |
 | eSocial | 🔴 | Fila sem geração/assinatura/transmissão (O1-06) |

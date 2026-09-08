@@ -266,10 +266,30 @@ migration — padrão O0-13/ADR 0017). Testes: `tests/decimo-terceiro-fiscal.tes
 (novo — o 13º passa a ter teste) e o flip de `tests/folha-unica.test.mjs`; ambos
 verificados por mutação. A rescisão nunca usou `payroll_config`.
 
-### O1-02 — RPPS como configuração
+### ✅ O1-02a — Write-path das tabelas fiscais do ente (habilita RPPS)
 
-P0 · 4 dias · depende de O1-01. `pension_regimes` por ente; contribuição do
-servidor, patronal e de inativos como rubricas com `table_lookup`.
+P0 · depende de O1-01. **Feito.** `src/lib/fiscal-tables.functions.ts`
+(`getFiscalTables`/`saveFiscalTable`/`saveFiscalTableVersion`), guardado por
+`fiscal.read`/`fiscal.manage`, espelhando `savePayrollRubricVersion` (rascunho →
+publicada, publicada imutável, checksum server-side que o loader reconfere,
+auditado). Só tabelas do ente (`tenant_id` do ente; nacionais seguem por
+migration). **Sem migration** — write-path de app sobre o schema do O1-01. Com
+isso o RPPS já roda ponta a ponta sobre a infra existente: o ente cria
+`RPPS_<ENTE>`, uma rubrica de desconto com `table_lookup` contra ela é atribuída
+aos estatutários (`employment_link_rubrics`) e o ciclo calcula progressivo com
+checksum na memória. Testes: `tests/sprint-fiscal-tables-admin.test.mjs` (PGlite,
+inclui override do ente sobre a nacional e o cálculo RPPS ponta a ponta),
+verificado por mutação.
+
+### O1-02b — RPPS como entidade de primeira classe
+
+P0 · 3 dias · depende de O1-02a. `pension_regimes` por ente +
+`employment_links.pension_regime_id` (migration, estende `validate_employment_link`),
+e **atribuição de rubricas por regime** (hoje a seleção é manual por
+`employment_link_rubrics`; o motor não tem nó condicional nem variável de regime —
+ADR 0003). Eventual `base_code='rpps'` (widen do CHECK de
+`payroll_rubric_incidences`) se não reusar `inss`/`patronal`. UI
+`/rh/tabelas-fiscais` para o write-path.
 
 ### O1-03 — Ponto conforme Portaria MTP 671/2021
 

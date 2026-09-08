@@ -70,4 +70,11 @@ Convenções e mecânica:
 `payroll_config` para `loadFiscalTables`; a matemática de faixa unificou-se em
 `progressiveLookup`/`bracketLookup` (fonte única) e `payroll_config` foi congelada
 in-place (ADR 0017). A rescisão (`employment-special.functions.ts`) nunca usou
-`payroll_config`. RPPS por ente sobre este mesmo nó fica no O1-02.
+`payroll_config`.
+
+**Feito em O1-02a:** `fiscal-tables.functions.ts` deu o write-path governado das
+tabelas do ente (`fiscal.manage`, auditado, publicada imutável, checksum
+reconferido pelo loader). Só o ente é gerido pela app — as nacionais seguem por
+migration. Com isso o RPPS já é computável por configuração: uma tabela
+`RPPS_<ENTE>` + uma rubrica com `table_lookup` atribuída aos estatutários. RPPS
+como entidade (`pension_regimes` + atribuição por regime) fica no O1-02b.
