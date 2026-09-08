@@ -256,6 +256,37 @@ export function requireTenantPermission(
 }
 
 /**
+ * Permissões que, por serem atos de alto risco e em geral irreversíveis, exigem
+ * segundo fator (TOTP) além da senha. Conjunto restrito de propósito (O0-09): a
+ * maioria das permissões `critica` é de rotina do RH; exigir MFA em todas
+ * tornaria o segundo fator onipresente. Ver src/lib/mfa.server.ts.
+ */
+export const PROTECTED_MFA_PERMISSIONS: ReadonlySet<TenantPermission> = new Set(
+  [
+    "security.manage",
+    "tenant.manage",
+    "payroll.cycles.close",
+    "payroll.cycles.reopen",
+  ],
+);
+
+/**
+ * Guard fail-closed do segundo fator. Se `permission` está no conjunto protegido
+ * e a sessão atual não verificou o TOTP (`mfaVerifiedAt` nulo), lança
+ * `MFA_REQUIRED` — o cliente captura, faz o challenge (verifyMfa) e repete o ato.
+ * Permissão fora do conjunto passa direto. Chamar logo após o
+ * `requireTenantPermission` correspondente nos handlers protegidos.
+ */
+export function requireCriticalMfa(
+  permission: TenantPermission,
+  mfaVerifiedAt: string | null | undefined,
+) {
+  if (PROTECTED_MFA_PERMISSIONS.has(permission) && !mfaVerifiedAt) {
+    throw new Error("MFA_REQUIRED");
+  }
+}
+
+/**
  * Invólucro fail-closed para o corpo de uma server function: valida a associação
  * ao ente (lança se o usuário não for membro), exige a permissão e só então roda
  * `fn` com o `TenantAccess` resolvido. É o caminho recomendado para todo handler

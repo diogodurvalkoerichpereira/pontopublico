@@ -7,6 +7,7 @@ import { requireAuth } from "./data.functions";
 import {
   loadTenantAccess,
   requireTenantPermission,
+  requireCriticalMfa,
   type TenantPermission,
 } from "./tenant-access.server";
 
@@ -468,6 +469,7 @@ export const saveSecurityRole = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "security.manage");
+    requireCriticalMfa("security.manage", context.mfaVerifiedAt);
     const before = data.id
       ? await queryOne<Record<string, unknown>>(
           "select * from public.security_roles where id = $1 and tenant_id = $2",
@@ -544,6 +546,7 @@ export const assignSecurityRole = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "security.manage");
+    requireCriticalMfa("security.manage", context.mfaVerifiedAt);
     const role = await queryOne<{ codigo: string }>(
       "select codigo from public.security_roles where id = $1 and tenant_id = $2 and ativo",
       [data.role_id, data.tenant_id],
@@ -611,6 +614,7 @@ export const saveSecurityAssignment = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "security.manage");
+    requireCriticalMfa("security.manage", context.mfaVerifiedAt);
     if (data.valid_to && data.valid_to < data.valid_from)
       throw new Error("A vigência final não pode anteceder a inicial");
 

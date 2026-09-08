@@ -89,6 +89,7 @@ o motivo está aqui.
 
 - **`db:migrate` antes de `dev`.** A app sobe sem banco; a falha só aparece ao logar.
 - **`SESSION_SECRET` ≥32 caracteres**, senão `auth.server.ts` lança na subida.
+- **`MFA_ENC_KEY` ≥32 caracteres** (ideal 32 bytes em base64) cifra o segredo TOTP em repouso (`mfa.server.ts`). Sem ela, MFA falha ao cadastrar/verificar; trocá-la depois torna ilegíveis os segredos já cadastrados. Configure no Coolify **antes** do deploy.
 - **Sem seed.** O primeiro admin nasce de `ADMIN_EMAILS` no cadastro.
 - **SMTP vive na tabela `email_settings`**, não em variável de ambiente.
 - **`TZ`/tzdata**: sem tzdata, `TZ=America/Sao_Paulo` cai em UTC em silêncio — erro de competência em folha. O `Dockerfile` já instala; ambiente local precisa ter.

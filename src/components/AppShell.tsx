@@ -313,6 +313,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     icon: BadgeDollarSign,
     section: "Geral",
   });
+  items.push({
+    to: "/conta/seguranca",
+    label: "Segurança da conta",
+    icon: ShieldCheck,
+    section: "Geral",
+  });
   if (hasTenantPermission("manager.dashboard.read"))
     items.push({
       to: "/gestor",

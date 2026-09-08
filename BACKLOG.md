@@ -88,19 +88,32 @@ qualquer ente com só `requireAuth` — agora valida membership +
 `payroll.cycles.close` + input zod. Verificado por mutação. O pool com role
 não-dono foi **adiado para a Onda 2** (só compensa com RLS ativa, ADR 0002).
 
-### O0-09 — MFA (TOTP) para permissões críticas
+### ✅ O0-09 — MFA (TOTP) para operações de alto risco
 
-P0 · 3 dias · **pendente (próximo)**
-
-Abordagem. `security_permissions.criticidade` já tem `normal|sensivel|critica`.
-`requireTenantPermission` passa a exigir `mfa_verified_at` recente quando
-`critica`. TOTP com `node:crypto`; `input-otp` já é dependência. Uma mudança em
-uma função cobre as 5 permissões críticas de hoje e todas as futuras.
+P0 · feito. Segundo fator TOTP (RFC 6238) para um **conjunto restrito** de
+permissões de alto risco — `security.manage`, `tenant.manage`,
+`payroll.cycles.close`, `payroll.cycles.reopen` (`PROTECTED_MFA_PERMISSIONS` em
+`tenant-access.server.ts`) — e **não** todas as `critica`, que incluem rotina de
+RH. Verificação **uma vez por sessão**: `verifyMfa` carimba
+`private.auth_sessions.mfa_verified_at`; `requireCriticalMfa(permission,
+context.mfaVerifiedAt)` lança `MFA_REQUIRED` (fail-closed) nos 3 sites de
+`security.manage` (`organization.functions.ts`) e em `transitionPayrollCycle`
+(`payroll-cycle.functions.ts`, permissão dinâmica). Cripto em `mfa.server.ts`
+(só `node:crypto`): TOTP base32/HMAC-SHA1, segredo cifrado em repouso com
+**AES-256-GCM** sob `MFA_ENC_KEY` dedicada, códigos de recuperação com hash
+scrypt consumidos ao usar. Server functions em `mfa.functions.ts` (enroll,
+confirm, verify, disable, status). Cliente: challenge (`mfa-challenge.tsx`) nos
+2 pontos de chamada e painel self-service em `/conta/seguranca`. Verificado:
+vetores oficiais da RFC 6238, round-trip AES (com adulteração), guard por
+mutação (`tests/mfa.test.mjs`) e **ponta a ponta em PostgreSQL 16 real**
+(enroll→confirm→verify, `text[]` de backup, `on delete cascade`).
 
 Aceite.
 
-- [ ] `payroll.cycles.close` exige segundo fator
-- [ ] fluxo de cadastro e verificação de TOTP com códigos de recuperação
+- [x] `payroll.cycles.close`/`reopen` e `security.manage` exigem segundo fator
+- [x] fluxo de cadastro e verificação de TOTP com códigos de recuperação
+- [ ] reset de MFA por admin quando o usuário perde o TOTP (P2 — hoje `disableMfa`
+      exige um código válido)
 
 ### O0-10 — Aposentar a ponte legada de permissões
 

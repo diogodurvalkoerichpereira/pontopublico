@@ -33,6 +33,7 @@ import { Route as RhEscalasRouteImport } from './routes/rh.escalas'
 import { Route as RhCiclosRouteImport } from './routes/rh.ciclos'
 import { Route as GestorLrfRouteImport } from './routes/gestor/lrf'
 import { Route as GestorAssistenteRouteImport } from './routes/gestor/assistente'
+import { Route as ContaSegurancaRouteImport } from './routes/conta.seguranca'
 import { Route as AdminUsuariosRouteImport } from './routes/admin.usuarios'
 import { Route as AdminSegurancaRouteImport } from './routes/admin.seguranca'
 import { Route as AdminMigracaoHistoricaRouteImport } from './routes/admin/migracao-historica'
@@ -162,6 +163,11 @@ const GestorAssistenteRoute = GestorAssistenteRouteImport.update({
   path: '/assistente',
   getParentRoute: () => GestorRoute,
 } as any)
+const ContaSegurancaRoute = ContaSegurancaRouteImport.update({
+  id: '/conta/seguranca',
+  path: '/conta/seguranca',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminUsuariosRoute = AdminUsuariosRouteImport.update({
   id: '/admin/usuarios',
   path: '/admin/usuarios',
@@ -219,6 +225,7 @@ export interface FileRoutesByFullPath {
   '/admin/migracao-historica': typeof AdminMigracaoHistoricaRoute
   '/admin/seguranca': typeof AdminSegurancaRoute
   '/admin/usuarios': typeof AdminUsuariosRoute
+  '/conta/seguranca': typeof ContaSegurancaRoute
   '/gestor/assistente': typeof GestorAssistenteRoute
   '/gestor/lrf': typeof GestorLrfRoute
   '/rh/ciclos': typeof RhCiclosRoute
@@ -253,6 +260,7 @@ export interface FileRoutesByTo {
   '/admin/migracao-historica': typeof AdminMigracaoHistoricaRoute
   '/admin/seguranca': typeof AdminSegurancaRoute
   '/admin/usuarios': typeof AdminUsuariosRoute
+  '/conta/seguranca': typeof ContaSegurancaRoute
   '/gestor/assistente': typeof GestorAssistenteRoute
   '/gestor/lrf': typeof GestorLrfRoute
   '/rh/ciclos': typeof RhCiclosRoute
@@ -288,6 +296,7 @@ export interface FileRoutesById {
   '/admin/migracao-historica': typeof AdminMigracaoHistoricaRoute
   '/admin/seguranca': typeof AdminSegurancaRoute
   '/admin/usuarios': typeof AdminUsuariosRoute
+  '/conta/seguranca': typeof ContaSegurancaRoute
   '/gestor/assistente': typeof GestorAssistenteRoute
   '/gestor/lrf': typeof GestorLrfRoute
   '/rh/ciclos': typeof RhCiclosRoute
@@ -324,6 +333,7 @@ export interface FileRouteTypes {
     | '/admin/migracao-historica'
     | '/admin/seguranca'
     | '/admin/usuarios'
+    | '/conta/seguranca'
     | '/gestor/assistente'
     | '/gestor/lrf'
     | '/rh/ciclos'
@@ -358,6 +368,7 @@ export interface FileRouteTypes {
     | '/admin/migracao-historica'
     | '/admin/seguranca'
     | '/admin/usuarios'
+    | '/conta/seguranca'
     | '/gestor/assistente'
     | '/gestor/lrf'
     | '/rh/ciclos'
@@ -392,6 +403,7 @@ export interface FileRouteTypes {
     | '/admin/migracao-historica'
     | '/admin/seguranca'
     | '/admin/usuarios'
+    | '/conta/seguranca'
     | '/gestor/assistente'
     | '/gestor/lrf'
     | '/rh/ciclos'
@@ -427,6 +439,7 @@ export interface RootRouteChildren {
   AdminMigracaoHistoricaRoute: typeof AdminMigracaoHistoricaRoute
   AdminSegurancaRoute: typeof AdminSegurancaRoute
   AdminUsuariosRoute: typeof AdminUsuariosRoute
+  ContaSegurancaRoute: typeof ContaSegurancaRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -599,6 +612,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GestorAssistenteRouteImport
       parentRoute: typeof GestorRoute
     }
+    '/conta/seguranca': {
+      id: '/conta/seguranca'
+      path: '/conta/seguranca'
+      fullPath: '/conta/seguranca'
+      preLoaderRoute: typeof ContaSegurancaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/usuarios': {
       id: '/admin/usuarios'
       path: '/admin/usuarios'
@@ -735,6 +755,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminMigracaoHistoricaRoute: AdminMigracaoHistoricaRoute,
   AdminSegurancaRoute: AdminSegurancaRoute,
   AdminUsuariosRoute: AdminUsuariosRoute,
+  ContaSegurancaRoute: ContaSegurancaRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

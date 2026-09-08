@@ -59,6 +59,12 @@ const ALLOWLIST = {
   createTenant: "cria o ente; autoriza por admin global legado",
   // Self-service (dados do próprio usuário).
   getMyFinancialPortal: "lê os próprios vínculos por context.userId",
+  // MFA do próprio usuário — identidade, sem contexto de tenant (O0-09).
+  getMfaStatus: "MFA do próprio usuário, sem tenant",
+  startMfaEnrollment: "MFA do próprio usuário, sem tenant",
+  confirmMfaEnrollment: "MFA do próprio usuário, sem tenant",
+  verifyMfa: "MFA do próprio usuário, sem tenant",
+  disableMfa: "MFA do próprio usuário, sem tenant",
   // OCR: utilitários sem estado, sem dados de tenant.
   extractAtestadoOCR: "proxy de OCR sem estado, sem dados de tenant",
   extractDocumentoOCR: "proxy de OCR sem estado, sem dados de tenant",

@@ -54,6 +54,7 @@ async function bearerUserId(): Promise<{
   userId: string;
   email: string;
   sessionId: string;
+  mfaVerifiedAt: string | null;
 }> {
   const request = getRequest();
   const authHeader = request?.headers?.get("authorization");
@@ -61,8 +62,11 @@ async function bearerUserId(): Promise<{
   const token = authHeader.slice(7);
   const claims = verifyToken(token);
   if (!claims?.sub || !claims.sid) throw new Error("Unauthorized");
-  const session = await queryOne<{ id: string }>(
-    `select id from private.auth_sessions
+  const session = await queryOne<{
+    id: string;
+    mfa_verified_at: string | null;
+  }>(
+    `select id, mfa_verified_at::text from private.auth_sessions
      where id=$1 and user_id=$2 and revoked_at is null and expires_at>now()`,
     [claims.sid, claims.sub],
   );
@@ -72,13 +76,18 @@ async function bearerUserId(): Promise<{
      where id=$1 and last_seen_at < now()-interval '5 minutes'`,
     [claims.sid],
   );
-  return { userId: claims.sub, email: claims.email, sessionId: claims.sid };
+  return {
+    userId: claims.sub,
+    email: claims.email,
+    sessionId: claims.sid,
+    mfaVerifiedAt: session.mfa_verified_at,
+  };
 }
 
 export const requireAuth = createMiddleware({ type: "function" }).server(
   async ({ next }) => {
-    const { userId, email, sessionId } = await bearerUserId();
-    return next({ context: { userId, email, sessionId } });
+    const { userId, email, sessionId, mfaVerifiedAt } = await bearerUserId();
+    return next({ context: { userId, email, sessionId, mfaVerifiedAt } });
   },
 );
 

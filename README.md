@@ -52,6 +52,12 @@ Edite o `.env`:
   ```bash
   node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"
   ```
+- **`MFA_ENC_KEY`** cifra o segredo TOTP em repouso (AES-256-GCM). ≥32
+  caracteres; ideal 32 bytes em base64. Configure-a **antes** do primeiro uso do
+  segundo fator; trocá-la depois invalida os segredos já cadastrados. Gere:
+  ```bash
+  node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"
+  ```
 - **`ADMIN_EMAILS`** — o e-mail que você vai cadastrar. **É o único caminho para
   ter acesso administrativo**: quem se cadastra com um e-mail desta lista vira
   admin. Sem isso, o banco novo não tem administrador.

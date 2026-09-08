@@ -7,6 +7,7 @@ import { requireAuth } from "./data.functions";
 import {
   loadTenantAccess,
   requireTenantPermission,
+  requireCriticalMfa,
   type TenantPermission,
 } from "./tenant-access.server";
 
@@ -494,6 +495,7 @@ export const transitionPayrollCycle = createServerFn({ method: "POST" })
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     const rule = transitionRules[data.action];
     requireTenantPermission(access, rule.permission);
+    requireCriticalMfa(rule.permission, context.mfaVerifiedAt);
     if (data.action === "reopen" && (data.reason?.length ?? 0) < 10)
       throw new Error(
         "Informe uma justificativa de reabertura com ao menos 10 caracteres",
