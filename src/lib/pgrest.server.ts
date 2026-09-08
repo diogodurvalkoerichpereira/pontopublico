@@ -320,6 +320,11 @@ export async function runQuery(req: QueryReq, ctx: AccessCtx | null): Promise<Qu
       const merged = { ...vals, ...(pol.forced ?? {}) };
       const setCols = Object.keys(merged);
       if (setCols.length === 0) return { data: null, error: { message: "Nada a atualizar" } };
+      // Simétrico à trava do DELETE abaixo. Sem esta verificação, uma chamada
+      // sem .eq() vira `UPDATE tabela SET ...` sem WHERE e reescreve todas as
+      // linhas — inclusive as de outros entes, já que este caminho não tem
+      // noção de tenant. É destruição de dados em massa, não vazamento.
+      if (filters.length === 0) return { data: null, error: { message: "UPDATE sem filtro bloqueado" } };
       const setSql = setCols.map((c) => `${ident(c)} = ${pushParam(params, merged[c] ?? null)}`).join(", ");
       let text = `UPDATE ${table} t SET ${setSql} ${whereClause(filters, params)}`;
       if (req.wantReturning || req.single) text += " RETURNING *";
@@ -338,8 +343,15 @@ export async function runQuery(req: QueryReq, ctx: AccessCtx | null): Promise<Qu
 
     return { data: null, error: { message: "Ação desconhecida" } };
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Erro na consulta";
-    return { data: null, error: { message } };
+    // A mensagem crua do PostgreSQL revela nomes de tabela, de coluna e
+    // estrutura de constraint ao navegador. Fica no log do servidor; o cliente
+    // recebe apenas a indicação de falha.
+    console.error("[pgrest] falha na consulta", {
+      table: req.table,
+      action: req.action,
+      error: e instanceof Error ? e.message : e,
+    });
+    return { data: null, error: { message: "Erro na consulta" } };
   }
 }
 
