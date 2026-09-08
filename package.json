@@ -26,14 +26,7 @@
     "test:sprint4:formula": "node scripts/validate-sprint4-formula.mjs",
     "test:sprint4:auth": "node scripts/validate-sprint4-auth.mjs",
     "test:sprint5:migration": "node scripts/validate-sprint5-migration.mjs",
-    "test:sprint6:special": "node scripts/validate-sprint6-special.mjs",
-    "test:sprint7": "node scripts/validate-sprint7.mjs",
-    "test:sprint13": "node scripts/validate-sprint13.mjs",
-    "test:sprint14": "node scripts/validate-sprint14.mjs",
-    "test:sprint15": "node scripts/validate-sprint15.mjs",
-    "test:sprint16": "node scripts/validate-sprint16.mjs",
-    "test:sprint17": "node scripts/validate-sprint17.mjs",
-    "test:sprint19": "node scripts/validate-sprint19.mjs"
+    "test:sprint6:special": "node scripts/validate-sprint6-special.mjs"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.25.5",

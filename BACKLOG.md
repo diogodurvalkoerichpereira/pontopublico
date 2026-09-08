@@ -162,9 +162,9 @@ public.audit_events` cru permanece fora de `audit.server.ts`. Rede dupla
 (SQL/params/jsonb/metadados, esbuild+stub) + conformidade (lint) que falha se
 voltar um insert cru ou se um módulo de saída não importar o helper. Ver ADR 0015.
 
-### ◑ O0-12 — Converter validadores de grep em testes reais
+### ✅ O0-12 — Converter validadores de grep em testes reais
 
-P1 · Incremento 1 **feito**; Incremento 2 pendente.
+P1 · **feito**. Nenhum validador grep sobra (só os reais das Sprints 1-6).
 
 Problema. As Sprints 8-20 só tinham "validadores" que liam o arquivo como string
 (`String.includes()`) — foi como a Sprint 19 passou com erro de sintaxe e a 13
@@ -182,14 +182,22 @@ honestidade dos rótulos na fonte (lint). Verificado por mutação (quebrar o
 trigger na migration ou virar o status de conformidade derruba o teste — o grep
 antigo não pegava). Deletados os 4 validadores e seus scripts. Ver ADR 0016.
 
-**Incremento 2 (em andamento).** Convertidas as Sprints **9** (importações:
-CHECKs de file_sha256/status/file_type + unique de linha), **18** (IA semântica:
-`resolveSemanticIntent` em runtime prova a whitelist + sem SQL livre da pergunta)
-e **20** (migração: CHECK de status + unique idempotente `(job_id,source_key)` +
-guardas de aplicação). Verificado por mutação; validadores e scripts deletados.
-Restam Sprints **7, 13, 14, 15, 16, 17, 19** (mesma receita). Os validadores
-reais das Sprints 1-6 ficam como estão (já executam). Os 6 `reconcile-sprint*.sql`
-órfãos são P2.
+**Incremento 2.** Sprints **9** (CHECKs de file_sha256/status/file_type + unique),
+**18** (`resolveSemanticIntent` em runtime prova a whitelist + sem SQL livre) e
+**20** (CHECK de status + unique idempotente `(job_id,source_key)`).
+
+**Incremento 3 (encerra).** Sprints **7** (rescisão: `worked_days`/checksum +
+trigger cross-tenant + conta = 16000), **13** (portal: CHECKs de document_type/
+sha256 + policy self), **14** (KPIs: checksum + unique), **15** (push: CHECKs de
+title/status + unique), **16** (data mart: schema `analytics` privado provado por
+`has_schema_privilege(...)=false`), **17** (LRF: função pura `classifyLrf` extraída
+e testada + CHECKs dos limites) e **19** (suporte: CHECKs de body/status + policy
+de participante). Verificado por mutação em cada um; RLS não é imposta em PGlite
+(dono), então `auth.uid()` é aferido por `pg_policies`. Os 3 incrementos deletaram
+os 14 validadores grep e seus scripts. Os validadores reais das Sprints 1-6 ficam
+como estão (já executam). Ver ADR 0016.
+
+Restam P2 à parte: os 6 `reconcile-sprint*.sql` órfãos; um `test:all` agregado.
 
 ### ✅ O0-13 — Unificar as duas gerações de modelo
 
