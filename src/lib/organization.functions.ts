@@ -1,8 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
-import { getRequest } from "@tanstack/react-start/server";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { query, queryOne, withTransaction } from "./db.server";
+import { recordAuditQ } from "./audit.server";
 import { requireAuth } from "./data.functions";
 import {
   loadTenantAccess,
@@ -47,18 +47,6 @@ export interface OrganizationUnit {
 
 const TenantIdInput = z.object({ tenant_id: z.string().uuid() });
 
-function requestMetadata() {
-  const request = getRequest();
-  const forwarded = request?.headers
-    ?.get("x-forwarded-for")
-    ?.split(",")[0]
-    ?.trim();
-  return {
-    requestId: request?.headers?.get("x-request-id") ?? randomUUID(),
-    ip: forwarded || null,
-  };
-}
-
 async function audit(
   tenantId: string,
   actorId: string,
@@ -68,23 +56,15 @@ async function audit(
   beforeData: unknown,
   afterData: unknown,
 ) {
-  const meta = requestMetadata();
-  await query(
-    `insert into public.audit_events
-       (tenant_id, actor_id, action, resource, record_id, before_data, after_data, request_id, ip)
-     values ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8,$9::inet)`,
-    [
-      tenantId,
-      actorId,
-      action,
-      resource,
-      recordId,
-      beforeData == null ? null : JSON.stringify(beforeData),
-      afterData == null ? null : JSON.stringify(afterData),
-      meta.requestId,
-      meta.ip,
-    ],
-  );
+  await recordAuditQ({
+    tenantId,
+    actorId,
+    action,
+    resource,
+    recordId,
+    before: beforeData,
+    after: afterData,
+  });
 }
 
 export const getTenantContext = createServerFn({ method: "POST" })

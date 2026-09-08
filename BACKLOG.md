@@ -148,14 +148,19 @@ até haver `schedules.*`.
 conceito de _platform admin_ (hoje autorizam por admin legado global, não pela
 ponte). `pgrest.policyFor` (motor de política do shim) → Onda 2.
 
-### O0-11 — Helper de auditoria compartilhado
+### ✅ O0-11 — Helper de auditoria compartilhado
 
-P1 · 2 dias
-
-Abordagem. `src/lib/audit.server.ts` com `recordAudit(client, {...})`; cobrir os
-módulos de saída de dados hoje descobertos (remessa, exportação, eSocial,
-migração histórica); teste que falha se um `*.functions.ts` que escreve não o
-importa.
+P1 · feito. `src/lib/audit.server.ts` centraliza a escrita da trilha:
+`recordAudit(client, event)` (atômico dentro de `withTransaction`) e
+`recordAuditQ(event)` (fora de transação), com `request_id`/`ip` e serialização
+jsonb idênticos em toda a aplicação. Os ~10 writers que reimplementavam o insert
+passaram a chamar o helper e os **4 módulos de saída de dados** que não gravavam
+trilha — remessa bancária, exportação oficial, eSocial (enfileiramento), migração
+histórica (fechamento) — agora registram o ato. Nenhum `insert into
+public.audit_events` cru permanece fora de `audit.server.ts`. Rede dupla
+(`tests/audit-helper.test.mjs`): teste de comportamento do `recordAudit`
+(SQL/params/jsonb/metadados, esbuild+stub) + conformidade (lint) que falha se
+voltar um insert cru ou se um módulo de saída não importar o helper. Ver ADR 0015.
 
 ### O0-12 — Converter validadores de grep em testes reais
 

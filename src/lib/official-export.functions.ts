@@ -17,6 +17,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
+import { recordAudit } from "./audit.server";
 import { conformanceOf } from "./conformance";
 import {
   loadTenantAccess,
@@ -99,6 +100,23 @@ export const generateOfficialExport = createServerFn({ method: "POST" })
           context.userId,
         ],
       );
+      // Trilha de auditoria do ato de saída de dados (exportação oficial).
+      await recordAudit(c, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "exportacao.gerar",
+        resource: "official_export_batches",
+        recordId: id,
+        after: {
+          code: data.code,
+          version: data.version,
+          reference_month: data.reference_month,
+          status: errors.length ? "invalido" : "valido",
+          records_count: rows.length,
+          file_sha256: hash,
+          validation_errors: errors,
+        },
+      });
       return {
         id,
         content,

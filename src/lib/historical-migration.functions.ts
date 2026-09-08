@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { query, queryOne } from "./db.server";
 import { requireAuth } from "./data.functions";
+import { recordAuditQ } from "./audit.server";
 import {
   loadTenantAccess,
   requireTenantPermission,
@@ -148,6 +149,18 @@ export const commitMigrationJob = createServerFn({ method: "POST" })
       `update public.historical_migration_jobs set status='committed',committed_at=now() where id=$1`,
       [data.job_id],
     );
+    // Trilha de auditoria do ato de ingestão de dados (fechamento da migração).
+    await recordAuditQ({
+      tenantId: data.tenant_id,
+      actorId: context.userId,
+      action: "migracao.fechar",
+      resource: "historical_migration_jobs",
+      recordId: data.job_id,
+      after: {
+        source_type: job.source_type,
+        committed_rows: Number(job.valid_rows),
+      },
+    });
     return { committed: Number(job.valid_rows), archiveOnly: true };
   });
 export const listMigrationJobs = createServerFn({ method: "POST" })

@@ -8,24 +8,16 @@
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { createServerFn } from "@tanstack/react-start";
-import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
+import { recordAudit } from "./audit.server";
 import {
   loadTenantAccess,
   requireTenantPermission,
 } from "./tenant-access.server";
 
 const TIPO = z.enum(["entrada", "saida_almoco", "volta_almoco", "saida"]);
-
-function auditMetadata() {
-  const request = getRequest();
-  return {
-    requestId: request?.headers?.get("x-request-id") ?? randomUUID(),
-    ip: request?.headers?.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
-  };
-}
 
 async function assertTenantMember(
   client: PoolClient,
@@ -72,7 +64,6 @@ export const registerManualTimeEntry = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const a = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(a, "people.manage");
-    const meta = auditMetadata();
     return withTransaction(async (client) => {
       await assertTenantMember(client, data.tenant_id, data.user_id);
       const id = randomUUID();
@@ -89,24 +80,19 @@ export const registerManualTimeEntry = createServerFn({ method: "POST" })
           context.userId,
         ],
       );
-      await client.query(
-        `insert into public.audit_events
-           (tenant_id, actor_id, action, resource, record_id, after_data, request_id, ip)
-         values ($1, $2, 'register', 'time_entries', $3, $4::jsonb, $5, $6::inet)`,
-        [
-          data.tenant_id,
-          context.userId,
-          id,
-          JSON.stringify({
-            user_id: data.user_id,
-            tipo: data.tipo,
-            entry_at: data.entry_at,
-            observacao: data.observacao ?? null,
-          }),
-          meta.requestId,
-          meta.ip,
-        ],
-      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "register",
+        resource: "time_entries",
+        recordId: id,
+        after: {
+          user_id: data.user_id,
+          tipo: data.tipo,
+          entry_at: data.entry_at,
+          observacao: data.observacao ?? null,
+        },
+      });
       return { id };
     });
   });
@@ -125,7 +111,6 @@ export const updateManualTimeEntry = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const a = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(a, "people.manage");
-    const meta = auditMetadata();
     return withTransaction(async (client) => {
       const before = await loadEntry(client, data.id);
       if (!before || before.deleted_at) {
@@ -145,28 +130,23 @@ export const updateManualTimeEntry = createServerFn({ method: "POST" })
           context.userId,
         ],
       );
-      await client.query(
-        `insert into public.audit_events
-           (tenant_id, actor_id, action, resource, record_id, before_data, after_data, request_id, ip)
-         values ($1, $2, 'update', 'time_entries', $3, $4::jsonb, $5::jsonb, $6, $7::inet)`,
-        [
-          data.tenant_id,
-          context.userId,
-          data.id,
-          JSON.stringify({
-            tipo: before.tipo,
-            entry_at: before.entry_at,
-            observacao: before.observacao,
-          }),
-          JSON.stringify({
-            tipo: data.tipo,
-            entry_at: data.entry_at,
-            observacao: data.observacao ?? null,
-          }),
-          meta.requestId,
-          meta.ip,
-        ],
-      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "update",
+        resource: "time_entries",
+        recordId: data.id,
+        before: {
+          tipo: before.tipo,
+          entry_at: before.entry_at,
+          observacao: before.observacao,
+        },
+        after: {
+          tipo: data.tipo,
+          entry_at: data.entry_at,
+          observacao: data.observacao ?? null,
+        },
+      });
       return { id: data.id };
     });
   });
@@ -183,7 +163,6 @@ export const softDeleteTimeEntry = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const a = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(a, "people.manage");
-    const meta = auditMetadata();
     return withTransaction(async (client) => {
       const before = await loadEntry(client, data.id);
       if (!before || before.deleted_at) {
@@ -196,24 +175,19 @@ export const softDeleteTimeEntry = createServerFn({ method: "POST" })
          where id = $1`,
         [data.id, context.userId, data.reason],
       );
-      await client.query(
-        `insert into public.audit_events
-           (tenant_id, actor_id, action, resource, record_id, before_data, request_id, ip)
-         values ($1, $2, 'soft_delete', 'time_entries', $3, $4::jsonb, $5, $6::inet)`,
-        [
-          data.tenant_id,
-          context.userId,
-          data.id,
-          JSON.stringify({
-            user_id: before.user_id,
-            tipo: before.tipo,
-            entry_at: before.entry_at,
-            reason: data.reason,
-          }),
-          meta.requestId,
-          meta.ip,
-        ],
-      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "soft_delete",
+        resource: "time_entries",
+        recordId: data.id,
+        before: {
+          user_id: before.user_id,
+          tipo: before.tipo,
+          entry_at: before.entry_at,
+          reason: data.reason,
+        },
+      });
       return { id: data.id };
     });
   });

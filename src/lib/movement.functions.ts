@@ -1,11 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
-import { getRequest } from "@tanstack/react-start/server";
 import { createHash, randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import { query, queryOne, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
+import { recordAudit } from "./audit.server";
 import {
   loadTenantAccess,
   loadTenantUnitScope,
@@ -13,14 +13,6 @@ import {
 } from "./tenant-access.server";
 
 const STORAGE_DIR = process.env.STORAGE_DIR || "/data/storage";
-
-function metadata() {
-  const request = getRequest();
-  return {
-    requestId: request?.headers?.get("x-request-id") ?? randomUUID(),
-    ip: request?.headers?.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
-  };
-}
 
 const WorkspaceInput = z.object({ tenant_id: z.string().uuid() });
 
@@ -175,7 +167,6 @@ export const saveEmploymentMovement = createServerFn({ method: "POST" })
       unit_id: data.to_unit_id ?? link.unit_id,
       status: targetStatus,
     };
-    const event = metadata();
 
     await withTransaction(async (client) => {
       await client.query(
@@ -222,25 +213,20 @@ export const saveEmploymentMovement = createServerFn({ method: "POST" })
           ],
         );
       }
-      await client.query(
-        `insert into public.audit_events
-           (tenant_id,actor_id,action,resource,record_id,before_data,after_data,request_id,ip)
-         values ($1,$2,'create','employment_link_movements',$3,$4::jsonb,$5::jsonb,$6,$7::inet)`,
-        [
-          data.tenant_id,
-          context.userId,
-          movementId,
-          JSON.stringify({ unit_id: link.unit_id, status: link.status }),
-          JSON.stringify({
-            ...after,
-            effective_date: data.effective_date,
-            document_path: documentPath,
-            document_sha256: documentHash,
-          }),
-          event.requestId,
-          event.ip,
-        ],
-      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "create",
+        resource: "employment_link_movements",
+        recordId: movementId,
+        before: { unit_id: link.unit_id, status: link.status },
+        after: {
+          ...after,
+          effective_date: data.effective_date,
+          document_path: documentPath,
+          document_sha256: documentHash,
+        },
+      });
     });
     return { id: movementId, applied: applyNow, documentHash };
   });

@@ -1,23 +1,15 @@
 import { createServerFn } from "@tanstack/react-start";
-import { getRequest } from "@tanstack/react-start/server";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { query, queryOne, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
+import { recordAudit } from "./audit.server";
 import {
   loadTenantAccess,
   requireTenantPermission,
 } from "./tenant-access.server";
 import { checksumFormulaAst } from "./payroll-formula.server";
 import { evaluateFormulaAst } from "./payroll-formula";
-
-function metadata() {
-  const request = getRequest();
-  return {
-    requestId: request?.headers?.get("x-request-id") ?? randomUUID(),
-    ip: request?.headers?.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
-  };
-}
 
 const TenantInput = z.object({ tenant_id: z.string().uuid() });
 
@@ -123,7 +115,6 @@ export const savePayrollRubric = createServerFn({ method: "POST" })
       : null;
     if (data.id && !before) throw new Error("Rubrica não encontrada");
     const id = data.id ?? randomUUID();
-    const event = metadata();
     await withTransaction(async (client) => {
       if (data.id) {
         await client.query(
@@ -159,21 +150,15 @@ export const savePayrollRubric = createServerFn({ method: "POST" })
           ],
         );
       }
-      await client.query(
-        `insert into public.audit_events
-           (tenant_id,actor_id,action,resource,record_id,before_data,after_data,request_id,ip)
-         values ($1,$2,$3,'payroll_rubrics',$4,$5::jsonb,$6::jsonb,$7,$8::inet)`,
-        [
-          data.tenant_id,
-          context.userId,
-          data.id ? "update" : "create",
-          id,
-          before ? JSON.stringify(before) : null,
-          JSON.stringify(data),
-          event.requestId,
-          event.ip,
-        ],
-      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: data.id ? "update" : "create",
+        resource: "payroll_rubrics",
+        recordId: id,
+        before: before ?? null,
+        after: data,
+      });
     });
     return { id };
   });
@@ -241,7 +226,6 @@ export const savePayrollRubricVersion = createServerFn({ method: "POST" })
             )
           )?.next ?? 1,
         );
-    const event = metadata();
     await withTransaction(async (client) => {
       if (data.id) {
         await client.query(
@@ -309,21 +293,15 @@ export const savePayrollRubricVersion = createServerFn({ method: "POST" })
           [data.tenant_id, id, dependency, context.userId],
         );
       }
-      await client.query(
-        `insert into public.audit_events
-           (tenant_id,actor_id,action,resource,record_id,before_data,after_data,request_id,ip)
-         values ($1,$2,$3,'payroll_rubric_versions',$4,$5::jsonb,$6::jsonb,$7,$8::inet)`,
-        [
-          data.tenant_id,
-          context.userId,
-          data.id ? "update" : "create",
-          id,
-          before ? JSON.stringify(before) : null,
-          JSON.stringify({ ...data, version_number: number }),
-          event.requestId,
-          event.ip,
-        ],
-      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: data.id ? "update" : "create",
+        resource: "payroll_rubric_versions",
+        recordId: id,
+        before: before ?? null,
+        after: { ...data, version_number: number },
+      });
     });
     return {
       id,

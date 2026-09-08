@@ -1,23 +1,15 @@
 import { createServerFn } from "@tanstack/react-start";
-import { getRequest } from "@tanstack/react-start/server";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { query, queryOne, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
+import { recordAudit } from "./audit.server";
 import {
   loadTenantAccess,
   loadTenantUnitScope,
   requireTenantPermission,
   requireUnitInScope,
 } from "./tenant-access.server";
-
-function metadata() {
-  const request = getRequest();
-  return {
-    requestId: request?.headers?.get("x-request-id") ?? randomUUID(),
-    ip: request?.headers?.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
-  };
-}
 
 async function assertPersonScope(
   tenantId: string,
@@ -190,7 +182,6 @@ export const saveDependent = createServerFn({ method: "POST" })
         )
       : null;
     if (data.id && !before) throw new Error("Dependente não encontrado");
-    const event = metadata();
     const id = data.id ?? randomUUID();
     let reused = false;
     await withTransaction(async (client) => {
@@ -236,21 +227,15 @@ export const saveDependent = createServerFn({ method: "POST" })
           ],
         );
       }
-      await client.query(
-        `insert into public.audit_events
-           (tenant_id,actor_id,action,resource,record_id,before_data,after_data,request_id,ip)
-         values ($1,$2,$3,'person_dependents',$4,$5::jsonb,$6::jsonb,$7,$8::inet)`,
-        [
-          data.tenant_id,
-          context.userId,
-          data.id ? "update" : "create",
-          id,
-          before ? JSON.stringify(before) : null,
-          JSON.stringify(data),
-          event.requestId,
-          event.ip,
-        ],
-      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: data.id ? "update" : "create",
+        resource: "person_dependents",
+        recordId: id,
+        before: before ?? null,
+        after: data,
+      });
     });
     return { id, reusedPerson: reused };
   });
@@ -307,7 +292,6 @@ export const savePensionBeneficiary = createServerFn({ method: "POST" })
         )
       : null;
     if (data.id && !before) throw new Error("Pensionista não encontrado");
-    const event = metadata();
     const id = data.id ?? randomUUID();
     await withTransaction(async (client) => {
       const resolved = data.id
@@ -344,21 +328,15 @@ export const savePensionBeneficiary = createServerFn({ method: "POST" })
           values,
         );
       }
-      await client.query(
-        `insert into public.audit_events
-           (tenant_id,actor_id,action,resource,record_id,before_data,after_data,request_id,ip)
-         values ($1,$2,$3,'pension_beneficiaries',$4,$5::jsonb,$6::jsonb,$7,$8::inet)`,
-        [
-          data.tenant_id,
-          context.userId,
-          data.id ? "update" : "create",
-          id,
-          before ? JSON.stringify(before) : null,
-          JSON.stringify(data),
-          event.requestId,
-          event.ip,
-        ],
-      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: data.id ? "update" : "create",
+        resource: "pension_beneficiaries",
+        recordId: id,
+        before: before ?? null,
+        after: data,
+      });
     });
     return { id };
   });

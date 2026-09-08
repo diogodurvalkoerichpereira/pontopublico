@@ -16,6 +16,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
+import { recordAudit } from "./audit.server";
 import { conformanceOf } from "./conformance";
 import {
   loadTenantAccess,
@@ -82,6 +83,21 @@ export const generateBankRemittance = createServerFn({ method: "POST" })
           context.userId,
         ],
       );
+      // Trilha de auditoria do ato de saída de dados (remessa bancária).
+      await recordAudit(c, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "remessa.gerar",
+        resource: "bank_remittance_batches",
+        recordId: id,
+        after: {
+          bank_code: data.bank_code,
+          payroll_cycle_id: cycle.id,
+          records_count: rows.length,
+          total_amount: total,
+          file_sha256: hash,
+        },
+      });
       return {
         id,
         content,

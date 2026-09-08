@@ -1,9 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
-import { getRequest } from "@tanstack/react-start/server";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { query, queryOne, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
+import { recordAudit } from "./audit.server";
 import {
   loadTenantAccess,
   loadTenantUnitScope,
@@ -41,14 +41,6 @@ export interface PersonRegistryRow {
   mother_name: string | null;
   link_count: number;
   links: EmploymentLinkView[];
-}
-
-function requestMetadata() {
-  const request = getRequest();
-  return {
-    requestId: request?.headers?.get("x-request-id") ?? randomUUID(),
-    ip: request?.headers?.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
-  };
 }
 
 const RegistryInput = TenantIdInput.extend({
@@ -266,7 +258,6 @@ export const savePersonAndLink = createServerFn({ method: "POST" })
           )?.ok,
         )
       : true;
-    const meta = requestMetadata();
 
     await withTransaction(async (client) => {
       if (!beforePerson) {
@@ -354,23 +345,18 @@ export const savePersonAndLink = createServerFn({ method: "POST" })
         person_id: personId,
         link_id: linkId,
       };
-      await client.query(
-        `insert into public.audit_events
-           (tenant_id, actor_id, action, resource, record_id, before_data, after_data, request_id, ip)
-         values ($1,$2,$3,'employment_links',$4,$5::jsonb,$6::jsonb,$7,$8::inet)`,
-        [
-          data.tenant_id,
-          context.userId,
-          data.link.id ? "update" : "create",
-          linkId,
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: data.link.id ? "update" : "create",
+        resource: "employment_links",
+        recordId: linkId,
+        before:
           beforeLink == null
             ? null
-            : JSON.stringify({ person: beforePerson, link: beforeLink }),
-          JSON.stringify(after),
-          meta.requestId,
-          meta.ip,
-        ],
-      );
+            : { person: beforePerson, link: beforeLink },
+        after,
+      });
     });
 
     return {

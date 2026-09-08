@@ -1,9 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
-import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { query, queryOne, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
+import { recordAudit, recordAuditQ } from "./audit.server";
 import {
   loadTenantAccess,
   loadTenantUnitScope,
@@ -19,14 +19,6 @@ import {
 
 const ENGINE_VERSION = "ast-v1.0.0";
 const TenantInput = z.object({ tenant_id: z.string().uuid() });
-
-function metadata() {
-  const request = getRequest();
-  return {
-    requestId: request?.headers?.get("x-request-id") ?? randomUUID(),
-    ip: request?.headers?.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
-  };
-}
 
 function checksum(value: unknown) {
   return createHash("sha256")
@@ -189,7 +181,6 @@ export const saveEmploymentLinkRubric = createServerFn({ method: "POST" })
       : null;
     if (data.id && !before) throw new Error("Atribuição não encontrada");
     const id = data.id ?? randomUUID();
-    const event = metadata();
 
     await withTransaction(async (client) => {
       if (data.id) {
@@ -234,21 +225,15 @@ export const saveEmploymentLinkRubric = createServerFn({ method: "POST" })
           ],
         );
       }
-      await client.query(
-        `insert into public.audit_events
-           (tenant_id,actor_id,action,resource,record_id,before_data,after_data,request_id,ip)
-         values ($1,$2,$3,'employment_link_rubrics',$4,$5::jsonb,$6::jsonb,$7,$8::inet)`,
-        [
-          data.tenant_id,
-          context.userId,
-          data.id ? "update" : "create",
-          id,
-          before ? JSON.stringify(before) : null,
-          JSON.stringify(data),
-          event.requestId,
-          event.ip,
-        ],
-      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: data.id ? "update" : "create",
+        resource: "employment_link_rubrics",
+        recordId: id,
+        before: before ?? null,
+        after: data,
+      });
     });
     return { id };
   });
@@ -536,25 +521,19 @@ export const runPayrollSimulation = createServerFn({ method: "POST" })
           [runId, links.length],
         );
       });
-      const event = metadata();
-      await query(
-        `insert into public.audit_events
-           (tenant_id,actor_id,action,resource,record_id,after_data,request_id,ip)
-         values ($1,$2,'simulate','payroll_calculation_runs',$3,$4::jsonb,$5,$6::inet)`,
-        [
-          data.tenant_id,
-          context.userId,
-          runId,
-          JSON.stringify({
-            reference_month: referenceDate,
-            links: links.length,
-            items: items.length,
-            input_checksum: checksum(snapshot),
-          }),
-          event.requestId,
-          event.ip,
-        ],
-      );
+      await recordAuditQ({
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "simulate",
+        resource: "payroll_calculation_runs",
+        recordId: runId,
+        after: {
+          reference_month: referenceDate,
+          links: links.length,
+          items: items.length,
+          input_checksum: checksum(snapshot),
+        },
+      });
       return {
         runId,
         linksProcessed: links.length,

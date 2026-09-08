@@ -20,12 +20,13 @@ SQL) · `npm run quality:check` (catraca) · `npm run db:migrate`. Ver
 
 Ao criar algo novo, copie a estrutura destes:
 
-| Você vai criar…                         | Modele por                                                             |
-| --------------------------------------- | ---------------------------------------------------------------------- |
-| Server function com fluxo de estados    | `src/lib/payroll-cycle.functions.ts`                                   |
-| Módulo de leitura tipado, com auditoria | `src/lib/audit.functions.ts`                                           |
-| Migration                               | `supabase/migrations/20260816150000_sprint1_multi_tenant_security.sql` |
-| Teste de verdade                        | `tests/pgrest-guards.test.mjs`                                         |
+| Você vai criar…                         | Modele por                                                                     |
+| --------------------------------------- | ------------------------------------------------------------------------------ |
+| Server function com fluxo de estados    | `src/lib/payroll-cycle.functions.ts`                                           |
+| Módulo de leitura tipado, com auditoria | `src/lib/audit.functions.ts`                                                   |
+| Gravar trilha de auditoria              | `recordAudit`/`recordAuditQ` de `src/lib/audit.server.ts` (nunca `insert` cru) |
+| Migration                               | `supabase/migrations/20260816150000_sprint1_multi_tenant_security.sql`         |
+| Teste de verdade                        | `tests/pgrest-guards.test.mjs`                                                 |
 
 ## Padrão de server function — a espinha da segurança
 

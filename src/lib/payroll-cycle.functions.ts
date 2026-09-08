@@ -1,9 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
-import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
+import { recordAudit } from "./audit.server";
 import {
   loadTenantAccess,
   requireTenantPermission,
@@ -12,14 +12,6 @@ import {
 } from "./tenant-access.server";
 
 const TenantInput = z.object({ tenant_id: z.string().uuid() });
-
-function auditMetadata() {
-  const request = getRequest();
-  return {
-    requestId: request?.headers?.get("x-request-id") ?? randomUUID(),
-    ip: request?.headers?.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
-  };
-}
 
 function checksum(value: unknown) {
   return createHash("sha256")
@@ -329,7 +321,6 @@ export const materializePayrollPreview = createServerFn({ method: "POST" })
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "payroll.cycles.prepare");
     const referenceDate = `${data.reference_month}-01`;
-    const event = auditMetadata();
     return withTransaction(async (client) => {
       const rows = await loadRunResults(
         client,
@@ -432,24 +423,19 @@ export const materializePayrollPreview = createServerFn({ method: "POST" })
           }),
         ],
       );
-      await client.query(
-        `insert into public.audit_events
-           (tenant_id,actor_id,action,resource,record_id,after_data,request_id,ip)
-         values ($1,$2,'materialize_preview','payroll_cycles',$3,$4::jsonb,$5,$6::inet)`,
-        [
-          data.tenant_id,
-          context.userId,
-          cycleId,
-          JSON.stringify({
-            reference_month: referenceDate,
-            version: nextVersion,
-            ...totals,
-            compensations,
-          }),
-          event.requestId,
-          event.ip,
-        ],
-      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "materialize_preview",
+        resource: "payroll_cycles",
+        recordId: cycleId,
+        after: {
+          reference_month: referenceDate,
+          version: nextVersion,
+          ...totals,
+          compensations,
+        },
+      });
       return { cycleId, version: nextVersion, compensations, ...totals };
     });
   });
@@ -500,7 +486,6 @@ export const transitionPayrollCycle = createServerFn({ method: "POST" })
       throw new Error(
         "Informe uma justificativa de reabertura com ao menos 10 caracteres",
       );
-    const event = auditMetadata();
     return withTransaction(async (client) => {
       const current = await client.query<{
         status: string;
@@ -558,25 +543,19 @@ export const transitionPayrollCycle = createServerFn({ method: "POST" })
           JSON.stringify({ version: data.expected_version }),
         ],
       );
-      await client.query(
-        `insert into public.audit_events
-           (tenant_id,actor_id,action,resource,record_id,before_data,after_data,request_id,ip)
-         values ($1,$2,$3,'payroll_cycles',$4,$5::jsonb,$6::jsonb,$7,$8::inet)`,
-        [
-          data.tenant_id,
-          context.userId,
-          data.action,
-          data.cycle_id,
-          JSON.stringify({ status: rule.from }),
-          JSON.stringify({
-            status: rule.to,
-            reason: data.reason || null,
-            version: data.expected_version,
-          }),
-          event.requestId,
-          event.ip,
-        ],
-      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: data.action,
+        resource: "payroll_cycles",
+        recordId: data.cycle_id,
+        before: { status: rule.from },
+        after: {
+          status: rule.to,
+          reason: data.reason || null,
+          version: data.expected_version,
+        },
+      });
       return { cycleId: data.cycle_id, status: rule.to };
     });
   });

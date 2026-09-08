@@ -1,9 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
-import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
+import { recordAudit } from "./audit.server";
 import {
   loadTenantAccess,
   loadTenantUnitScope,
@@ -23,14 +23,6 @@ function checksum(value: unknown) {
   return createHash("sha256")
     .update(JSON.stringify(value), "utf8")
     .digest("hex");
-}
-
-function auditMetadata() {
-  const request = getRequest();
-  return {
-    requestId: request?.headers?.get("x-request-id") ?? randomUUID(),
-    ip: request?.headers?.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
-  };
 }
 
 export const getSpecialPayrollWorkspace = createServerFn({ method: "POST" })
@@ -207,7 +199,6 @@ export const createSpecialPayroll = createServerFn({ method: "POST" })
     if (!selectedIds.length) throw new Error("Selecione ao menos um vínculo");
     const referenceDate = `${data.reference_month}-01`;
     const referenceYear = Number(data.reference_month.slice(0, 4));
-    const event = auditMetadata();
 
     return withTransaction(async (client) => {
       const linksResult = await client.query<{
@@ -534,25 +525,20 @@ export const createSpecialPayroll = createServerFn({ method: "POST" })
           }),
         ],
       );
-      await client.query(
-        `insert into public.audit_events
-           (tenant_id,actor_id,action,resource,record_id,after_data,request_id,ip)
-         values ($1,$2,'create_special_payroll','payroll_cycles',$3,$4::jsonb,$5,$6::inet)`,
-        [
-          data.tenant_id,
-          context.userId,
-          cycleId,
-          JSON.stringify({
-            reference_month: referenceDate,
-            cycle_type: data.cycle_type,
-            sequence,
-            links: specialResults.length,
-            ...totals,
-          }),
-          event.requestId,
-          event.ip,
-        ],
-      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "create_special_payroll",
+        resource: "payroll_cycles",
+        recordId: cycleId,
+        after: {
+          reference_month: referenceDate,
+          cycle_type: data.cycle_type,
+          sequence,
+          links: specialResults.length,
+          ...totals,
+        },
+      });
       return { cycleId, sequence, links: specialResults.length, ...totals };
     });
   });

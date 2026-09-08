@@ -21,6 +21,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { query } from "./db.server";
 import { requireAuth } from "./data.functions";
+import { recordAuditQ } from "./audit.server";
 import { conformanceOf, NotImplementedConformanceError } from "./conformance";
 import {
   loadTenantAccess,
@@ -57,6 +58,19 @@ export const enqueueEsocialEvent = createServerFn({ method: "POST" })
         context.userId,
       ],
     );
+    // Trilha de auditoria do ato de saída de dados (enfileiramento eSocial).
+    await recordAuditQ({
+      tenantId: data.tenant_id,
+      actorId: context.userId,
+      action: "esocial.enfileirar",
+      resource: "esocial_events",
+      recordId: id,
+      after: {
+        event_type: data.event_type,
+        external_id: data.external_id,
+        payload_sha256: hash,
+      },
+    });
     return { id, hash };
   });
 export const processEsocialQueue = createServerFn({ method: "POST" })
