@@ -2,7 +2,7 @@
 
 ## Context
 
-O `pontopublico` (≈28k linhas TS/TSX, ≈3,8k linhas SQL, 41 migrations, 33 rotas, 109 server functions) é hoje um sistema de **RH, folha de pagamento e ponto** para o setor público, construído contra um edital de folha/RH. O backlog original — 22 épicos, 102 pontos — está 92,2% executado tecnicamente.
+O `pontopublico` (≈28k linhas TS/TSX, ≈3,8k linhas SQL, 39 migrations mais 1 bootstrap, 33 rotas, ~110 server functions) é hoje um sistema de **RH, folha de pagamento e ponto** para o setor público, construído contra um edital de folha/RH. O backlog original — 22 épicos, 102 pontos — está 92,2% executado tecnicamente.
 
 A análise de quatro editais recentes (CREFITO-8 PE 22/2026, TJBA PE 054/2026, MPAC PE 025/2026 e **Timóteo/MG PE 033/2026**) mostrou que o produto cobre **uma** das nove áreas que um pregão de ERP público exige. O PE 033/2026 é explícito: a plataforma deve cobrir **no mínimo 80%** das exigências do Anexo I, **subcontratação é vedada** (salvo data center), e o acervo a migrar abrange tributação, contabilidade, RH/folha, materiais, protocolo, controle interno, NFS-e e portal da transparência.
 
@@ -31,17 +31,28 @@ O que a auditoria confirmou, porque o plano depende disso:
 1b. **A ponte legada é escalação de privilégio entre entes.** `loadAccess` lê `user_roles` sem noção de tenant e `loadTenantAccess` concede as 52 permissões a quem for `admin` legado. Vetor: um usuário com `role='admin'` global que seja membro de outro ente **como simples funcionário** vira administrador pleno daquele ente. É o caminho normal de qualquer usuário criado via `ADMIN_EMAILS`.
 
 1c. **`time_entries` aceita `user_id` arbitrário.** Para quem tem `manage_employees`, `policyFor` não força `user_id`. Combinado com a policy `te_rh_delete`, o ponto é gravável e apagável arbitrariamente sem rastro. Documentado por teste em `tests/pgrest-guards.test.mjs`, a ser invertido quando o ponto ganhar valor probatório.
+
 2. **RLS inerte.** As policies existem e são boas, mas a aplicação nunca faz `SET ROLE` nem `set_config('request.jwt.claim.sub', ...)`; o pool conecta como dono das tabelas. A autorização real é 100% aplicacional e **fail-open por omissão**: esquecer `requireTenantPermission` num handler novo abre o tenant inteiro.
+
 3. **Ponte legada de permissões.** `src/lib/tenant-access.server.ts:106-189` concede as 52 permissões a quem tem `role='admin'` no modelo antigo, contornando todo o RBAC do banco.
+
 4. **Sem MFA.** Nenhum segundo fator para permissões de criticidade `critica` (`payroll.cycles.close`, `security.manage`, `tenant.manage`).
-5. **Três módulos são fachada.** `esocial.functions.ts` marca eventos como assinados sem assinar e não gera XML; `official-export.functions.ts` devolve o **mesmo CSV de 5 colunas** para TCE-CE, SIOPE e MAND; `bank-remittance.functions.ts` grava `layout_version='CNAB240-v1'` e produz linhas de **47 caracteres** (verificado) onde o CNAB 240 exige registros de 240 posições com header de arquivo, header de lote, segmentos e trailers. Nenhum dos três tem tela — são backends órfãos.
+
+5. **~~Três módulos são fachada.~~** ✅ **MARCADO NA ONDA 0.** `esocial.functions.ts` marcava eventos como assinados sem assinar; `official-export.functions.ts` devolvia o mesmo CSV de 5 colunas para TCE-CE, SIOPE e MAND; `bank-remittance.functions.ts` gravava `layout_version='CNAB240-v1'` produzindo linhas de 47 caracteres onde o CNAB 240 exige 240 posições. Rótulos passaram a `RASCUNHO_*`, o eSocial falha explicitamente, e `src/lib/conformance.ts` registra o status de cada artefato. Falta a implementação real (Ondas 1-2).
+
 6. **Motor não expressa tabela progressiva.** A AST não tem condicionais nem comparadores; INSS/IRRF progressivos são matematicamente impossíveis nela. O cálculo real vive fora do motor, e `payroll_config` é singleton **sem `tenant_id` e sem vigência** — faixas de 2025 hardcoded como DEFAULT.
+
 7. **RPPS inexistente** (zero ocorrências). Para folha pública, é ausência estrutural.
+
 8. **Ponto sem valor probatório.** Sem NSR, AFD, AEJ ou REP-P; RH pode **deletar batidas sem trilha**; `time_entries` está fora do multi-tenant; feriado é calculado como `date.getDay()===0`.
+
 9. **Ilhas desconectadas.** `payroll_monthly_variables` é gravada pela importação e **nunca lida**; o ponto não alimenta a folha (horas e dias são digitados à mão).
+
 10. **Duas gerações coexistindo.** `profiles` vs `persons`+`employment_links`; `payroll_periods` vs `payroll_cycles`; duas telas de folha no menu sem indicar qual vale.
+
 11. **Auditoria em 9 de 24 módulos**, sem triggers, sem helper compartilhado. Remessa bancária, exportação oficial, eSocial e migração histórica não são auditados — exatamente as operações que um TCE pediria em trilha.
-12. **Testes bimodais e sem CI.** Sprints 1-7 têm testes reais em PGlite com casos negativos; Sprints 8-20 são `String.includes()` sobre o código-fonte. Não há `.github/`. **As 41 migrations nunca foram aplicadas num banco real.**
+
+12. **Testes bimodais e sem CI.** _Parcialmente sanado na Onda 0._ Sprints 1-7 têm testes reais em PGlite com casos negativos; Sprints 8-20 eram `String.includes()` sobre o código-fonte. Havia zero automação — a Onda 0 acrescentou `.github/workflows/ci.yml`. **As 39 migrations foram aplicadas num PostgreSQL real pela primeira vez durante a Onda 0**, não durante as sprints; o CI passou a fazê-lo a cada push. Falta converter os validadores de grep das Sprints 8-20 em testes reais.
 
 ---
 
@@ -59,17 +70,17 @@ Consequências para o roadmap:
 
 ### As nove áreas
 
-| # | Área | Situação | Papel |
-|---|---|---|---|
-| 1 | Planejamento e Orçamento (PPA, LDO, LOA, créditos adicionais) | 🔴 inexistente | núcleo SIAFIC |
-| 2 | Contabilidade PCASP (empenho→liquidação→pagamento, restos a pagar, balanços) | 🔴 inexistente | núcleo SIAFIC |
-| 3 | Tesouraria (contas, OB, conciliação, fluxo de caixa) | 🟡 só remessas | núcleo SIAFIC |
-| 4 | Tributação e Receita (IPTU, ISS, ITBI, dívida ativa, NFS-e) | 🔴 inexistente | estruturante |
-| 5 | **RH, Folha e Ponto** | 🟢 base sólida | estruturante |
-| 6 | Materiais (Lei 14.133, contratos, almoxarifado, patrimônio, frotas, PNCP) | 🔴 inexistente | estruturante |
-| 7 | Protocolo e Processo Eletrônico (+ e-SIC/LAI) | 🔴 inexistente | apoio |
-| 8 | Controle Interno | 🟡 só trilha técnica | apoio |
-| 9 | Portal da Transparência (LC 131/2009, dados abertos) | 🔴 inexistente | apoio |
+| #   | Área                                                                         | Situação             | Papel         |
+| --- | ---------------------------------------------------------------------------- | -------------------- | ------------- |
+| 1   | Planejamento e Orçamento (PPA, LDO, LOA, créditos adicionais)                | 🔴 inexistente       | núcleo SIAFIC |
+| 2   | Contabilidade PCASP (empenho→liquidação→pagamento, restos a pagar, balanços) | 🔴 inexistente       | núcleo SIAFIC |
+| 3   | Tesouraria (contas, OB, conciliação, fluxo de caixa)                         | 🟡 só remessas       | núcleo SIAFIC |
+| 4   | Tributação e Receita (IPTU, ISS, ITBI, dívida ativa, NFS-e)                  | 🔴 inexistente       | estruturante  |
+| 5   | **RH, Folha e Ponto**                                                        | 🟢 base sólida       | estruturante  |
+| 6   | Materiais (Lei 14.133, contratos, almoxarifado, patrimônio, frotas, PNCP)    | 🔴 inexistente       | estruturante  |
+| 7   | Protocolo e Processo Eletrônico (+ e-SIC/LAI)                                | 🔴 inexistente       | apoio         |
+| 8   | Controle Interno                                                             | 🟡 só trilha técnica | apoio         |
+| 9   | Portal da Transparência (LC 131/2009, dados abertos)                         | 🔴 inexistente       | apoio         |
 
 ### Obrigações acessórias transversais
 
@@ -85,22 +96,22 @@ Seis ondas, sequenciadas por **tempo até receita**. A Onda 1 existe para gerar 
 
 ### Onda 0 — Saneamento da fundação `bloqueante`
 
-*Adicionar oito domínios sobre esta base multiplicaria a dívida por oito. Nada da Onda 2 em diante deve começar antes daqui.*
+_Adicionar oito domínios sobre esta base multiplicaria a dívida por oito. Nada da Onda 2 em diante deve começar antes daqui._
 
-1. ✅ **Aplicar as migrations num banco real.** *Feito.* As 40 migrations aplicaram em PostgreSQL 16 real sem falha: 71 tabelas em `public`, 4 em `analytics`, 2 em `private`, 126 policies, 36 funções, 50 permissões, 4 papéis-sistema. Reaplicação idempotente. Também corrigido: o lockfile estava dessincronizado e `npm ci` abortava — ou seja, **o `Dockerfile` não construía**.
+1. ✅ **Aplicar as migrations num banco real.** _Feito._ As 40 migrations aplicaram em PostgreSQL 16 real sem falha: 71 tabelas em `public`, 4 em `analytics`, 2 em `private`, 126 policies, 36 funções, 50 permissões, 4 papéis-sistema. Reaplicação idempotente. Também corrigido: o lockfile estava dessincronizado e `npm ci` abortava — ou seja, **o `Dockerfile` não construía**.
 2. **Fechar o furo de tenant.** A saída de menor dívida e sem tocar em nenhuma das 10 telas legadas: mover a decisão de tenant do chamador para o compilador de query. `QueryReq` ganha `tenant_id` obrigatório, o `QueryBuilder` o injeta a partir do tenant ativo que `auth-context.tsx` já mantém, e `dbQuery` passa a chamar `loadTenantAccess` (que já rejeita quem não tem membership). Substituir `ALLOWED_TABLES: Set<string>` por um registro com **união discriminada** — `{strategy:"direct", column:"tenant_id"}` para `unidades`, `{strategy:"via_member", column:"user_id"}` para as demais — de modo que **uma tabela nova sem estratégia declarada não compile**. É a diferença entre lembrar de filtrar e não conseguir esquecer.
-2b. **Corrigir na mesma passada:** forçar `user_id` no insert de `time_entries` (defeito 1c) e o operador `is`, que gera `IS $1` — SQL inválido para valor não-nulo.
+   2b. **Corrigir na mesma passada:** forçar `user_id` no insert de `time_entries` (defeito 1c) e o operador `is`, que gera `IS $1` — SQL inválido para valor não-nulo.
 3. **Tornar a autorização fail-closed — sem ativar RLS agora.** Ativar RLS de verdade exigiria `SET ROLE`/`set_config` por requisição, escopados à sessão do client; como `db.server.ts` expõe `query()` no nível de módulo sobre um pool, isso obrigaria a reescrever as **109 server functions** para receberem um client. Maior refatoração possível, risco alto, zero funcionalidade nova. Em vez disso: um invólucro `withTenant(permission, handler)` obrigatório, um teste de CI que falhe se um `createServerFn` não referenciar `loadTenantAccess` sem estar em allowlist comentada, e conectar o pool com um role **não-dono e sem BYPASSRLS**, o que transforma "esqueci de filtrar" em erro de permissão em vez de vazamento. **A Onda 2 nasce com RLS real**, escrita contra `current_setting('app.tenant_id')` em vez do `auth.uid()` herdado do Supabase — lá não há chamador legado e o custo desaparece.
 4. **Aposentar a ponte legada** de `tenant-access.server.ts:106-189`, migrando os papéis antigos para atribuições reais no RBAC.
 5. **MFA (TOTP)** obrigatório para permissões de criticidade `critica`.
-4b. **Aposentar a ponte em quatro passos, nunca de uma vez:** migration que materializa cada regra hardcoded como papel real; flag `LEGACY_ROLE_BRIDGE` com telemetria em `audit_events` registrando toda vez que a ponte for a **única** origem de uma permissão; virar para `off`; só então deletar as linhas 106-189. Último consumidor a migrar: `AppShell.tsx`, que ainda decide menu por `isAdmin`/`isRh` legados.
+   4b. **Aposentar a ponte em quatro passos, nunca de uma vez:** migration que materializa cada regra hardcoded como papel real; flag `LEGACY_ROLE_BRIDGE` com telemetria em `audit_events` registrando toda vez que a ponte for a **única** origem de uma permissão; virar para `off`; só então deletar as linhas 106-189. Último consumidor a migrar: `AppShell.tsx`, que ainda decide menu por `isAdmin`/`isRh` legados.
 
 5b. **MFA com retorno desproporcional:** `security_permissions.criticidade` já existe com os valores `normal|sensivel|critica`. Basta `requireTenantPermission` consultar a criticidade e exigir `mfa_verified_at` recente quando for `critica`. Uma mudança em uma função cobre as 5 permissões críticas de hoje **e todas as futuras** — emissão de empenho, ordem bancária, encerramento de exercício. TOTP são ~80 linhas com `node:crypto`, e `input-otp` já é dependência.
 
 6. **Auditoria com helper compartilhado**, cobrindo as operações de saída de dados hoje descobertas. Para as tabelas do SIAFIC, adicionalmente **triggers no banco**: em contabilidade, trilha contornável por código futuro não serve.
-7. ✅ **CI mínimo.** *Feito.* Cinco jobs, todos verificados verdes localmente antes do commit: catraca de qualidade, dry run em PGlite, **migrations em PostgreSQL 17 real com reaplicação idempotente**, testes e build de produção com verificação do servidor Nitro emitido. Como o baseline é de 274 erros de tipo e 2022 de lint, o gate é uma **catraca** (`scripts/quality-ratchet.mjs`): fixa o número atual como teto e falha se subir — pipeline permanentemente vermelho não é gate, é ruído. Falta converter os validadores de grep das Sprints 8-20 em testes reais, reaproveitando o padrão das Sprints 1-7 e o harness de `tests/pgrest-guards.test.mjs`.
+7. ✅ **CI mínimo.** _Feito._ Cinco jobs, todos verificados verdes localmente antes do commit: catraca de qualidade, dry run em PGlite, **migrations em PostgreSQL 17 real com reaplicação idempotente**, testes e build de produção com verificação do servidor Nitro emitido. Como o baseline é de 274 erros de tipo e 2022 de lint, o gate é uma **catraca** (`scripts/quality-ratchet.mjs`): fixa o número atual como teto e falha se subir — pipeline permanentemente vermelho não é gate, é ruído. Falta converter os validadores de grep das Sprints 8-20 em testes reais, reaproveitando o padrão das Sprints 1-7 e o harness de `tests/pgrest-guards.test.mjs`.
 8. **Unificar as duas gerações — separando semanticamente, não fundindo.** `profiles` é referenciada por `app_users`, `security_user_roles`, `audit_events.actor_id`, `tenant_memberships` e `payroll_cycles.prepared_by`; fundir identidade em `persons` seria cascata por todo o esquema de segurança. Declarar três papéis distintos: `profiles` = identidade de login, `persons` = registro civil, `employment_links` = o vínculo. E **`payroll_periods` não migra: congela** — o grão é diferente (usuário/mês com horas vs. competência com resultado por vínculo), converter inventaria dados. Copiar para `historical_records` (a tabela da Sprint 20 existe para isso) e remover `/rh/folha` do menu. **Duas telas de folha inviabilizam qualquer demonstração de PoC**: o avaliador pergunta qual vale, e a resposta correta destrói a credibilidade.
-9. ✅ **Decidir sobre os três módulos-fachada.** *Feito* — ver abaixo.
+9. ✅ **Decidir sobre os três módulos-fachada.** _Feito_ — ver abaixo.
 
 **Prioridade fora de ordem, de 30 minutos:** derrubar a policy `te_rh_delete` e o caminho de delete de batidas, trocando por `deleted_at` + motivo + `audit_events`. Batida apagável sem rastro reprova avaliação técnica independentemente do peso do módulo de ponto no edital.
 
@@ -110,15 +121,15 @@ Seis ondas, sequenciadas por **tempo até receita**. A Onda 1 existe para gerar 
 
 **O que fazer com cada um, e o custo real:**
 
-| Módulo | Decisão | Custo | Por quê |
-|---|---|---|---|
-| **CNAB 240** | **Implementar de verdade, um banco, na Onda 1** | 6-8 dias | É o mais barato dos três e o de maior alavancagem: a folha fechada já existe, e "gera arquivo de crédito no layout FEBRABAN" é item pontuável e **verificável** — o avaliador abre o arquivo e confere posições. Arquitetar como `src/lib/cnab/` com descritores de campo declarativos e um `writer` **puro** (testável sem banco). **Incluir o parser de retorno**: é ele que sustenta "conciliação bancária" e vira insumo direto da Tesouraria na Onda 2. |
-| **Exportações oficiais** | Remover o multiplexador; reconstruir como motor declarativo na Onda 2 | 4-8 semanas, só depois do núcleo contábil | Há um **erro de alvo**: a referência é Timóteo/**MG**, logo o tribunal é **SICOM/TCE-MG**, não TCE-CE. E os arquivos do SICOM são majoritariamente orçamentários e contábeis — gerá-los de `payroll_cycle_results` é impossível por construção, os dados não existem ainda. O `schema_definition` já é `jsonb`: vira descritor real interpretado pelo **mesmo writer posicional do CNAB**. Um motor, três consumidores. |
-| **eSocial** | **Declarar não atendido** | 3-6 meses + HSM para A3 | Exige XML validado por XSD, assinatura XMLDSig com ICP-Brasil, transmissão com polling de protocolo e ordenação de eventos (S-1000 → S-1005 → S-2200 → S-1200). **Não é tarefa solo.** O edital veda subcontratação, então "atendido via terceiro" não é opção. A jogada honesta é declarar não atendido e gastar os pontos em Contabilidade e Controle Interno, onde o custo por ponto é uma ordem de grandeza menor. |
+| Módulo                   | Decisão                                                               | Custo                                     | Por quê                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ------------------------ | --------------------------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **CNAB 240**             | **Implementar de verdade, um banco, na Onda 1**                       | 6-8 dias                                  | É o mais barato dos três e o de maior alavancagem: a folha fechada já existe, e "gera arquivo de crédito no layout FEBRABAN" é item pontuável e **verificável** — o avaliador abre o arquivo e confere posições. Arquitetar como `src/lib/cnab/` com descritores de campo declarativos e um `writer` **puro** (testável sem banco). **Incluir o parser de retorno**: é ele que sustenta "conciliação bancária" e vira insumo direto da Tesouraria na Onda 2. |
+| **Exportações oficiais** | Remover o multiplexador; reconstruir como motor declarativo na Onda 2 | 4-8 semanas, só depois do núcleo contábil | Há um **erro de alvo**: a referência é Timóteo/**MG**, logo o tribunal é **SICOM/TCE-MG**, não TCE-CE. E os arquivos do SICOM são majoritariamente orçamentários e contábeis — gerá-los de `payroll_cycle_results` é impossível por construção, os dados não existem ainda. O `schema_definition` já é `jsonb`: vira descritor real interpretado pelo **mesmo writer posicional do CNAB**. Um motor, três consumidores.                                      |
+| **eSocial**              | **Declarar não atendido**                                             | 3-6 meses + HSM para A3                   | Exige XML validado por XSD, assinatura XMLDSig com ICP-Brasil, transmissão com polling de protocolo e ordenação de eventos (S-1000 → S-1005 → S-2200 → S-1200). **Não é tarefa solo.** O edital veda subcontratação, então "atendido via terceiro" não é opção. A jogada honesta é declarar não atendido e gastar os pontos em Contabilidade e Controle Interno, onde o custo por ponto é uma ordem de grandeza menor.                                       |
 
 ### Onda 1 — Tornar RH/Folha/Ponto vendável
 
-*Objetivo: primeiro contrato → primeiro atestado de capacidade técnica.*
+_Objetivo: primeiro contrato → primeiro atestado de capacidade técnica._
 
 - **Tabelas fiscais como entidade de primeira classe + exatamente UM nó novo na AST.** A alternativa — uma flag `calculation_kind='inss'` com código hardcoded — funciona para INSS e IRRF federais e **quebra no RPPS**, porque cada ente tem alíquotas definidas em lei municipal: cada município novo viraria um deploy. Em vez disso, `fiscal_tables` + `fiscal_table_versions` (reusando o vocabulário de ciclo de vida de `payroll_rubric_versions`, que já tem `status='publicada'`, vigência e checksum, com resolução já testada) e um nó `{type:"table_lookup", table:"INSS_FEDERAL", mode:"progressive", base:<ast>}`. As propriedades que preservam a segurança: `table` é **um código, não dados** — a AST nunca contém alíquota; **zero I/O no avaliador** — as tabelas chegam pré-carregadas como `Map`, igual às variáveis hoje, mantendo `payroll-formula.ts` uma função pura; zero operadores novos; faixas limitadas por CHECK. O motor fica fechado e os dados abertos, que é a propriedade que um ERP multi-município precisa. O id **e o checksum** da versão de tabela vão para a memória de cálculo — é o que torna o número defensável perante o TCE.
 - **Aposentar `payroll_config`** (singleton sem `tenant_id` e sem vigência, faixas de 2025 como DEFAULT de coluna): migration lê a linha atual e cria `INSS_FEDERAL` e `IRRF_FEDERAL` vigentes de 2025-01-01. Publicação de tabela fiscal é permissão de criticidade `critica` → exige MFA.
@@ -189,7 +200,7 @@ Cada onda só se considera concluída com evidência executável, não com códi
 
 **Gate permanente (toda mudança):** `npm run lint`, `npm run typecheck`, `npm run db:dryrun` e a suíte de testes, rodando em CI. Nenhum merge sem os quatro verdes.
 
-**Onda 0:** banco limpo subido via `docker compose`, 41 migrations aplicadas por `npm run db:migrate`, `npm run db:status` sem pendências. Teste automatizado que cria dois tenants, um usuário em cada, e prova que nenhum caminho — inclusive `dbQuery`/`pgrest` — devolve dado do outro. Teste que detecta handler sem `requireTenantPermission`. Login com TOTP exigido em operação crítica.
+**Onda 0:** banco limpo subido via `docker compose`, 39 migrations aplicadas por `npm run db:migrate`, `npm run db:status` sem pendências. Teste automatizado que cria dois tenants, um usuário em cada, e prova que nenhum caminho — inclusive `dbQuery`/`pgrest` — devolve dado do outro. Teste que detecta handler sem `requireTenantPermission`. Login com TOTP exigido em operação crítica.
 
 **Onda 1:** folha de uma competência real calculada ponta a ponta com memória de cálculo conferível; AFD e AEJ gerados e validados por ferramenta oficial; evento eSocial assinado e transmitido em ambiente de homologação da Receita, com recibo; conferência manual de uma rescisão e de umas férias contra cálculo feito à mão.
 
@@ -205,16 +216,16 @@ Cada onda só se considera concluída com evidência executável, não com códi
 
 Premissa: solo com Claude Code, ~30 horas produtivas por semana.
 
-| Onda | Semanas | Justificativa da posição |
-|---|---|---|
-| 0 — Saneamento | **4-6** | Bloqueante; parcialmente feito |
-| 1 — Motor fiscal + RPPS + ponto↔folha + CNAB real | **5-7** | Receita mais cedo: a folha é vendável sozinha |
-| 2 — SIAFIC | **12-16** | **Tudo** posta nele |
-| 3 — Materiais / PNCP | **14-18** | Gera empenho para o que não é folha. Ordem interna: compras → contratos → almoxarifado → patrimônio → frotas → PNCP |
-| 4 — Tributação | **14-20** | Menor reuso por esforço: cada Código Tributário Municipal é diferente |
-| 5 — Protocolo | **6-8** | Construído antes de existirem processos, vira arquivo genérico |
-| 6 — Controle interno | **4-6** | É leitor puro: alto valor de edital, risco baixo |
-| 7 — Transparência | **4-6** | Publica tudo; feito antes, refaz-se |
+| Onda                                              | Semanas   | Justificativa da posição                                                                                            |
+| ------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------- |
+| 0 — Saneamento                                    | **4-6**   | Bloqueante; parcialmente feito                                                                                      |
+| 1 — Motor fiscal + RPPS + ponto↔folha + CNAB real | **5-7**   | Receita mais cedo: a folha é vendável sozinha                                                                       |
+| 2 — SIAFIC                                        | **12-16** | **Tudo** posta nele                                                                                                 |
+| 3 — Materiais / PNCP                              | **14-18** | Gera empenho para o que não é folha. Ordem interna: compras → contratos → almoxarifado → patrimônio → frotas → PNCP |
+| 4 — Tributação                                    | **14-20** | Menor reuso por esforço: cada Código Tributário Municipal é diferente                                               |
+| 5 — Protocolo                                     | **6-8**   | Construído antes de existirem processos, vira arquivo genérico                                                      |
+| 6 — Controle interno                              | **4-6**   | É leitor puro: alto valor de edital, risco baixo                                                                    |
+| 7 — Transparência                                 | **4-6**   | Publica tudo; feito antes, refaz-se                                                                                 |
 
 **Total: 63-87 semanas ≈ 15 a 21 meses solo.**
 
@@ -222,7 +233,7 @@ Premissa: solo com Claude Code, ~30 horas produtivas por semana.
 
 Eles não chegam juntos:
 
-1. **Conhecimento de domínio — início da Onda 2, parcialmente coberto.** PCASP, Lei 4.320 e DCASP estão cobertos pela sua própria formação — caso raro em que esse gargalo é adiado. Mas os layouts do TCE e o plano de contas do município exigem validação por um contador *daquele município*. **É preciso uma prefeitura parceira de homologação desde o início da Onda 2**; sem ela, a Onda 2 produz código que nunca encontrou um balancete real, e a descoberta acontece na demonstração.
+1. **Conhecimento de domínio — início da Onda 2, parcialmente coberto.** PCASP, Lei 4.320 e DCASP estão cobertos pela sua própria formação — caso raro em que esse gargalo é adiado. Mas os layouts do TCE e o plano de contas do município exigem validação por um contador _daquele município_. **É preciso uma prefeitura parceira de homologação desde o início da Onda 2**; sem ela, a Onda 2 produz código que nunca encontrou um balancete real, e a descoberta acontece na demonstração.
 2. **Suporte e implantação — na PRIMEIRA venda, não na décima.** Uma pessoa não constrói a Onda 3 e atende uma prefeitura no fechamento do mês ao mesmo tempo: o fechamento não espera. Mínimo viável: um implantador com formação contábil.
 3. **Homologação por terceiros — Onda 4.** NFS-e e PNCP exigem credenciamento e testes contra ambientes governamentais. São limitados por **calendário, não por esforço** — não comprimem com mais horas.
 
@@ -235,10 +246,10 @@ Chegar a 80% de um ERP público completo solo, no prazo do edital, não é reali
 
 ## Riscos
 
-| Risco | Mitigação |
-|---|---|
-| Declarar conformidade com base em módulo-fachada | Renomear e marcar como não-conforme **agora** (Onda 0, item 9) |
-| Escopo de ERP completo excede capacidade solo | Vender módulo isolado (folha/ponto) enquanto a operação não existe |
-| Um TCE por estado multiplica o custo | Um layout por vez, disparado por oportunidade concreta |
-| Repetir o padrão "código escrito ≠ sistema funcionando" | CI obrigatório e verificação contra sistema oficial, nunca mock |
-| Onda 0 parecer investimento sem retorno visível | É pré-requisito de venda: nenhum dos defeitos passa numa auditoria de PoC |
+| Risco                                                   | Mitigação                                                                 |
+| ------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Declarar conformidade com base em módulo-fachada        | Renomear e marcar como não-conforme **agora** (Onda 0, item 9)            |
+| Escopo de ERP completo excede capacidade solo           | Vender módulo isolado (folha/ponto) enquanto a operação não existe        |
+| Um TCE por estado multiplica o custo                    | Um layout por vez, disparado por oportunidade concreta                    |
+| Repetir o padrão "código escrito ≠ sistema funcionando" | CI obrigatório e verificação contra sistema oficial, nunca mock           |
+| Onda 0 parecer investimento sem retorno visível         | É pré-requisito de venda: nenhum dos defeitos passa numa auditoria de PoC |
