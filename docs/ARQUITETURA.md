@@ -45,7 +45,9 @@ trate-o como área de risco.
 `persons` = registro civil, `employment_links` = vínculo (contrato numa
 entidade). O caminho novo lê o civil de `persons` e o emprego de
 `employment_links`, nunca de `profiles`. **Folha:** a válida é `payroll_cycles`
-(`/rh/ciclos`); a legada `payroll_periods` foi congelada no O0-13 (ADR 0017).
+(`/rh/ciclos`); a legada `payroll_periods` foi congelada no O0-13 (ADR 0017). O
+singleton fiscal `payroll_config` foi congelado no O1-01b — a fonte fiscal viva é
+`fiscal_tables` (versionada, com checksum; ADR 0003).
 
 ### O shim Supabase — leia antes de "consertar"
 

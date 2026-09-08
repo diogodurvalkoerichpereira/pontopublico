@@ -66,5 +66,8 @@ Convenções e mecânica:
   as tabelas como 3º parâmetro — um segundo `Map` pré-carregado ao lado das
   variáveis; permanece **sem I/O**.
 
-Fora do escopo de O1-01 (ver BACKLOG O1-01b): repointar `payroll-special`
-(13º/rescisão) de `payroll_config` para o loader e aposentar `payroll_config`.
+**Feito em O1-01b:** o 13º (`payroll-special.functions.ts`) foi repontado de
+`payroll_config` para `loadFiscalTables`; a matemática de faixa unificou-se em
+`progressiveLookup`/`bracketLookup` (fonte única) e `payroll_config` foi congelada
+in-place (ADR 0017). A rescisão (`employment-special.functions.ts`) nunca usou
+`payroll_config`. RPPS por ente sobre este mesmo nó fica no O1-02.

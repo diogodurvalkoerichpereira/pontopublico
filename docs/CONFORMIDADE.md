@@ -30,7 +30,7 @@ Legenda: 🟢 atende · 🟡 atende parcialmente · 🔴 não atende.
 | Cadastro de pessoas, vínculos, estrutura organizacional | 🟢 | — |
 | Rubricas versionadas e memória de cálculo | 🟢 | AST auditável com checksum |
 | Ciclo de folha com aprovação e fechamento | 🟢 | Segregação de funções, lock otimista |
-| Tabelas fiscais versionadas por vigência | 🔴 | `payroll_config` singleton sem vigência (O1-01) |
+| Tabelas fiscais versionadas por vigência | 🟢 | `fiscal_tables`/`fiscal_table_versions` por vigência e ente, checksum na memória (O1-01/O1-01b); `payroll_config` aposentado |
 | RPPS | 🔴 | Inexistente (O1-02) |
 | Ponto eletrônico Portaria 671 (AFD/AEJ/NSR) | 🔴 | Só batida manual sem valor probatório (O1-03) |
 | Rescisão e férias com INSS/IRRF | 🟡 | Aritmética simplificada (O1-05) |

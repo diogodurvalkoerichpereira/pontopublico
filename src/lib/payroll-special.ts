@@ -1,5 +1,13 @@
-export type ProgressiveBand = { ate: number; aliquota: number };
-export type IncomeTaxBand = { ate: number; aliquota: number; deduzir: number };
+// A matemática fiscal (faixa progressiva / tabela por faixa) vem do motor do ADR
+// 0003 — fonte única. As faixas chegam de `loadFiscalTables` (versionadas, com
+// checksum), não mais do singleton `payroll_config` (congelado no O1-01b).
+import {
+  progressiveLookup,
+  bracketLookup,
+  type FiscalBracket,
+} from "./payroll-formula";
+
+const round2 = (value: number) => Number(value.toFixed(2));
 
 function utcDate(value: string) {
   return new Date(`${value.slice(0, 10)}T00:00:00Z`);
@@ -26,47 +34,14 @@ export function countThirteenthSalaryMonths(
   return months;
 }
 
-export function calculateProgressiveContribution(
-  base: number,
-  bands: ProgressiveBand[],
-  ceiling: number,
-) {
-  const limited = Math.max(0, Math.min(base, ceiling));
-  let total = 0;
-  let previous = 0;
-  for (const band of [...bands].sort((a, b) => a.ate - b.ate)) {
-    if (limited <= previous) break;
-    const top = Math.min(limited, band.ate);
-    total += Math.max(0, top - previous) * band.aliquota;
-    previous = band.ate;
-  }
-  return Number(total.toFixed(2));
-}
-
-export function calculateIncomeTax(
-  base: number,
-  bands: IncomeTaxBand[],
-  dependentDeduction = 0,
-  dependents = 0,
-) {
-  const taxable = Math.max(0, base - dependentDeduction * dependents);
-  const band = [...bands]
-    .sort((a, b) => a.ate - b.ate)
-    .find((item) => taxable <= item.ate);
-  if (!band) return 0;
-  return Number(Math.max(0, taxable * band.aliquota - band.deduzir).toFixed(2));
-}
-
 export function calculateThirteenthSalary(input: {
   calculationBase: number;
   months: number;
   installment: "primeira" | "segunda";
   firstInstallmentPaid?: number;
-  socialSecurityBands: ProgressiveBand[];
-  socialSecurityCeiling: number;
-  incomeTaxBands: IncomeTaxBand[];
-  dependentDeduction?: number;
-  dependents?: number;
+  // Faixas das tabelas fiscais vigentes (INSS = progressive, IRRF = bracket).
+  inssBrackets: FiscalBracket[];
+  irrfBrackets: FiscalBracket[];
 }) {
   const months = Math.max(0, Math.min(12, Math.trunc(input.months)));
   const entitlement = Number(
@@ -84,16 +59,16 @@ export function calculateThirteenthSalary(input: {
       netAmount: earnings,
     };
   }
-  const socialSecurity = calculateProgressiveContribution(
-    entitlement,
-    input.socialSecurityBands,
-    input.socialSecurityCeiling,
+  // INSS progressivo: o teto é o topo da última faixa (progressiveLookup para
+  // por faixa). IRRF: faixa onde base<=ate, base*aliquota - deduzir.
+  const socialSecurity = round2(
+    progressiveLookup(entitlement, input.inssBrackets),
   );
-  const incomeTax = calculateIncomeTax(
-    Math.max(0, entitlement - socialSecurity),
-    input.incomeTaxBands,
-    input.dependentDeduction,
-    input.dependents,
+  const incomeTax = round2(
+    bracketLookup(
+      Math.max(0, entitlement - socialSecurity),
+      input.irrfBrackets,
+    ),
   );
   const firstInstallmentCompensation = Number(
     Math.max(0, input.firstInstallmentPaid ?? 0).toFixed(2),

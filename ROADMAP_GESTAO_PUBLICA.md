@@ -40,7 +40,7 @@ O que a auditoria confirmou, porque o plano depende disso:
 
 5. **~~Três módulos são fachada.~~** ✅ **MARCADO NA ONDA 0.** `esocial.functions.ts` marcava eventos como assinados sem assinar; `official-export.functions.ts` devolvia o mesmo CSV de 5 colunas para TCE-CE, SIOPE e MAND; `bank-remittance.functions.ts` gravava `layout_version='CNAB240-v1'` produzindo linhas de 47 caracteres onde o CNAB 240 exige 240 posições. Rótulos passaram a `RASCUNHO_*`, o eSocial falha explicitamente, e `src/lib/conformance.ts` registra o status de cada artefato. Falta a implementação real (Ondas 1-2).
 
-6. **Motor não expressa tabela progressiva.** A AST não tem condicionais nem comparadores; INSS/IRRF progressivos são matematicamente impossíveis nela. O cálculo real vive fora do motor, e `payroll_config` é singleton **sem `tenant_id` e sem vigência** — faixas de 2025 hardcoded como DEFAULT.
+6. **~~Motor não expressa tabela progressiva.~~** ✅ **RESOLVIDO NA ONDA 1 (O1-01/O1-01b).** A AST ganhou o nó `table_lookup` (progressive/bracket) sobre `fiscal_tables`/`fiscal_table_versions` (por vigência e ente, com checksum na memória); o avaliador continua puro. O 13º foi repontado para `loadFiscalTables` e o singleton `payroll_config` foi congelado in-place.
 
 7. **RPPS inexistente** (zero ocorrências). Para folha pública, é ausência estrutural.
 

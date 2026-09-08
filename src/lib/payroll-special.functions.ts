@@ -13,9 +13,8 @@ import {
 import {
   calculateThirteenthSalary,
   countThirteenthSalaryMonths,
-  type IncomeTaxBand,
-  type ProgressiveBand,
 } from "./payroll-special";
+import { loadFiscalTables } from "./fiscal-tables.server";
 
 const TenantInput = z.object({ tenant_id: z.string().uuid() });
 
@@ -256,18 +255,19 @@ export const createSpecialPayroll = createServerFn({ method: "POST" })
         sequence = Number(next.rows[0].sequence);
       }
 
-      const configResult = await client.query<{
-        teto_inss: string;
-        inss_faixas: ProgressiveBand[];
-        irrf_faixas: IncomeTaxBand[];
-        deducao_dependente: string;
-      }>(
-        `select teto_inss::text,inss_faixas,irrf_faixas,deducao_dependente::text
-         from public.payroll_config order by updated_at desc limit 1`,
+      // Tabelas fiscais versionadas vigentes na competência (O1-01b): a fonte
+      // saiu do singleton payroll_config para fiscal_tables (com checksum na
+      // memória, defensável perante o TCE). Ver ADR 0003.
+      const fiscalTables = await loadFiscalTables(
+        data.tenant_id,
+        referenceDate,
       );
-      const taxConfig = configResult.rows[0];
-      if (data.cycle_type.startsWith("decimo_") && !taxConfig)
-        throw new Error("Configuração de INSS/IRRF não encontrada");
+      const inssTable = fiscalTables.get("INSS_FEDERAL");
+      const irrfTable = fiscalTables.get("IRRF_FEDERAL");
+      if (data.cycle_type.startsWith("decimo_") && (!inssTable || !irrfTable))
+        throw new Error(
+          "Tabelas fiscais INSS/IRRF não encontradas para a competência",
+        );
 
       const historyResult = await client.query<{
         employment_link_id: string;
@@ -387,16 +387,18 @@ export const createSpecialPayroll = createServerFn({ method: "POST" })
             link.admission_date,
             link.termination_date,
           );
+          if (!inssTable || !irrfTable)
+            throw new Error(
+              "Tabelas fiscais INSS/IRRF não encontradas para a competência",
+            );
           const calculation = calculateThirteenthSalary({
             calculationBase: methodBase,
             months,
             installment:
               data.cycle_type === "decimo_primeira" ? "primeira" : "segunda",
             firstInstallmentPaid: firstPaid.get(link.id),
-            socialSecurityBands: taxConfig.inss_faixas,
-            socialSecurityCeiling: Number(taxConfig.teto_inss),
-            incomeTaxBands: taxConfig.irrf_faixas,
-            dependentDeduction: Number(taxConfig.deducao_dependente),
+            inssBrackets: inssTable.brackets,
+            irrfBrackets: irrfTable.brackets,
           });
           specialResults.push({
             linkId: link.id,
@@ -435,7 +437,22 @@ export const createSpecialPayroll = createServerFn({ method: "POST" })
       const configuration = {
         advance_percentage: data.advance_percentage ?? null,
         calculation_method: data.calculation_method ?? null,
-        tax_snapshot: taxConfig ?? null,
+        // Provenância fiscal: id + checksum das versões vigentes usadas (ADR 0003).
+        tax_snapshot:
+          inssTable && irrfTable
+            ? {
+                inss: {
+                  code: "INSS_FEDERAL",
+                  version_id: inssTable.versionId,
+                  checksum: inssTable.checksum,
+                },
+                irrf: {
+                  code: "IRRF_FEDERAL",
+                  version_id: irrfTable.versionId,
+                  checksum: irrfTable.checksum,
+                },
+              }
+            : null,
         engine_version: "special-v1.0.0",
       };
       await client.query(

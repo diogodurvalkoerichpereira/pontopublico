@@ -30,7 +30,9 @@ const TABLE_REGISTRY = {
   user_roles: { strategy: "global" }, // papéis globais; lido no bootstrap do login
   rh_permissions: { strategy: "global" }, // idem
   work_schedules: { strategy: "global" }, // catálogo, sem coluna de dono
-  payroll_config: { strategy: "global" }, // singleton
+  // payroll_config (faixas INSS/IRRF do singleton legado) foi congelada no
+  // O1-01b: sem registro aqui, o shim não a alcança — arquivo read-only. A fonte
+  // fiscal viva é fiscal_tables (versionada, com checksum). Ver ADR 0003 e 0017.
 } as const satisfies Record<string, TenantStrategy>;
 
 function tableStrategy(table: string): TenantStrategy | null {
@@ -184,10 +186,6 @@ function policyFor(req: QueryReq, ctx: AccessCtx | null): Policy {
         denied: "Edição e exclusão de ponto são feitas pelo módulo de ponto",
       };
     }
-
-    case "payroll_config":
-      if (a === "select") return {};
-      return can("close_payroll") ? {} : { denied: "Sem permissão para folha" };
 
     case "unidades":
       if (a === "select") return isRh ? {} : { emptyResult: true };

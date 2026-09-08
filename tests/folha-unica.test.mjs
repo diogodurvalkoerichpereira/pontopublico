@@ -79,16 +79,21 @@ test("comportamento: payroll_periods está fora do shim (congelada)", async () =
   assert.equal(stub.executed.length, 0, "não pode tocar o banco");
 });
 
-test("comportamento: a folha nova (payroll_cycles não passa pelo shim) e ciclos seguem", async () => {
-  // payroll_cycles nunca esteve no shim — é acessada por server functions. O que
-  // importa aqui: garantir que a legada saiu sem derrubar tabelas ainda válidas.
+test("comportamento: payroll_config está fora do shim (congelada no O1-01b)", async () => {
+  // A fonte fiscal viva virou fiscal_tables (versionada, com checksum); o singleton
+  // payroll_config foi congelado in-place (ADR 0017) — sai do TABLE_REGISTRY, o shim
+  // não a alcança. Repor o registro faz este teste falhar.
   stub.resetExecuted();
   const res = await runQuery(
     { table: "payroll_config", action: "select", filters: [] },
     rhCtx,
     TENANT,
   );
-  assert.ok(!res.error, "payroll_config (compartilhada) continua acessível");
+  assert.ok(
+    res.error,
+    "o singleton fiscal legado não pode ser consultado pelo shim",
+  );
+  assert.equal(stub.executed.length, 0, "não pode tocar o banco");
 });
 
 test("conformidade: /rh/folha saiu do menu e do código", () => {

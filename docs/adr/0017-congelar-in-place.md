@@ -29,6 +29,15 @@ que, na prática, rodaria vazia.
 `payroll_config` **não** é congelada — é compartilhada com a folha nova
 (`payroll-special.functions.ts`).
 
+**Atualização (O1-01b):** `payroll_config` **também foi congelada in-place**, pelo
+mesmo padrão. Depois que O1-01 entregou as tabelas fiscais versionadas
+(`fiscal_tables`, ADR 0003), o único consumidor vivo — o 13º em
+`payroll-special.functions.ts` — foi repontado para `loadFiscalTables`. Sem
+consumidor, o singleton saiu do `TABLE_REGISTRY` e do `policyFor` do shim (sem
+migration, sem DDL): vira arquivo read-only. A fonte fiscal viva passa a ser
+`fiscal_tables`, versionada e com checksum na memória de cálculo. A trava é a
+mesma de `payroll_periods`, coberta por `tests/folha-unica.test.mjs`.
+
 ## Consequências
 
 - Uma folha só no produto (`/rh/ciclos`); o bloqueio de PoC de ADR 0005 é

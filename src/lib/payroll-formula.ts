@@ -170,7 +170,10 @@ function safeResult(value: number, path: string): number {
 }
 
 /** INSS: soma `(min(base,ate)-prev)*aliquota` por faixa; o topo da última é o teto. */
-function progressiveLookup(base: number, brackets: FiscalBracket[]): number {
+export function progressiveLookup(
+  base: number,
+  brackets: FiscalBracket[],
+): number {
   const sorted = [...brackets].sort((a, b) => a.ate - b.ate);
   let prev = 0;
   let acc = 0;
@@ -184,7 +187,7 @@ function progressiveLookup(base: number, brackets: FiscalBracket[]): number {
 }
 
 /** IRRF: faixa onde `base<=ate` → `base*aliquota - deduzir` (nunca negativo). */
-function bracketLookup(base: number, brackets: FiscalBracket[]): number {
+export function bracketLookup(base: number, brackets: FiscalBracket[]): number {
   const sorted = [...brackets].sort((a, b) => a.ate - b.ate);
   const faixa = sorted.find((f) => base <= f.ate) ?? sorted[sorted.length - 1];
   return Math.max(0, base * faixa.aliquota - (faixa.deduzir ?? 0));

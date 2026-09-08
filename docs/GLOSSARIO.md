@@ -105,3 +105,7 @@ civil de `persons` e o emprego de `employment_links`, nunca de `profiles`.
 - **`payroll_periods`** — a folha **legada**, congelada no O0-13 (grão
   usuário/mês com horas). Preservada só como leitura; sem tela e fora do shim.
   Ver ADR 0005 e 0017.
+- **`payroll_config`** — o singleton fiscal **legado** (faixas INSS/IRRF de 2025
+  sem vigência nem ente), congelado no O1-01b. A fonte fiscal viva é
+  `fiscal_tables` / `fiscal_table_versions` (versionadas, com checksum). Fora do
+  shim, só leitura no banco. Ver ADR 0003 e 0017.

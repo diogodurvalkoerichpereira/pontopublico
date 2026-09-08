@@ -253,13 +253,18 @@ cumprido: INSS/IRRF progressivos calculados em cada limite de faixa, com o
 checksum da versão na memória — validado por `tests/fiscal-table-lookup.test.mjs`
 (puro) e `tests/sprint-fiscal-tables.test.mjs` (PGlite + PG16 real). Ver ADR 0003.
 
-### O1-01b — Repointar consumidor vivo e aposentar `payroll_config`
+### ✅ O1-01b — Repointar consumidor vivo e aposentar `payroll_config`
 
-P0 · 2-3 dias · depende de O1-01. Migração de um caminho que já funciona:
-repointar `payroll-special.functions.ts` (13º/rescisão) de `payroll_config`
-(singleton global, não versionado) para `loadFiscalTables`; **aposentar
-`payroll_config`** — tirar do shim e congelar in-place como `payroll_periods`
-(padrão O0-13/ADR 0017); atualizar `tests/folha-unica.test`. Contido e testável.
+P0 · 2-3 dias · depende de O1-01. **Feito.** O 13º
+(`payroll-special.functions.ts`) foi repontado de `payroll_config` para
+`loadFiscalTables` (competência = `${reference_month}-01`), com id+checksum das
+versões na `tax_snapshot` (ADR 0003). A matemática de faixa unificou-se em
+`progressiveLookup`/`bracketLookup` (exportados de `payroll-formula.ts`), **fonte
+única** — os helpers duplicados de `payroll-special.ts` saíram. `payroll_config`
+foi **congelado in-place** (fora do `TABLE_REGISTRY` e do `policyFor` do shim; sem
+migration — padrão O0-13/ADR 0017). Testes: `tests/decimo-terceiro-fiscal.test.mjs`
+(novo — o 13º passa a ter teste) e o flip de `tests/folha-unica.test.mjs`; ambos
+verificados por mutação. A rescisão nunca usou `payroll_config`.
 
 ### O1-02 — RPPS como configuração
 
