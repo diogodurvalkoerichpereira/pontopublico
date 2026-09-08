@@ -48,6 +48,23 @@ decisão consciente, ver `docs/adr/`). É imposta por essas duas linhas
 Isso é **fail-open por omissão**: esquecer as duas linhas num handler novo abre o
 tenant inteiro. Toda consulta filtra por `tenant_id`.
 
+Prefira o invólucro `withTenant`, que reúne as duas numa chamada:
+
+```ts
+.handler(({ data, context }) =>
+  withTenant(context.userId, data.tenant_id, "modulo.acao", async (access) => {
+    return query(`... where tenant_id = $1 ...`, [data.tenant_id]);
+  }),
+);
+```
+
+`tests/authorization-coverage.test.mjs` é a rede: varre por AST todo
+`createServerFn` em `src/lib/*.functions.ts` e **falha o CI** se um handler não
+alcançar um guard (`loadTenantAccess`, `withTenant` ou `loadTenantUnitScope`,
+direto ou por helper local). Exceção legítima (auth, self-service, OCR, admin
+legado) vai na `ALLOWLIST` do teste, com uma razão de uma linha — nunca deixe um
+handler de tenant fora das duas coisas.
+
 ## Regras invioláveis
 
 Cada uma tem um motivo. Regra sem motivo é revogada na primeira pressa — por isso

@@ -254,3 +254,22 @@ export function requireTenantPermission(
     throw new Error(`Sem permissão: ${permission}`);
   }
 }
+
+/**
+ * Invólucro fail-closed para o corpo de uma server function: valida a associação
+ * ao ente (lança se o usuário não for membro), exige a permissão e só então roda
+ * `fn` com o `TenantAccess` resolvido. É o caminho recomendado para todo handler
+ * novo — reúne numa chamada as duas linhas que, esquecidas, abrem o tenant
+ * inteiro (ver CLAUDE.md). O teste `tests/authorization-coverage.test.mjs`
+ * reconhece este helper como cobertura de autorização.
+ */
+export async function withTenant<T>(
+  userId: string,
+  tenantId: string,
+  permission: TenantPermission,
+  fn: (access: TenantAccess) => Promise<T>,
+): Promise<T> {
+  const access = await loadTenantAccess(userId, tenantId);
+  requireTenantPermission(access, permission);
+  return fn(access);
+}

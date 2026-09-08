@@ -74,26 +74,23 @@ policy `te_rh_delete`. Tela `rh.funcionarios.$id.tsx` migrada para as server
 functions. Provado em PostgreSQL 16 real; +4 testes de compilador com mutação.
 `ponto.tsx` (self-punch) inalterado.
 
-### O0-08 — Guard `withTenant` fail-closed + teste de cobertura
+### ✅ O0-08 — Guard `withTenant` fail-closed + teste de cobertura
 
-P0 · 2 dias · **pendente (próximo)**
-
-Problema. Autorização é fail-open por omissão. Nada detecta um handler novo sem
-`requireTenantPermission`.
-
-Abordagem. Invólucro `withTenant(permission, handler)` em
-`src/lib/tenant-access.server.ts`; teste de CI que falha se um `createServerFn`
-em `*.functions.ts` não referenciar `loadTenantAccess` sem estar em allowlist
-comentada. Conectar o pool com role **não-dono e sem BYPASSRLS**.
-
-Aceite.
-
-- [ ] handler novo sem permissão declarada quebra o teste
-- [ ] pool conecta como role não-dono
+P0 · feito. `withTenant(userId, tenantId, permission, fn)` em
+`src/lib/tenant-access.server.ts` reúne `loadTenantAccess` +
+`requireTenantPermission` numa chamada. `tests/authorization-coverage.test.mjs`
+varre por **AST** (compiler API do TS) todo `createServerFn` em
+`*.functions.ts` e falha o CI se um handler não alcançar um guard
+(`loadTenantAccess`/`withTenant`/`loadTenantUnitScope`, direto ou por helper
+local como `assertPersonScope`) sem estar na allowlist comentada. Corrigido o
+único fail-open real: **`publishClosedPayroll`** publicava contracheques de
+qualquer ente com só `requireAuth` — agora valida membership +
+`payroll.cycles.close` + input zod. Verificado por mutação. O pool com role
+não-dono foi **adiado para a Onda 2** (só compensa com RLS ativa, ADR 0002).
 
 ### O0-09 — MFA (TOTP) para permissões críticas
 
-P0 · 3 dias
+P0 · 3 dias · **pendente (próximo)**
 
 Abordagem. `security_permissions.criticidade` já tem `normal|sensivel|critica`.
 `requireTenantPermission` passa a exigir `mfa_verified_at` recente quando
@@ -148,6 +145,9 @@ de folha inviabilizam demonstração de PoC.
 - `test:all` que rode a suíte inteira de validadores.
 - Corrigir o operador `is` em `pgrest.server.ts` (`IS $1` é SQL inválido para não-nulo).
 - Migrar `.validator()` (deprecado, 65 usos) para `.inputValidator()`.
+- Exigir `requireAuth` nos proxies de OCR (`extractAtestadoOCR`,
+  `extractDocumentoOCR`): hoje são endpoints públicos que consomem a
+  `LOVABLE_API_KEY` — risco de abuso do serviço pago, não de tenant.
 
 ---
 

@@ -1,7 +1,12 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
+import {
+  loadTenantAccess,
+  requireTenantPermission,
+} from "./tenant-access.server";
 export const getMyFinancialPortal = createServerFn({ method: "POST" })
   .middleware([requireAuth])
   .handler(async ({ context }) => {
@@ -25,11 +30,22 @@ export const getMyFinancialPortal = createServerFn({ method: "POST" })
         ?.net_amount ?? 0;
     return { links, payslips, vacations, margin: Number(net) * 0.35 };
   });
+const PublishInput = z.object({
+  cycle_id: z.string().uuid(),
+  tenant_id: z.string().uuid(),
+});
+
 export const publishClosedPayroll = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .handler(async ({ data, context }) =>
-    withTransaction(async (c) => {
-      const input = data as { cycle_id: string; tenant_id: string };
+  .validator((v: unknown) => PublishInput.parse(v))
+  .handler(async ({ data, context }) => {
+    // Publicar contracheque é ato pós-fechamento do ciclo: exige ser membro do
+    // ente e ter a permissão de fechar folha. Sem isto, qualquer usuário
+    // autenticado publicava a folha de qualquer ente passando o tenant_id.
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "payroll.cycles.close");
+    return withTransaction(async (c) => {
+      const input = data;
       const cycle = (
         await c.query<any>(
           `select * from public.payroll_cycles where id=$1 and tenant_id=$2 and status='fechada'`,
@@ -68,5 +84,5 @@ export const publishClosedPayroll = createServerFn({ method: "POST" })
         );
       }
       return { published: rows.length, actor: context.userId };
-    }),
-  );
+    });
+  });
