@@ -61,25 +61,22 @@ bootstrap e telas do funcionário preservados. Provado ponta a ponta em
 PostgreSQL 16 real com dois entes e um RH em cada; +6 testes com prova de
 mutação. Sem migration.
 
-### O0-07 — Forçar `user_id` em `time_entries` e remover delete sem trilha
+### ✅ O0-07 — Forçar `user_id` em `time_entries` e remover delete sem trilha
 
-P0 · 1 dia · depende de O0-06 · **pendente (próximo)**
-
-Problema. RH grava batida com `user_id` arbitrário e a policy `te_rh_delete`
-permite apagar batida sem rastro — invalida o valor probatório do ponto.
-
-Abordagem. `policyFor` força `user_id` no insert; substituir DELETE por
-`deleted_at` + motivo + `audit_events`. Inverter o teste que hoje documenta o
-defeito em `tests/pgrest-guards.test.mjs`.
-
-Aceite.
-
-- [ ] insert de batida ignora `user_id` da requisição e usa o do contexto
-- [ ] não há caminho que apague `time_entries` fisicamente
+P0 · feito. O shim passou a criar só a própria batida (força `user_id` do
+contexto no insert) e a **negar** update/delete de `time_entries`; a leitura
+filtra `deleted_at IS NULL`. Criação/edição/exclusão pelo RH foram para
+`src/lib/timesheet.functions.ts` — server functions que validam que o
+funcionário pertence ao ente ativo e gravam `audit_events`; a exclusão é lógica
+(soft-delete) com motivo obrigatório. Migration adicionou `deleted_at/by`,
+`delete_reason`, `updated_at/by`, índice parcial de leituras vivas e removeu a
+policy `te_rh_delete`. Tela `rh.funcionarios.$id.tsx` migrada para as server
+functions. Provado em PostgreSQL 16 real; +4 testes de compilador com mutação.
+`ponto.tsx` (self-punch) inalterado.
 
 ### O0-08 — Guard `withTenant` fail-closed + teste de cobertura
 
-P0 · 2 dias
+P0 · 2 dias · **pendente (próximo)**
 
 Problema. Autorização é fail-open por omissão. Nada detecta um handler novo sem
 `requireTenantPermission`.

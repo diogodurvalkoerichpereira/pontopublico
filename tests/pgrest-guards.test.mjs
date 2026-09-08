@@ -96,11 +96,12 @@ test("UPDATE sem filtro é bloqueado antes de chegar ao banco", async () => {
 
 test("DELETE sem filtro é bloqueado antes de chegar ao banco", async () => {
   stub.resetExecuted();
-  // time_entries é apagável por quem tem manage_employees (policy te_rh_delete),
-  // então a checagem de política passa e a trava de filtro é de fato exercitada.
+  // employee_documents é apagável por quem tem approve_documents, então a
+  // política passa e a trava de "sem filtro" é de fato exercitada. (time_entries
+  // não serve mais: seu delete é negado antes, pelo O0-07.)
   const res = await runQuery(
-    { table: "time_entries", action: "delete", filters: [] },
-    rhCtx,
+    { table: "employee_documents", action: "delete", filters: [] },
+    { userId: rhCtx.userId, roles: ["rh"], perms: ["approve_documents"] },
   );
 
   assert.ok(res.error, "deve retornar erro");
@@ -126,32 +127,6 @@ test("UPDATE com filtro produz SQL com WHERE", async () => {
   const { text } = stub.executed[0];
   assert.match(text, /^UPDATE /);
   assert.match(text, /WHERE/, "o UPDATE precisa carregar WHERE");
-});
-
-test("time_entries: RH grava batida com user_id arbitrário (defeito conhecido)", async () => {
-  stub.resetExecuted();
-  await runQuery(
-    {
-      table: "time_entries",
-      action: "insert",
-      values: {
-        user_id: "99999999-9999-9999-9999-999999999999",
-        tipo: "entrada",
-      },
-      filters: [],
-    },
-    rhCtx,
-  );
-
-  assert.equal(stub.executed.length, 1);
-  const { params } = stub.executed[0];
-  // Documenta o estado atual: policyFor não força user_id para quem tem
-  // manage_employees, então a batida aceita o usuário que vier na requisição.
-  // Quando o ponto ganhar valor probatório, este teste deve ser invertido.
-  assert.ok(
-    params.includes("99999999-9999-9999-9999-999999999999"),
-    "hoje o user_id da requisição é aceito sem verificação",
-  );
 });
 
 test("erro do banco não vaza mensagem crua ao cliente", async () => {
@@ -296,6 +271,83 @@ test("direct/unidades insert com tenant: força tenant_id na linha gravada", asy
   assert.ok(
     params.includes(TENANT_A),
     "o tenant ativo é forçado na linha nova",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Ponto probatório (O0-07): o shim só cria a própria batida; edição/exclusão
+// são negadas (vão pelas server functions); leitura ignora as excluídas.
+// ---------------------------------------------------------------------------
+
+test("time_entries insert força user_id do contexto (ignora o da requisição)", async () => {
+  stub.resetExecuted();
+  await runQuery(
+    {
+      table: "time_entries",
+      action: "insert",
+      values: {
+        user_id: "99999999-9999-9999-9999-999999999999",
+        tipo: "entrada",
+      },
+      wantReturning: true,
+    },
+    rhCtx, // tem manage_employees — antes retornava {} e aceitava o user_id cru
+    TENANT_A,
+  );
+
+  assert.equal(stub.executed.length, 1);
+  const { params } = stub.executed[0];
+  assert.ok(params.includes(rhCtx.userId), "o user_id gravado é o do contexto");
+  assert.ok(
+    !params.includes("99999999-9999-9999-9999-999999999999"),
+    "o user_id da requisição é descartado",
+  );
+});
+
+test("time_entries update é negado pelo shim", async () => {
+  stub.resetExecuted();
+  const res = await runQuery(
+    {
+      table: "time_entries",
+      action: "update",
+      values: { observacao: "x" },
+      filters: [{ col: "id", op: "eq", val: "1" }],
+    },
+    rhCtx,
+    TENANT_A,
+  );
+  assert.ok(res.error, "update deve ser recusado");
+  assert.equal(stub.executed.length, 0, "não pode tocar o banco");
+});
+
+test("time_entries delete é negado pelo shim", async () => {
+  stub.resetExecuted();
+  const res = await runQuery(
+    {
+      table: "time_entries",
+      action: "delete",
+      filters: [{ col: "id", op: "eq", val: "1" }],
+    },
+    rhCtx,
+    TENANT_A,
+  );
+  assert.ok(res.error, "delete deve ser recusado");
+  assert.equal(stub.executed.length, 0, "não pode tocar o banco");
+});
+
+test("time_entries select filtra as batidas excluídas (deleted_at IS NULL)", async () => {
+  stub.resetExecuted();
+  await runQuery(
+    { table: "time_entries", action: "select", filters: [] },
+    rhCtx,
+    TENANT_A,
+  );
+  assert.equal(stub.executed.length, 1);
+  const { text } = stub.executed[0];
+  assert.match(
+    text,
+    /"deleted_at" IS NULL/,
+    "a leitura não pode trazer batidas excluídas",
   );
 });
 

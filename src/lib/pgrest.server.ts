@@ -167,13 +167,22 @@ function policyFor(req: QueryReq, ctx: AccessCtx | null): Policy {
         ? {}
         : { denied: "Sem permissão para escalas" };
 
-    case "time_entries":
-      if (a === "select") return isRh ? {} : { extraFilters: [own] };
-      if (a === "insert")
-        return can("manage_employees")
-          ? {}
-          : { forced: { user_id: ctx.userId } };
-      return can("manage_employees") ? {} : { denied: "Sem permissão" };
+    case "time_entries": {
+      // Batida é registro probatório (O0-07): leitura ignora as excluídas;
+      // o shim só cria a própria batida (self-punch). Edição/exclusão pelo RH
+      // vai por src/lib/timesheet.functions.ts, com validação de ente e trilha.
+      const notDeleted: QueryFilter = {
+        col: "deleted_at",
+        op: "is",
+        val: null,
+      };
+      if (a === "select")
+        return { extraFilters: isRh ? [notDeleted] : [own, notDeleted] };
+      if (a === "insert") return { forced: { user_id: ctx.userId } };
+      return {
+        denied: "Edição e exclusão de ponto são feitas pelo módulo de ponto",
+      };
+    }
 
     case "payroll_periods":
       if (a === "select") return isRh ? {} : { extraFilters: [own] };
