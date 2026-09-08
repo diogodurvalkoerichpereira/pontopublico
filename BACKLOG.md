@@ -238,13 +238,28 @@ Encerra quando: folha de município com RPPS calculada ponta a ponta, ponto
 conforme Portaria 671, eSocial transmitido em homologação, CNAB 240 real aceito
 por um banco.
 
-### O1-01 — Tabelas fiscais versionadas + nó `table_lookup`
+### ✅ O1-01 — Tabelas fiscais versionadas + nó `table_lookup`
 
-P0 · 6 dias. `fiscal_tables` + `fiscal_table_versions` (vocabulário de
-`payroll_rubric_versions`); nó `table_lookup` na AST — `table` é código, não
-dados; zero I/O no avaliador. Aposentar `payroll_config`. Aceite: INSS/IRRF
-progressivos calculados em cada limite de faixa, com o checksum da versão na
-memória de cálculo.
+P0 · 6 dias. **Feito.** `fiscal_tables` + `fiscal_table_versions` (vocabulário
+de `payroll_rubric_versions`), com trigger de não-sobreposição de vigências
+publicadas e convenção `tenant_id` nulo = tabela nacional (INSS/IRRF federais).
+Nó `table_lookup` na AST (`src/lib/payroll-formula.ts`) — `table` é código, não
+dados; dois modos (`progressive` p/ INSS, `bracket` p/ IRRF); as versões chegam
+pré-carregadas num `Map` (`loadFiscalTables`), então o avaliador continua **puro,
+sem I/O**. O id + checksum da versão entram na memória de cálculo. Threaded no
+ciclo (`payroll-simulation.functions.ts`). Seed federal 2025 (`INSS_FEDERAL`,
+`IRRF_FEDERAL`) com checksum pré-computado que o loader reconfere. Aceite
+cumprido: INSS/IRRF progressivos calculados em cada limite de faixa, com o
+checksum da versão na memória — validado por `tests/fiscal-table-lookup.test.mjs`
+(puro) e `tests/sprint-fiscal-tables.test.mjs` (PGlite + PG16 real). Ver ADR 0003.
+
+### O1-01b — Repointar consumidor vivo e aposentar `payroll_config`
+
+P0 · 2-3 dias · depende de O1-01. Migração de um caminho que já funciona:
+repointar `payroll-special.functions.ts` (13º/rescisão) de `payroll_config`
+(singleton global, não versionado) para `loadFiscalTables`; **aposentar
+`payroll_config`** — tirar do shim e congelar in-place como `payroll_periods`
+(padrão O0-13/ADR 0017); atualizar `tests/folha-unica.test`. Contido e testável.
 
 ### O1-02 — RPPS como configuração
 

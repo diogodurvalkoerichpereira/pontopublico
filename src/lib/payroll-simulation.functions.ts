@@ -11,6 +11,7 @@ import {
   requireUnitInScope,
 } from "./tenant-access.server";
 import { checksumFormulaAst } from "./payroll-formula.server";
+import { loadFiscalTables } from "./fiscal-tables.server";
 import {
   evaluateFormulaAst,
   type PayrollFormulaVariable,
@@ -364,6 +365,14 @@ export const runPayrollSimulation = createServerFn({ method: "POST" })
     );
 
     try {
+      // Tabelas fiscais vigentes na competência, pré-carregadas uma vez e
+      // passadas ao avaliador puro (nós table_lookup consultam este Map, sem
+      // I/O dentro do avaliador). Ver O1-01 / ADR 0003.
+      const fiscalTables = await loadFiscalTables(
+        data.tenant_id,
+        referenceDate,
+      );
+
       const items: Array<{
         id: string;
         linkId: string;
@@ -444,6 +453,7 @@ export const runPayrollSimulation = createServerFn({ method: "POST" })
           const evaluation = evaluateFormulaAst(
             verified.ast,
             variables,
+            fiscalTables,
             Number(source.rounding_scale),
             source.rounding_mode,
           );

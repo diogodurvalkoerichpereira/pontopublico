@@ -15,6 +15,9 @@ export const PAYROLL_FORMULA_VARIABLES = [
 export type PayrollFormulaVariable = (typeof PAYROLL_FORMULA_VARIABLES)[number];
 export type PayrollFormulaOperator = "+" | "-" | "*" | "/";
 
+/** Modo de aplicação de uma tabela fiscal ao valor-base (ver ADR 0003). */
+export type FiscalTableMode = "progressive" | "bracket";
+
 export type PayrollFormulaAst =
   | { type: "number"; value: number }
   | { type: "variable"; name: PayrollFormulaVariable }
@@ -23,15 +26,42 @@ export type PayrollFormulaAst =
       operator: PayrollFormulaOperator;
       left: PayrollFormulaAst;
       right: PayrollFormulaAst;
+    }
+  // Consulta a uma tabela fiscal versionada. `table` é CÓDIGO, não dado — a
+  // tabela chega pré-carregada no `Map` de tabelas, então o avaliador continua
+  // função pura, sem I/O. INSS = "progressive" (acumula por faixa até o teto),
+  // IRRF = "bracket" (faixa onde base<=ate: base*aliquota - deduzir).
+  | {
+      type: "table_lookup";
+      table: string;
+      mode: FiscalTableMode;
+      base: PayrollFormulaAst;
     };
+
+/** Uma faixa de tabela fiscal. `deduzir` só existe no modo bracket (IRRF). */
+export interface FiscalBracket {
+  ate: number;
+  aliquota: number;
+  deduzir?: number;
+}
+
+/** Versão vigente de uma tabela fiscal, pré-carregada para o avaliador. */
+export interface FiscalTable {
+  versionId: string;
+  checksum: string;
+  brackets: FiscalBracket[];
+}
 
 export interface FormulaStep {
   path: string;
-  kind: "number" | "variable" | "binary";
+  kind: "number" | "variable" | "binary" | "table_lookup";
   label: string;
   value: number;
   left?: number;
   right?: number;
+  base?: number;
+  tableVersionId?: string;
+  tableChecksum?: string;
 }
 
 export interface FormulaEvaluation {
@@ -100,6 +130,20 @@ function parseNode(
       right,
     };
   }
+  if (node.type === "table_lookup") {
+    assertExactKeys(node, ["type", "table", "mode", "base"], path);
+    if (typeof node.table !== "string" || !/^[A-Z0-9_]+$/.test(node.table))
+      throw new Error(`${path}.table: código de tabela inválido`);
+    if (node.mode !== "progressive" && node.mode !== "bracket")
+      throw new Error(`${path}.mode: modo de tabela não permitido`);
+    const base = parseNode(node.base, `${path}.base`, depth + 1, counter);
+    return {
+      type: "table_lookup",
+      table: node.table,
+      mode: node.mode,
+      base,
+    };
+  }
   throw new Error(`${path}.type: tipo de nó não permitido`);
 }
 
@@ -112,6 +156,8 @@ export function stableFormulaJson(ast: PayrollFormulaAst): string {
     return JSON.stringify({ type: ast.type, value: ast.value });
   if (ast.type === "variable")
     return JSON.stringify({ name: ast.name, type: ast.type });
+  if (ast.type === "table_lookup")
+    return `{"base":${stableFormulaJson(ast.base)},"mode":${JSON.stringify(ast.mode)},"table":${JSON.stringify(ast.table)},"type":"table_lookup"}`;
   return `{"left":${stableFormulaJson(ast.left)},"operator":${JSON.stringify(ast.operator)},"right":${stableFormulaJson(ast.right)},"type":"binary"}`;
 }
 
@@ -123,9 +169,31 @@ function safeResult(value: number, path: string): number {
   return value;
 }
 
+/** INSS: soma `(min(base,ate)-prev)*aliquota` por faixa; o topo da última é o teto. */
+function progressiveLookup(base: number, brackets: FiscalBracket[]): number {
+  const sorted = [...brackets].sort((a, b) => a.ate - b.ate);
+  let prev = 0;
+  let acc = 0;
+  for (const faixa of sorted) {
+    if (base <= prev) break;
+    const cap = Math.min(base, faixa.ate);
+    acc += (cap - prev) * faixa.aliquota;
+    prev = faixa.ate;
+  }
+  return acc;
+}
+
+/** IRRF: faixa onde `base<=ate` → `base*aliquota - deduzir` (nunca negativo). */
+function bracketLookup(base: number, brackets: FiscalBracket[]): number {
+  const sorted = [...brackets].sort((a, b) => a.ate - b.ate);
+  const faixa = sorted.find((f) => base <= f.ate) ?? sorted[sorted.length - 1];
+  return Math.max(0, base * faixa.aliquota - (faixa.deduzir ?? 0));
+}
+
 function evaluateNode(
   ast: PayrollFormulaAst,
   variables: Partial<Record<PayrollFormulaVariable, number>>,
+  tables: Map<string, FiscalTable>,
   path: string,
   steps: FormulaStep[],
 ): number {
@@ -144,8 +212,41 @@ function evaluateNode(
     steps.push({ path, kind: "variable", label: ast.name, value });
     return value;
   }
-  const left = evaluateNode(ast.left, variables, `${path}.left`, steps);
-  const right = evaluateNode(ast.right, variables, `${path}.right`, steps);
+  if (ast.type === "table_lookup") {
+    const table = tables.get(ast.table);
+    if (!table) throw new Error(`${path}: tabela fiscal ausente: ${ast.table}`);
+    const base = evaluateNode(
+      ast.base,
+      variables,
+      tables,
+      `${path}.base`,
+      steps,
+    );
+    const value =
+      ast.mode === "progressive"
+        ? progressiveLookup(base, table.brackets)
+        : bracketLookup(base, table.brackets);
+    safeResult(value, path);
+    // id e checksum da versão entram na memória de cálculo (defensável no TCE).
+    steps.push({
+      path,
+      kind: "table_lookup",
+      label: ast.table,
+      value,
+      base,
+      tableVersionId: table.versionId,
+      tableChecksum: table.checksum,
+    });
+    return value;
+  }
+  const left = evaluateNode(ast.left, variables, tables, `${path}.left`, steps);
+  const right = evaluateNode(
+    ast.right,
+    variables,
+    tables,
+    `${path}.right`,
+    steps,
+  );
   let value: number;
   switch (ast.operator) {
     case "+":
@@ -198,12 +299,13 @@ export function roundPayrollValue(
 export function evaluateFormulaAst(
   input: unknown,
   variables: Partial<Record<PayrollFormulaVariable, number>>,
+  tables: Map<string, FiscalTable> = new Map(),
   scale = 2,
   mode: PayrollRoundingMode = "half_up",
 ): FormulaEvaluation {
   const ast = validateFormulaAst(input);
   const steps: FormulaStep[] = [];
-  const rawValue = evaluateNode(ast, variables, "$", steps);
+  const rawValue = evaluateNode(ast, variables, tables, "$", steps);
   return {
     rawValue,
     roundedValue: roundPayrollValue(rawValue, scale, mode),

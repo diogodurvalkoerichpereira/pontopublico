@@ -68,6 +68,7 @@ aplicação inteira. Manter o shim é decisão consciente — [ADR 0012](adr/001
 | Estrutura organizacional | `unidades` (árvore com anti-ciclo)                                                                                            |
 | Pessoas e vínculos       | `persons`, `employment_links`, `person_dependents`, `pension_beneficiaries`                                                   |
 | Folha                    | `payroll_rubrics` → `payroll_rubric_versions` (AST) → `payroll_cycles` → `payroll_cycle_results`                              |
+| Tabelas fiscais          | `fiscal_tables` → `fiscal_table_versions` (INSS/IRRF/RPPS versionadas; `tenant_id` nulo = nacional) — nó `table_lookup`        |
 | Ponto                    | `time_entries`, `work_schedules` (geração legada, fora do multi-tenant)                                                       |
 | Auditoria                | `audit_events`                                                                                                                |
 | Analítico                | schema `analytics`: `fact_payroll`, `fact_payroll_item`, `fact_movement`                                                      |
@@ -78,10 +79,13 @@ unificação está em [ADR 0004](adr/0004-separar-profiles-persons.md) e no back
 
 ## O motor de fórmulas
 
-`src/lib/payroll-formula.ts` avalia uma AST em JSON — 3 tipos de nó, 4
+`src/lib/payroll-formula.ts` avalia uma AST em JSON — 4 tipos de nó, 4
 operadores, whitelist de 11 variáveis, sem `eval`. É seguro **porque** não tem
 condicionais. Tabelas progressivas (INSS/IRRF/RPPS) entram por um nó
 `table_lookup` declarativo, não por `if` — [ADR 0003](adr/0003-table-lookup.md).
+O `table` é código; as versões vigentes chegam pré-carregadas num `Map` por
+`loadFiscalTables` (`fiscal-tables.server.ts`) e o avaliador continua **puro, sem
+I/O** — o id + checksum da versão da tabela entram na memória de cálculo.
 
 ## Desenho-alvo: SIAFIC
 

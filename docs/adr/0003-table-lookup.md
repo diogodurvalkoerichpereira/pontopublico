@@ -1,6 +1,6 @@
 # ADR 0003 — Tabelas fiscais com nó `table_lookup`, não condicionais na AST
 
-Status: aceito.
+Status: aceito · implementado em O1-01.
 
 ## Contexto
 
@@ -33,3 +33,38 @@ Tabelas fiscais viram **entidade de primeira classe** (`fiscal_tables` +
 - **Flag `calculation_kind='inss'` com código hardcoded** — funciona para INSS/
   IRRF federais e quebra no RPPS, porque cada ente tem alíquotas em lei própria;
   cada município viraria um deploy.
+
+## Nota de implementação (O1-01)
+
+Schema concreto em `supabase/migrations/20260908060000_o1_01_fiscal_tables.sql`:
+
+- **`fiscal_tables`** — `code` (`^[A-Z0-9_]+$`), `name`, `status`, `tenant_id`
+  **nullable**. Unicidade por `(coalesce(tenant_id, '000…'::uuid), lower(code))`.
+- **`fiscal_table_versions`** — `version_number`, `valid_from`/`valid_to`,
+  `status` (`rascunho`|`publicada`|`arquivada`), `brackets jsonb`, `checksum`
+  (CHECK 64-hex). Trigger `validate_fiscal_table_version`: coerência de ente
+  (`is distinct from`, tratando o ente nulo como valor legítimo) e
+  não-sobreposição de vigências **publicadas** por `daterange && daterange`
+  (espelha `payroll_rubric_versions`).
+
+Convenções e mecânica:
+
+- **`tenant_id` nulo = tabela NACIONAL** (INSS/IRRF federais, iguais para todo
+  ente); `tenant_id` preenchido = tabela do ente (RPPS, O1-02). O loader
+  (`src/lib/fiscal-tables.server.ts`) resolve por código + vigência preferindo o
+  do ente à nacional (`order by v.tenant_id nulls last`, primeira por código
+  vence).
+- **Dois modos.** `progressive` (INSS): soma `(min(base,ate)-prev)*aliquota` por
+  faixa, o topo da última é o teto. `bracket` (IRRF): faixa onde `base<=ate`,
+  retorna `base*aliquota - deduzir` (nunca negativo).
+- **Checksum das faixas** = sha256 do JSON canônico (`stableFiscalBracketsJson`,
+  faixas ordenadas por `ate`, chaves alfabéticas). Pré-computado no seed (sem
+  pgcrypto) e **reconferido** pelo loader — divergência lança, para o número não
+  sair de uma tabela adulterada. O `versionId`+`checksum` entram no passo
+  `table_lookup` da memória de cálculo.
+- O avaliador (`evaluateFormulaAst(input, variables, tables, scale, mode)`) recebe
+  as tabelas como 3º parâmetro — um segundo `Map` pré-carregado ao lado das
+  variáveis; permanece **sem I/O**.
+
+Fora do escopo de O1-01 (ver BACKLOG O1-01b): repointar `payroll-special`
+(13º/rescisão) de `payroll_config` para o loader e aposentar `payroll_config`.

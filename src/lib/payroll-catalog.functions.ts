@@ -330,6 +330,9 @@ export const validatePayrollFormula = createServerFn({ method: "POST" })
     const evaluation = evaluateFormulaAst(
       formula.ast,
       data.sample_variables,
+      // Preview do catálogo não injeta tabelas fiscais; uma fórmula com
+      // table_lookup falha aqui de propósito (valide-a no ciclo).
+      new Map(),
       data.rounding_scale,
       data.rounding_mode,
     );
