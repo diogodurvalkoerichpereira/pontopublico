@@ -162,13 +162,29 @@ public.audit_events` cru permanece fora de `audit.server.ts`. Rede dupla
 (SQL/params/jsonb/metadados, esbuild+stub) + conformidade (lint) que falha se
 voltar um insert cru ou se um módulo de saída não importar o helper. Ver ADR 0015.
 
-### O0-12 — Converter validadores de grep em testes reais
+### ◑ O0-12 — Converter validadores de grep em testes reais
 
-P1 · 5 dias
+P1 · Incremento 1 **feito**; Incremento 2 pendente.
 
-Abordagem. `tests/helpers/pglite.mjs` reaproveitando `db-dryrun.mjs`; migrar as
-Sprints 8-20 de `String.includes()` para `node:test` com casos negativos, no
-padrão das Sprints 1-7. Deletar cada `validate-sprintN.mjs` ao substituir.
+Problema. As Sprints 8-20 só tinham "validadores" que liam o arquivo como string
+(`String.includes()`) — foi como a Sprint 19 passou com erro de sintaxe e a 13
+com coluna inexistente. E não rodavam no CI (scripts `test:sprintN` órfãos).
+
+**Incremento 1 (feito).** Helper compartilhado `tests/helpers/pglite.mjs`
+(`migrationFiles()` + `createTestDb()`) sobe o esquema real em PGlite;
+`scripts/db-dryrun.mjs` passou a importar `migrationFiles()` (fonte única da
+ordem). Convertidas as **Sprints 8, 10, 11, 12**: `tests/sprint08-ferias.test.mjs`
+executa os CHECKs e o trigger `trg_validate_vacation` (>3 frações, saldo,
+pagamento antecipado); `tests/conformidade-saida.test.mjs` afere em runtime
+`conformanceOf` (remessa/exportação `rascunho`, eSocial `nao-implementado`), o
+esquema real (tabelas de saída existem; eSocial não guarda chave privada) e a
+honestidade dos rótulos na fonte (lint). Verificado por mutação (quebrar o
+trigger na migration ou virar o status de conformidade derruba o teste — o grep
+antigo não pegava). Deletados os 4 validadores e seus scripts. Ver ADR 0016.
+
+**Incremento 2 (pendente).** Converter Sprints 7, 9, 13-20 (9 arquivos), mesma
+receita; deletar cada validador ao substituir. Os validadores reais das Sprints
+1-6 ficam como estão (já executam). Os 6 `reconcile-sprint*.sql` órfãos são P2.
 
 ### O0-13 — Unificar as duas gerações de modelo
 
