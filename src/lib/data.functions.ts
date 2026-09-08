@@ -15,6 +15,7 @@ import {
   TOKEN_TTL,
 } from "./auth.server";
 import { runQuery, loadAccess } from "./pgrest.server";
+import { loadTenantAccess } from "./tenant-access.server";
 import {
   loadEmailSettings,
   sendMailWith,
@@ -87,7 +88,16 @@ export const dbQuery = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as QueryReq)
   .handler(async ({ data, context }) => {
     const ctx = await loadAccess(context.userId);
-    return runQuery(data, ctx);
+    // O tenant vem do cliente (shim), então não pode ser confiado cru: só é
+    // aceito depois de loadTenantAccess confirmar associação ativa em
+    // tenant_memberships, que lança se o usuário não for membro daquele ente.
+    // Um tenant_id de outro ente falha aqui, antes de tocar o compilador.
+    let tenantId: string | null = null;
+    if (data.tenant_id) {
+      await loadTenantAccess(context.userId, data.tenant_id);
+      tenantId = data.tenant_id;
+    }
+    return runQuery(data, ctx, tenantId);
   });
 
 // ---------- Auth ----------

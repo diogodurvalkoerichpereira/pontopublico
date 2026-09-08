@@ -169,4 +169,134 @@ test("erro do banco não vaza mensagem crua ao cliente", async () => {
   );
 });
 
+// ---------------------------------------------------------------------------
+// Isolamento de tenant (O0-06). runQuery(req, ctx, tenantId).
+// ---------------------------------------------------------------------------
+
+const TENANT_A = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+
+test("direct/unidades com tenant: WHERE filtra por tenant_id", async () => {
+  stub.resetExecuted();
+  await runQuery(
+    { table: "unidades", action: "select", filters: [] },
+    rhCtx,
+    TENANT_A,
+  );
+
+  assert.equal(stub.executed.length, 1);
+  const { text, params } = stub.executed[0];
+  assert.match(
+    text,
+    /t\."tenant_id" = \$\d+/,
+    "o SELECT precisa restringir por tenant_id",
+  );
+  assert.ok(
+    params.includes(TENANT_A),
+    "o tenant validado deve entrar nos parâmetros",
+  );
+});
+
+test("via_member/time_entries com tenant: WHERE usa subquery de membership", async () => {
+  stub.resetExecuted();
+  await runQuery(
+    { table: "time_entries", action: "select", filters: [] },
+    rhCtx,
+    TENANT_A,
+  );
+
+  assert.equal(stub.executed.length, 1);
+  const { text, params } = stub.executed[0];
+  assert.match(
+    text,
+    /t\."user_id" IN \(SELECT user_id FROM public\.tenant_memberships WHERE tenant_id = \$\d+ AND status = 'ativo'\)/,
+    "o SELECT precisa restringir aos membros do ente",
+  );
+  assert.ok(params.includes(TENANT_A));
+});
+
+test("sem tenant, RH em unidades: não vaza (resultado vazio)", async () => {
+  stub.resetExecuted();
+  const res = await runQuery(
+    { table: "unidades", action: "select", filters: [] },
+    rhCtx,
+    null,
+  );
+
+  assert.equal(
+    stub.executed.length,
+    0,
+    "sem tenant ativo, unidades não deve nem consultar o banco",
+  );
+  assert.deepEqual(res, { data: [], error: null });
+});
+
+test("sem tenant, RH em time_entries: cai para as próprias linhas", async () => {
+  stub.resetExecuted();
+  await runQuery(
+    { table: "time_entries", action: "select", filters: [] },
+    rhCtx,
+    null,
+  );
+
+  assert.equal(stub.executed.length, 1);
+  const { text, params } = stub.executed[0];
+  assert.doesNotMatch(
+    text,
+    /tenant_memberships/,
+    "sem tenant não há subquery de membership",
+  );
+  assert.match(text, /t\."user_id" =/, "deve restringir ao próprio user_id");
+  assert.ok(
+    params.includes(rhCtx.userId),
+    "o filtro own usa o userId do contexto",
+  );
+});
+
+test("global/user_roles no bootstrap (sem tenant) continua funcionando", async () => {
+  stub.resetExecuted();
+  // Reproduz o loadAccess do auth-context: lê o próprio user_roles antes de
+  // haver tenant ativo. Não pode exigir tenant, senão o login trava.
+  const res = await runQuery(
+    {
+      table: "user_roles",
+      action: "select",
+      filters: [{ col: "user_id", op: "eq", val: rhCtx.userId }],
+    },
+    rhCtx,
+    null,
+  );
+
+  assert.equal(stub.executed.length, 1, "a consulta deve ter rodado");
+  assert.ok(!res.error, "não pode falhar por falta de tenant");
+  const { text } = stub.executed[0];
+  assert.doesNotMatch(
+    text,
+    /tenant_memberships/,
+    "tabela global não recebe predicado de tenant",
+  );
+});
+
+test("direct/unidades insert com tenant: força tenant_id na linha gravada", async () => {
+  stub.resetExecuted();
+  await runQuery(
+    {
+      table: "unidades",
+      action: "insert",
+      values: { nome: "Nova unidade", codigo: "NU" },
+      wantReturning: true,
+    },
+    // admin para passar na política de escrita de unidades
+    { userId: rhCtx.userId, roles: ["admin"], perms: [] },
+    TENANT_A,
+  );
+
+  assert.equal(stub.executed.length, 1);
+  const { text, params } = stub.executed[0];
+  assert.match(text, /"tenant_id"/, "a coluna tenant_id deve ser gravada");
+  assert.ok(
+    params.includes(TENANT_A),
+    "o tenant ativo é forçado na linha nova",
+  );
+});
+
 process.on("exit", () => rmSync(dir, { recursive: true, force: true }));
