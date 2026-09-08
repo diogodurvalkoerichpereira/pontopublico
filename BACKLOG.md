@@ -49,34 +49,21 @@ P0 · feito. `.github/workflows/ci.yml` (5 jobs) + `scripts/quality-ratchet.mjs`
 P1 · feito. README, CLAUDE.md, este backlog, `docs/` (arquitetura, glossário,
 conformidade, ADRs), histórico arquivado.
 
-### O0-06 — Fechar o furo de isolamento de tenant no shim
+### ✅ O0-06 — Fechar o furo de isolamento de tenant no shim
 
-P0 · 4 dias · depende de O0-02 · **pendente (próximo)**
-
-Problema. `pgrest.server.ts` não tem noção de tenant e expõe 13 tabelas legadas
-(`unidades`, `profiles`, `time_entries`, `payroll_periods`…). Reproduzido em
-banco vivo: consulta a `unidades` devolveu linhas de dois entes distintos.
-
-Abordagem. Mover a decisão do chamador para o compilador de query. `tenant_id`
-obrigatório em `QueryReq` (`src/lib/pgrest-types.ts`), injetado pelo
-`QueryBuilder` (`src/integrations/supabase/client.ts`) a partir do tenant ativo;
-`dbQuery` (`src/lib/data.functions.ts`) passa a chamar `loadTenantAccess`.
-Substituir `ALLOWED_TABLES: Set` por registro com **união discriminada**
-(`{strategy:"direct", column:"tenant_id"}` / `{strategy:"via_member", column:…}`),
-de modo que tabela nova sem estratégia declarada **não compile**.
-
-Aceite.
-
-- [ ] teste com dois tenants prova que nenhum caminho (`dbQuery` incluído) vaza
-- [ ] tabela nova sem estratégia declarada quebra o `typecheck`
-- [ ] as 10 telas legadas continuam funcionando
-
-Arquivos. `src/lib/pgrest.server.ts`, `src/lib/pgrest-types.ts`,
-`src/integrations/supabase/client.ts`, `src/lib/data.functions.ts`.
+P0 · feito. `QueryReq` ganhou `tenant_id`, o shim (`client.ts`) o anexa a partir
+de `localStorage["meuponto.activeTenantId"]`, e `dbQuery` o valida com
+`loadTenantAccess` (um tenant forjado é barrado antes do compilador).
+`ALLOWED_TABLES` virou registro com união discriminada (`direct` / `via_member` /
+`global`) — tabela nova sem estratégia não compila. Sem tenant ativo, a leitura
+cai para as próprias linhas e a escrita sem filtro segue bloqueada; login,
+bootstrap e telas do funcionário preservados. Provado ponta a ponta em
+PostgreSQL 16 real com dois entes e um RH em cada; +6 testes com prova de
+mutação. Sem migration.
 
 ### O0-07 — Forçar `user_id` em `time_entries` e remover delete sem trilha
 
-P0 · 1 dia · depende de O0-06
+P0 · 1 dia · depende de O0-06 · **pendente (próximo)**
 
 Problema. RH grava batida com `user_id` arbitrário e a policy `te_rh_delete`
 permite apagar batida sem rastro — invalida o valor probatório do ponto.
