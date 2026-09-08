@@ -182,9 +182,14 @@ honestidade dos rótulos na fonte (lint). Verificado por mutação (quebrar o
 trigger na migration ou virar o status de conformidade derruba o teste — o grep
 antigo não pegava). Deletados os 4 validadores e seus scripts. Ver ADR 0016.
 
-**Incremento 2 (pendente).** Converter Sprints 7, 9, 13-20 (9 arquivos), mesma
-receita; deletar cada validador ao substituir. Os validadores reais das Sprints
-1-6 ficam como estão (já executam). Os 6 `reconcile-sprint*.sql` órfãos são P2.
+**Incremento 2 (em andamento).** Convertidas as Sprints **9** (importações:
+CHECKs de file_sha256/status/file_type + unique de linha), **18** (IA semântica:
+`resolveSemanticIntent` em runtime prova a whitelist + sem SQL livre da pergunta)
+e **20** (migração: CHECK de status + unique idempotente `(job_id,source_key)` +
+guardas de aplicação). Verificado por mutação; validadores e scripts deletados.
+Restam Sprints **7, 13, 14, 15, 16, 17, 19** (mesma receita). Os validadores
+reais das Sprints 1-6 ficam como estão (já executam). Os 6 `reconcile-sprint*.sql`
+órfãos são P2.
 
 ### ✅ O0-13 — Unificar as duas gerações de modelo
 
