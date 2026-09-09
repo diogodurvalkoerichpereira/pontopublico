@@ -7,6 +7,8 @@ import {
   loadTenantAccess,
   requireTenantPermission,
 } from "./tenant-access.server";
+import { calculateTerminationTaxes } from "./payroll-special";
+import { loadFiscalTables } from "./fiscal-tables.server";
 
 const Tenant = z.object({ tenant_id: z.string().uuid() });
 const digest = (value: unknown) =>
@@ -200,9 +202,7 @@ export const calculateTermination = createServerFn({ method: "POST" })
     )[0];
     if (!link?.base_salary) throw new Error("Vínculo sem salário-base");
     const salary = Number(link.base_salary);
-    const memory = {
-      salary,
-      inputs: data,
+    const verbas = {
       salary_balance: +((salary / 30) * data.worked_days).toFixed(2),
       notice_amount: data.notice_type === "indenizado" ? salary : 0,
       thirteenth_amount: +((salary * data.thirteenth_months) / 12).toFixed(2),
@@ -212,18 +212,94 @@ export const calculateTermination = createServerFn({ method: "POST" })
       ).toFixed(2),
       fgts_penalty: +(data.fgts_balance * data.fgts_penalty_rate).toFixed(2),
     };
+
+    // Tabelas fiscais versionadas vigentes na competencia da rescisao (O1-01b):
+    // INSS/IRRF saem do motor do ADR 0003, com checksum na memoria (defensavel
+    // perante o TCE). A rescisao aqui e de regime celetista/temporario (modela
+    // FGTS e aviso previo); a exoneracao de estatutario/RPPS e outro fluxo.
+    const fiscalTables = await loadFiscalTables(
+      data.tenant_id,
+      data.termination_date,
+    );
+    const inssTable = fiscalTables.get("INSS_FEDERAL");
+    const irrfTable = fiscalTables.get("IRRF_FEDERAL");
+    if (!inssTable || !irrfTable)
+      throw new Error(
+        "Tabelas fiscais INSS/IRRF não encontradas para a competência da rescisão",
+      );
+    const taxes = calculateTerminationTaxes({
+      salaryBalance: verbas.salary_balance,
+      thirteenthAmount: verbas.thirteenth_amount,
+      noticeAmount: verbas.notice_amount,
+      vacationAmount: verbas.vacation_amount,
+      fgtsPenalty: verbas.fgts_penalty,
+      inssBrackets: inssTable.brackets,
+      irrfBrackets: irrfTable.brackets,
+    });
+
     const total = +(
-      memory.salary_balance +
-      memory.notice_amount +
-      memory.thirteenth_amount +
-      memory.vacation_amount +
-      memory.fgts_penalty +
+      verbas.salary_balance +
+      verbas.notice_amount +
+      verbas.thirteenth_amount +
+      verbas.vacation_amount +
+      verbas.fgts_penalty +
       data.other_earnings
     ).toFixed(2);
-    const net = +(total - data.deductions).toFixed(2);
+    // Liquido = proventos - INSS - IRRF - outros descontos manuais (data.deductions,
+    // ex.: pensao alimenticia, adiantamentos). `other_earnings` fica fora da base
+    // automatica (bucket indenizatorio do operador); verba tributavel entra por
+    // rubrica no ciclo, nao aqui.
+    const net = +(
+      total -
+      taxes.inssTotal -
+      taxes.irrfTotal -
+      data.deductions
+    ).toFixed(2);
+    const memory = {
+      salary,
+      inputs: data,
+      ...verbas,
+      taxes: {
+        inss: taxes.inssTotal,
+        irrf: taxes.irrfTotal,
+        breakdown: {
+          inss_salario: taxes.inssSalario,
+          irrf_salario: taxes.irrfSalario,
+          inss_decimo: taxes.inssThirteenth,
+          irrf_decimo: taxes.irrfThirteenth,
+        },
+        taxable: {
+          competencia: taxes.taxableSalary,
+          decimo_terceiro: taxes.taxableThirteenth,
+        },
+        exempt: {
+          aviso_previo_indenizado: verbas.notice_amount,
+          ferias_indenizadas: verbas.vacation_amount,
+          fgts: verbas.fgts_penalty,
+          other_earnings: data.other_earnings,
+          total: taxes.exemptTotal,
+        },
+        rule: "INSS/IRRF sobre saldo de salario (competencia) e 13o (exclusiva); verbas indenizatorias isentas.",
+        // Provenancia fiscal: id + checksum das versoes vigentes usadas (ADR 0003).
+        snapshot: {
+          inss: {
+            code: "INSS_FEDERAL",
+            version_id: inssTable.versionId,
+            checksum: inssTable.checksum,
+          },
+          irrf: {
+            code: "IRRF_FEDERAL",
+            version_id: irrfTable.versionId,
+            checksum: irrfTable.checksum,
+          },
+        },
+      },
+      other_deductions: data.deductions,
+      engine_version: "termination-v1.1.0",
+    };
     const id = randomUUID();
     await query(
-      `insert into public.termination_calculations(id,tenant_id,employment_link_id,termination_date,reason,notice_type,worked_days,thirteenth_months,vacation_months,fgts_balance,fgts_penalty_rate,other_earnings,deductions,salary_balance,notice_amount,thirteenth_amount,vacation_amount,fgts_penalty,total_earnings,net_amount,memory,result_checksum,created_by) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21::jsonb,$22,$23)`,
+      `insert into public.termination_calculations(id,tenant_id,employment_link_id,termination_date,reason,notice_type,worked_days,thirteenth_months,vacation_months,fgts_balance,fgts_penalty_rate,other_earnings,deductions,salary_balance,notice_amount,thirteenth_amount,vacation_amount,fgts_penalty,inss_amount,irrf_amount,total_earnings,net_amount,memory,result_checksum,created_by) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23::jsonb,$24,$25)`,
       [
         id,
         data.tenant_id,
@@ -238,11 +314,13 @@ export const calculateTermination = createServerFn({ method: "POST" })
         data.fgts_penalty_rate,
         data.other_earnings,
         data.deductions,
-        memory.salary_balance,
-        memory.notice_amount,
-        memory.thirteenth_amount,
-        memory.vacation_amount,
-        memory.fgts_penalty,
+        verbas.salary_balance,
+        verbas.notice_amount,
+        verbas.thirteenth_amount,
+        verbas.vacation_amount,
+        verbas.fgts_penalty,
+        taxes.inssTotal,
+        taxes.irrfTotal,
         total,
         net,
         JSON.stringify(memory),
@@ -250,7 +328,7 @@ export const calculateTermination = createServerFn({ method: "POST" })
         context.userId,
       ],
     );
-    return { id, net };
+    return { id, net, inss: taxes.inssTotal, irrf: taxes.irrfTotal };
   });
 
 const ApplyTermination = z.object({

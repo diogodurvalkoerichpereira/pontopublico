@@ -34,7 +34,8 @@ Legenda: 🟢 atende · 🟡 atende parcialmente · 🔴 não atende.
 | RPPS | 🟢 | Tabela do ente (O1-02a), regime como dado de primeira classe (O1-02b) e rubricas aplicadas automaticamente por regime no ciclo, com checksum na memória (O1-02c). Falta só a UI (O1-02d) |
 | Ponto — base probatória (NSR + marcação imutável encadeada) | 🟡 | `time_clock_punches` append-only, NSR por ente, encadeamento SHA-256 verificável (O1-03a); espelho + comprovante interno (O1-03c); feriados por ente (O1-03d); apuração previsto×trabalhado com tolerância legal e extras/faltas (O1-03e) |
 | Ponto eletrônico Portaria 671 (AFD/AEJ oficiais) | 🔴 | Exportação oficial pendente de homologação por ferramenta oficial (O1-03b) |
-| Rescisão e férias com INSS/IRRF | 🟡 | Aritmética simplificada (O1-05) |
+| Rescisão com INSS/IRRF | 🟢 | INSS progressivo + IRRF por faixa pelo motor fiscal versionado, em trilhas separadas (saldo de salário e 13º em tributação exclusiva); verbas indenizatórias isentas; `inss_amount`/`irrf_amount` e provenância na memória (O1-05a). Regime celetista/temporário |
+| Férias com INSS/IRRF | 🟡 | Ainda só o bruto (base + 1/3); a retenção correta recompõe com a competência via ciclo (O1-05b) |
 | eSocial | 🔴 | Fila sem geração/assinatura/transmissão (O1-06) |
 | Remessa bancária CNAB 240 | 🔴 | Formato próprio, não CNAB 240 (O1-07) |
 | Exportação para TCE/SIOPE | 🔴 | CSV genérico, não os layouts oficiais |

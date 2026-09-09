@@ -389,10 +389,32 @@ divisor; nada adivinhado) — e grava em `payroll_monthly_variables`
 folha** fecha ponta a ponta. Testes `tests/sprint-monthly-variables.test.mjs` e
 `tests/sprint-ponto-folha.test.mjs`, verificados por mutação.
 
-### O1-05 — Rescisão e férias corretas
+### O1-05a — Rescisão com INSS/IRRF ✅
 
-P1 · 1 semana. Hoje ambas são aritmética simplificada, sem INSS/IRRF. Conferir
-contra cálculo manual.
+P1 · feito. `calculateTermination` (`employment-special.functions.ts`) deixou de
+entregar o líquido sem retenção (`net = total − descontos manuais`). Agora retém
+pelo motor fiscal versionado (ADR 0003): **INSS progressivo + IRRF por faixa** em
+duas trilhas independentes — saldo de salário (competência final) e **13º
+proporcional em tributação exclusiva** (base própria). As verbas indenizatórias —
+aviso prévio indenizado (STJ REsp 1.230.957), férias indenizadas + 1/3 (Súmula 386
+STJ; art. 6º V Lei 7.713) e saldo/multa FGTS — ficam **isentas** e explícitas na
+memória (`exempt.total` conferível). Colunas próprias `inss_amount`/`irrf_amount`
+no termo (auditável pelo TCE); provenância fiscal (id + checksum das versões) na
+memória. Escopo: rescisão de regime **celetista/temporário** (modela FGTS e aviso);
+a exoneração de estatutário/RPPS é outro fluxo. Migration
+`20260909100000_o1_05_termination_taxes.sql`. Testes `tests/rescisao-fiscal.test.mjs`
+(math puro, conferido contra cálculo manual) e `tests/sprint-rescisao-fiscal.test.mjs`
+(ponta a ponta), verificados por mutação.
+
+### O1-05b — Férias corretas pela via do ciclo
+
+P1 · 3-4 dias. A `scheduleVacation` (`vacation.functions.ts`) ainda emite só o
+bruto (base + 1/3), sem retenção. A correção **não** é bolar INSS/IRRF isolados no
+agendamento: a remuneração de férias deve ser **recomposta com a competência** (teto
+único do INSS) — o lugar certo é o **ciclo**, que já tributa a base combinada por
+incidências (`payroll_rubric_incidences` → `table_lookup` de INSS/IRRF). Depositar a
+remuneração de férias em `payroll_monthly_variables` (como o ponto no O1-04b) faz o
+ciclo tributar certo, sem dupla contagem de faixa. Conferir contra cálculo manual.
 
 ### O1-06 — eSocial real
 
