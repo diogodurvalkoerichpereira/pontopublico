@@ -338,10 +338,17 @@ MTP 671/2021, sobre as marcações encadeadas, com assinatura. **Aceite: validad
 por ferramenta oficial** antes de qualquer declaração de conformidade
 (`conformance.ts`). Nenhum artefato leva o nome AFD/AEJ até passar.
 
-### O1-03c — Espelho e comprovante ao trabalhador
+### ✅ O1-03c — Espelho e comprovante ao trabalhador
 
-P0 · depende de O1-03a. Espelho de ponto (jornada apurada) e **comprovante ao
-trabalhador** por marcação (recibo com NSR + hash).
+P0 · depende de O1-03a. **Feito.** `time-mirror.ts` (puro, sem I/O) apura a jornada
+por dia pareando as marcações **posicionalmente** (as marcações não têm tipo);
+`getTimeMirror` devolve a jornada apurada e `getPunchReceipt` o comprovante interno
+(NSR + `record_hash` como código verificador, servidor identificado, CPF mascarado
+sem `people.sensitive.read`). Sem migration — funções puras + leitura sobre
+`time_clock_punches`. Teste `tests/sprint-time-mirror.test.mjs` (pareamento,
+intervalo aberto, jornada apurada, máscara de CPF), verificado por mutação.
+Tolerância/feriados/banco de horas são o O1-03d; o comprovante **oficial** da
+Portaria 671 é o O1-03b (exige homologação).
 
 ### O1-03d — Feriados, tolerância e banco de horas
 

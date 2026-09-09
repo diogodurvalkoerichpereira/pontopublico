@@ -4,7 +4,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { query, withTransaction } from "./db.server";
+import { query, queryOne, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
 import {
@@ -12,6 +12,7 @@ import {
   requireTenantPermission,
 } from "./tenant-access.server";
 import { hashPunch, GENESIS_HASH } from "./time-clock.server";
+import { buildTimeMirror, type MirrorPunch } from "./time-mirror";
 
 const RecordInput = z.object({
   tenant_id: z.string().uuid(),
@@ -182,4 +183,107 @@ export const verifyTimeClockChain = createServerFn({ method: "POST" })
       expectedPrev = row.record_hash;
     }
     return { valid: true, count: rows.length };
+  });
+
+const MirrorInput = z.object({
+  tenant_id: z.string().uuid(),
+  employment_link_id: z.string().uuid(),
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional(),
+  time_zone: z.string().max(64).optional(),
+});
+
+/** Espelho de ponto: jornada apurada por dia (pareamento posicional das marcas). */
+export const getTimeMirror = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => MirrorInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "people.read");
+    const values: unknown[] = [data.tenant_id, data.employment_link_id];
+    let filter = "";
+    if (data.from) {
+      values.push(data.from);
+      filter += ` and punch_time>=$${values.length}`;
+    }
+    if (data.to) {
+      values.push(data.to);
+      filter += ` and punch_time<=$${values.length}`;
+    }
+    const rows = await query<{
+      nsr: number;
+      punch_time: string;
+      source: string;
+      record_hash: string;
+    }>(
+      `select nsr, punch_time, source, record_hash
+       from public.time_clock_punches
+       where tenant_id=$1 and employment_link_id=$2${filter}
+       order by nsr`,
+      values,
+    );
+    const punches: MirrorPunch[] = rows.map((row) => ({
+      nsr: Number(row.nsr),
+      punchTime: new Date(row.punch_time).toISOString(),
+      recordHash: row.record_hash,
+      source: row.source,
+    }));
+    return buildTimeMirror(punches, data.time_zone);
+  });
+
+const ReceiptInput = z.object({
+  tenant_id: z.string().uuid(),
+  punch_id: z.string().uuid(),
+});
+
+/** Comprovante interno de uma marcacao: NSR + hash como codigo verificador, com o
+ *  servidor identificado. Base interna — o comprovante oficial da Portaria 671 e
+ *  o O1-03b (exige homologacao). CPF integral so com people.sensitive.read. */
+export const getPunchReceipt = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => ReceiptInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "people.read");
+    const row = await queryOne<{
+      nsr: number;
+      punch_time: string;
+      source: string;
+      record_hash: string;
+      registration_number: string;
+      unit_name: string | null;
+      full_name: string;
+      cpf: string | null;
+    }>(
+      `select tcp.nsr, tcp.punch_time, tcp.source, tcp.record_hash,
+         el.registration_number, u.nome as unit_name, pe.full_name, pe.cpf
+       from public.time_clock_punches tcp
+       join public.employment_links el on el.id = tcp.employment_link_id
+       join public.persons pe on pe.id = el.person_id
+       left join public.unidades u on u.id = el.unit_id and u.tenant_id = el.tenant_id
+       where tcp.id=$1 and tcp.tenant_id=$2`,
+      [data.punch_id, data.tenant_id],
+    );
+    if (!row) throw new Error("Marcação não encontrada");
+    const canSensitive = access.permissions.includes("people.sensitive.read");
+    const digits = (row.cpf ?? "").replace(/\D/g, "");
+    const cpf = !digits
+      ? null
+      : canSensitive
+        ? row.cpf
+        : `***.***.***-${digits.slice(-2)}`;
+    return {
+      nsr: Number(row.nsr),
+      punch_time: new Date(row.punch_time).toISOString(),
+      source: row.source,
+      record_hash: row.record_hash,
+      // Codigo verificador curto derivado do hash da marcacao (imutavel).
+      verification_code: row.record_hash.slice(0, 12).toUpperCase(),
+      employee: {
+        registration_number: row.registration_number,
+        full_name: row.full_name,
+        cpf,
+        unit_name: row.unit_name,
+      },
+    };
   });
