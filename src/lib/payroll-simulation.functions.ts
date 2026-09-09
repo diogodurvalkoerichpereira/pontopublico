@@ -292,7 +292,7 @@ export const runPayrollSimulation = createServerFn({ method: "POST" })
       throw new Error("Há vínculo inválido ou desligado na seleção");
     links.forEach((link) => requireUnitInScope(scope, link.unit_id));
 
-    const sources = await query<CalculationSource>(
+    const assignmentSources = await query<CalculationSource>(
       `select assignment.id as assignment_id,assignment.employment_link_id,
          rubric.id as rubric_id,rubric.code as rubric_code,rubric.name as rubric_name,
          rubric.nature,rubric.calculation_order,link.base_salary,
@@ -314,6 +314,42 @@ export const runPayrollSimulation = createServerFn({ method: "POST" })
        order by assignment.employment_link_id,rubric.calculation_order,rubric.code`,
       [data.tenant_id, linkIds, referenceDate],
     );
+
+    // Rubricas do REGIME (O1-02c): declaradas uma vez por regime, aplicam-se a
+    // todo vinculo daquele regime. Sem linha de assignment, entao fixed_amount/
+    // quantity nulos e parameters vazio; a formula (ex.: table_lookup contra a
+    // tabela RPPS do ente) faz o calculo. Ver ADR 0003.
+    const regimeSources = await query<CalculationSource>(
+      `select prr.id as assignment_id,link.id as employment_link_id,
+         rubric.id as rubric_id,rubric.code as rubric_code,rubric.name as rubric_name,
+         rubric.nature,rubric.calculation_order,link.base_salary,
+         null::numeric as fixed_amount,null::numeric as quantity,'{}'::jsonb as parameters,
+         version.id as version_id,version.version_number,version.formula_ast,
+         version.formula_checksum,version.rounding_scale,version.rounding_mode
+       from public.pension_regime_rubrics prr
+       join public.employment_links link on link.pension_regime_id=prr.pension_regime_id
+         and link.tenant_id=prr.tenant_id
+       join public.payroll_rubrics rubric on rubric.id=prr.rubric_id
+       join public.payroll_rubric_versions version on version.rubric_id=rubric.id
+         and version.tenant_id=prr.tenant_id and version.status='publicada'
+         and version.valid_from<=$3::date
+         and (version.valid_to is null or version.valid_to>=$3::date)
+       where prr.tenant_id=$1 and link.id=any($2::uuid[]) and rubric.status='ativo'
+       order by link.id,rubric.calculation_order,rubric.code`,
+      [data.tenant_id, linkIds, referenceDate],
+    );
+
+    // A atribuicao explicita por vinculo tem precedencia: uma rubrica ja atribuida
+    // ao vinculo nao e reaplicada pela regra do regime (evita dupla contagem).
+    const assignedKey = new Set(
+      assignmentSources.map((s) => `${s.employment_link_id}:${s.rubric_id}`),
+    );
+    const sources = [
+      ...assignmentSources,
+      ...regimeSources.filter(
+        (s) => !assignedKey.has(`${s.employment_link_id}:${s.rubric_id}`),
+      ),
+    ];
 
     const incidenceRows = await query<{
       version_id: string;

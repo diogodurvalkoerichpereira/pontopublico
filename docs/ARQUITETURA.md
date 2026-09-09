@@ -69,7 +69,7 @@ aplicação inteira. Manter o shim é decisão consciente — [ADR 0012](adr/001
 | Multi-tenant / RBAC      | `tenants`, `tenant_memberships`, `security_permissions`, `security_roles`, `security_user_roles`, `security_user_unit_scopes` |
 | Estrutura organizacional | `unidades` (árvore com anti-ciclo)                                                                                            |
 | Pessoas e vínculos       | `persons`, `employment_links` (→ `pension_regimes`), `person_dependents`, `pension_beneficiaries`                             |
-| Previdência              | `pension_regimes` por ente (RPPS/RGPS); `employment_links.pension_regime_id`                                                  |
+| Previdência              | `pension_regimes` por ente (RPPS/RGPS); `employment_links.pension_regime_id`; `pension_regime_rubrics` (rubricas aplicadas por regime no ciclo) |
 | Folha                    | `payroll_rubrics` → `payroll_rubric_versions` (AST) → `payroll_cycles` → `payroll_cycle_results`                              |
 | Tabelas fiscais          | `fiscal_tables` → `fiscal_table_versions` (INSS/IRRF/RPPS versionadas; `tenant_id` nulo = nacional) — nó `table_lookup`        |
 | Ponto                    | `time_entries`, `work_schedules` (geração legada, fora do multi-tenant)                                                       |

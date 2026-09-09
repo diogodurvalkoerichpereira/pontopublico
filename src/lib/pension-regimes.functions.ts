@@ -120,3 +120,78 @@ export const savePensionRegime = createServerFn({ method: "POST" })
     });
     return { id };
   });
+
+// Mapeamento regime -> rubricas (O1-02c): as rubricas de contribuicao aplicadas
+// automaticamente a todo vinculo do regime pelo ciclo.
+
+export const getPensionRegimeRubrics = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => TenantInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "payroll.simulate");
+    return query<{
+      pension_regime_id: string;
+      rubric_id: string;
+      rubric_code: string;
+    }>(
+      `select prr.pension_regime_id, prr.rubric_id, r.code as rubric_code
+       from public.pension_regime_rubrics prr
+       join public.payroll_rubrics r on r.id = prr.rubric_id
+       where prr.tenant_id=$1
+       order by prr.pension_regime_id, r.calculation_order, r.code`,
+      [data.tenant_id],
+    );
+  });
+
+const SetRegimeRubricsInput = z.object({
+  tenant_id: z.string().uuid(),
+  pension_regime_id: z.string().uuid(),
+  rubric_ids: z.array(z.string().uuid()).max(200),
+});
+
+export const setPensionRegimeRubrics = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => SetRegimeRubricsInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "payroll.assignments.manage");
+    const regime = await queryOne<{ id: string }>(
+      "select id from public.pension_regimes where id=$1 and tenant_id=$2",
+      [data.pension_regime_id, data.tenant_id],
+    );
+    if (!regime) throw new Error("Regime inválido para esta entidade");
+    const ids = [...new Set(data.rubric_ids)];
+    if (ids.length) {
+      const count = await queryOne<{ total: number }>(
+        "select count(*)::int as total from public.payroll_rubrics where tenant_id=$1 and id=any($2::uuid[])",
+        [data.tenant_id, ids],
+      );
+      if ((count?.total ?? 0) !== ids.length)
+        throw new Error("Há rubrica inválida para esta entidade");
+    }
+    await withTransaction(async (client) => {
+      await client.query(
+        "delete from public.pension_regime_rubrics where tenant_id=$1 and pension_regime_id=$2",
+        [data.tenant_id, data.pension_regime_id],
+      );
+      for (const rubricId of ids) {
+        await client.query(
+          `insert into public.pension_regime_rubrics
+             (tenant_id, pension_regime_id, rubric_id, created_by)
+           values ($1,$2,$3,$4)`,
+          [data.tenant_id, data.pension_regime_id, rubricId, context.userId],
+        );
+      }
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "update",
+        resource: "pension_regime_rubrics",
+        recordId: data.pension_regime_id,
+        before: null,
+        after: { pension_regime_id: data.pension_regime_id, rubric_ids: ids },
+      });
+    });
+    return { count: ids.length };
+  });

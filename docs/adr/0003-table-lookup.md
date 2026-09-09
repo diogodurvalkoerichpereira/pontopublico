@@ -75,6 +75,12 @@ in-place (ADR 0017). A rescisão (`employment-special.functions.ts`) nunca usou
 **Feito em O1-02a:** `fiscal-tables.functions.ts` deu o write-path governado das
 tabelas do ente (`fiscal.manage`, auditado, publicada imutável, checksum
 reconferido pelo loader). Só o ente é gerido pela app — as nacionais seguem por
-migration. Com isso o RPPS já é computável por configuração: uma tabela
-`RPPS_<ENTE>` + uma rubrica com `table_lookup` atribuída aos estatutários. RPPS
-como entidade (`pension_regimes` + atribuição por regime) fica no O1-02b.
+migration.
+
+**Feito em O1-02b/O1-02c:** o regime virou entidade (`pension_regimes` +
+`employment_links.pension_regime_id`, O1-02b) e as rubricas de contribuição são
+declaradas por regime (`pension_regime_rubrics`, O1-02c). O ciclo aplica-as
+automaticamente a todo vínculo do regime (merge com as atribuições por vínculo,
+que têm precedência) — sem tocar o avaliador puro: só a camada de seleção de
+rubricas. Assim uma rubrica RPPS com `table_lookup` contra a tabela do ente
+calcula-se para todos os estatutários, com o id+checksum da versão na memória.

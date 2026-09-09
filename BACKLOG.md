@@ -294,13 +294,28 @@ UPDATE, leitura). O regime deixa de ser texto livre. Teste
 `savePersonAndLink`, coerência cross-tenant), verificado por mutação. **Não toca**
 o hot path do ciclo nem `employment_link_rubrics`.
 
-### O1-02c — Atribuição de rubricas por regime
+### ✅ O1-02c — Atribuição de rubricas por regime
 
-P0 · 3 dias · depende de O1-02b. `pension_regime_rubrics` (regime→rubrica) +
-UNION na seleção de rubricas de `payroll-simulation.functions.ts` (hot path), para
-o RPPS aplicar-se a todos os estatutários **sem atribuição manual** por vínculo.
-UI de regime em `rh.pessoas.tsx` (SelectField) e tela de tabelas fiscais. Eventual
-`base_code='rpps'` (widen do CHECK de `payroll_rubric_incidences`).
+P0 · depende de O1-02b. **Feito.** `pension_regime_rubrics` (regime→rubrica, com
+trigger de coerência de entidade) + `get/setPensionRegimeRubrics`
+(`pension-regimes.functions.ts`, guardado por `payroll.simulate`/
+`payroll.assignments.manage`). O ciclo (`payroll-simulation.functions.ts`) agora
+carrega, além das atribuições por vínculo, as rubricas do **regime** de cada
+vínculo e faz o merge com dedup — a atribuição explícita por vínculo tem
+precedência (sem dupla contagem). Assim o RPPS aplica-se a todo estatutário **sem
+atribuição manual**. O motor puro (ADR 0003) não muda: só a camada de seleção.
+Teste `tests/sprint-pension-rubrics.test.mjs` roda a folha **ponta a ponta**
+(tabela do ente → rubrica `table_lookup` → mapeamento → servidor no regime →
+`runPayrollSimulation` com o valor progressivo e o checksum na memória),
+verificado por mutação.
+
+### O1-02d — UI de previdência (RPPS)
+
+P1 · depende de O1-02c. Tela de regimes + mapeamento de rubricas, seletor de
+regime em `rh.pessoas.tsx` (SelectField), tela do write-path de tabelas fiscais.
+Só interface — o back-end de RPPS está completo (O1-02a/b/c). Eventual
+`base_code='rpps'` (widen do CHECK de `payroll_rubric_incidences`) se uma rubrica
+de RPPS precisar compor uma base própria.
 
 ### O1-03 — Ponto conforme Portaria MTP 671/2021
 
