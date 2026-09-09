@@ -406,15 +406,24 @@ a exoneração de estatutário/RPPS é outro fluxo. Migration
 (math puro, conferido contra cálculo manual) e `tests/sprint-rescisao-fiscal.test.mjs`
 (ponta a ponta), verificados por mutação.
 
-### O1-05b — Férias corretas pela via do ciclo
+### O1-05b — Férias corretas pela via do ciclo ✅
 
-P1 · 3-4 dias. A `scheduleVacation` (`vacation.functions.ts`) ainda emite só o
-bruto (base + 1/3), sem retenção. A correção **não** é bolar INSS/IRRF isolados no
-agendamento: a remuneração de férias deve ser **recomposta com a competência** (teto
-único do INSS) — o lugar certo é o **ciclo**, que já tributa a base combinada por
-incidências (`payroll_rubric_incidences` → `table_lookup` de INSS/IRRF). Depositar a
-remuneração de férias em `payroll_monthly_variables` (como o ponto no O1-04b) faz o
-ciclo tributar certo, sem dupla contagem de faixa. Conferir contra cálculo manual.
+P1 · feito. A retenção de férias **não** é INSS/IRRF isolado no agendamento: a
+remuneração de férias integra o salário-de-contribuição da competência (teto único
+do INSS). Então `depositVacationToPayroll` (`vacation.functions.ts`) deposita a
+remuneração (base + 1/3) em `payroll_monthly_variables` — como o ponto no O1-04b — e
+o **ciclo** tributa a base **combinada** (salário + férias) por incidências
+(`payroll_rubric_incidences` → `table_lookup`). O agendamento segue o documento
+bruto; o líquido nasce no ciclo. Idempotente (re-depósito substitui a competência).
+
+Correção de hot-path junto: `runPayrollSimulation` passou a **ordenar as fontes por
+`calculation_order` independente da origem** (atribuição/regime/variável mensal) —
+antes as variáveis mensais eram anexadas por último, então uma rubrica que alimenta
+a base (férias, extras do ponto) vinda de `payroll_monthly_variables` era calculada
+**depois** do INSS/IRRF e não entrava no salário-de-contribuição. Corrige também o
+laço ponto→folha do O1-04b. Teste `tests/sprint-ferias-folha.test.mjs` prova a
+recomposição (salário 3000 + férias 3000 → INSS 649,60, não 253,41 nem 506,82),
+verificado por mutação (remover a ordenação derruba).
 
 ### O1-06 — eSocial real
 

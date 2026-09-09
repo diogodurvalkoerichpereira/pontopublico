@@ -385,6 +385,16 @@ export const runPayrollSimulation = createServerFn({ method: "POST" })
       if (!presentKey.has(`${mv.employment_link_id}:${mv.rubric_id}`))
         sources.push(mv);
     }
+    // A ordem de calculo tem de respeitar `calculation_order` INDEPENDENTE da
+    // origem (atribuicao, regime ou variavel mensal): as bases de incidencia
+    // (inss/irrf/fgts) sao acumuladas conforme cada rubrica e calculada, entao uma
+    // rubrica que ALIMENTA a base (ex.: remuneracao de ferias/extras vinda de
+    // payroll_monthly_variables, O1-05b/O1-04b) precisa vir ANTES do INSS/IRRF que
+    // a consome — senao seu valor nao entra no salario-de-contribuicao. A dedup
+    // acima ja fixou a precedencia; aqui so ordenamos para o acumulo bater. O laco
+    // de dependencia (depends_on_rubric_id) reordena o que faltar. Estavel: mesma
+    // calculation_order preserva a ordem de insercao.
+    sources.sort((a, b) => a.calculation_order - b.calculation_order);
 
     const incidenceRows = await query<{
       version_id: string;

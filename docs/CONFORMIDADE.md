@@ -35,7 +35,7 @@ Legenda: 🟢 atende · 🟡 atende parcialmente · 🔴 não atende.
 | Ponto — base probatória (NSR + marcação imutável encadeada) | 🟡 | `time_clock_punches` append-only, NSR por ente, encadeamento SHA-256 verificável (O1-03a); espelho + comprovante interno (O1-03c); feriados por ente (O1-03d); apuração previsto×trabalhado com tolerância legal e extras/faltas (O1-03e) |
 | Ponto eletrônico Portaria 671 (AFD/AEJ oficiais) | 🔴 | Exportação oficial pendente de homologação por ferramenta oficial (O1-03b) |
 | Rescisão com INSS/IRRF | 🟢 | INSS progressivo + IRRF por faixa pelo motor fiscal versionado, em trilhas separadas (saldo de salário e 13º em tributação exclusiva); verbas indenizatórias isentas; `inss_amount`/`irrf_amount` e provenância na memória (O1-05a). Regime celetista/temporário |
-| Férias com INSS/IRRF | 🟡 | Ainda só o bruto (base + 1/3); a retenção correta recompõe com a competência via ciclo (O1-05b) |
+| Férias com INSS/IRRF | 🟢 | `depositVacationToPayroll` deposita a remuneração (base + 1/3) em `payroll_monthly_variables`; o ciclo tributa a base combinada com o salário (teto único do INSS), com recomposição provada por teste (O1-05b) |
 | eSocial | 🔴 | Fila sem geração/assinatura/transmissão (O1-06) |
 | Remessa bancária CNAB 240 | 🔴 | Formato próprio, não CNAB 240 (O1-07) |
 | Exportação para TCE/SIOPE | 🔴 | CSV genérico, não os layouts oficiais |
