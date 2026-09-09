@@ -281,15 +281,26 @@ checksum na memória. Testes: `tests/sprint-fiscal-tables-admin.test.mjs` (PGlit
 inclui override do ente sobre a nacional e o cálculo RPPS ponta a ponta),
 verificado por mutação.
 
-### O1-02b — RPPS como entidade de primeira classe
+### ✅ O1-02b — RPPS como entidade de primeira classe
 
-P0 · 3 dias · depende de O1-02a. `pension_regimes` por ente +
-`employment_links.pension_regime_id` (migration, estende `validate_employment_link`),
-e **atribuição de rubricas por regime** (hoje a seleção é manual por
-`employment_link_rubrics`; o motor não tem nó condicional nem variável de regime —
-ADR 0003). Eventual `base_code='rpps'` (widen do CHECK de
-`payroll_rubric_incidences`) se não reusar `inss`/`patronal`. UI
-`/rh/tabelas-fiscais` para o write-path.
+P0 · depende de O1-02a. **Feito.** `pension_regimes` por ente (RPPS/RGPS) +
+`employment_links.pension_regime_id` com integridade referencial e **coerência de
+tenant** no trigger `validate_employment_link` (re-declarado, com
+`pension_regime_id` na lista `update of`). `pension-regimes.functions.ts`
+(get/save, guardado por `people.read`/`people.manage`, dedup por código, auditado)
+e o `pension_regime_id` ligado em `people.functions.ts` (zod, precheck, INSERT/
+UPDATE, leitura). O regime deixa de ser texto livre. Teste
+`tests/sprint-pension-regimes.test.mjs` (PGlite: CRUD, persistência via
+`savePersonAndLink`, coerência cross-tenant), verificado por mutação. **Não toca**
+o hot path do ciclo nem `employment_link_rubrics`.
+
+### O1-02c — Atribuição de rubricas por regime
+
+P0 · 3 dias · depende de O1-02b. `pension_regime_rubrics` (regime→rubrica) +
+UNION na seleção de rubricas de `payroll-simulation.functions.ts` (hot path), para
+o RPPS aplicar-se a todos os estatutários **sem atribuição manual** por vínculo.
+UI de regime em `rh.pessoas.tsx` (SelectField) e tela de tabelas fiscais. Eventual
+`base_code='rpps'` (widen do CHECK de `payroll_rubric_incidences`).
 
 ### O1-03 — Ponto conforme Portaria MTP 671/2021
 

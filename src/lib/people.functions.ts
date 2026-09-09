@@ -18,6 +18,8 @@ export interface EmploymentLinkView {
   registration_number: string;
   unit_id: string | null;
   unit_name: string | null;
+  pension_regime_id: string | null;
+  pension_regime_name: string | null;
   employment_type: string | null;
   work_regime: string | null;
   job_title: string | null;
@@ -95,6 +97,8 @@ export const getPeopleRegistry = createServerFn({ method: "POST" })
            'registration_number', el.registration_number,
            'unit_id', el.unit_id,
            'unit_name', u.nome,
+           'pension_regime_id', el.pension_regime_id,
+           'pension_regime_name', pr.name,
            'employment_type', el.employment_type,
            'work_regime', el.work_regime,
            'job_title', el.job_title,
@@ -109,6 +113,7 @@ export const getPeopleRegistry = createServerFn({ method: "POST" })
        from public.persons pe
        join public.employment_links el on el.person_id = pe.id
        left join public.unidades u on u.id = el.unit_id and u.tenant_id = el.tenant_id
+       left join public.pension_regimes pr on pr.id = el.pension_regime_id and pr.tenant_id = el.tenant_id
        where el.tenant_id = $1
          and ($2::boolean or el.unit_id = any($3::uuid[]))
          ${statusSql}
@@ -156,6 +161,7 @@ const SavePersonLinkInput = z.object({
     id: z.string().uuid().optional(),
     registration_number: z.string().trim().min(1).max(60),
     unit_id: z.string().uuid().nullable(),
+    pension_regime_id: z.string().uuid().nullable().optional(),
     employment_type: z.string().trim().max(80).nullable().optional(),
     work_regime: z.string().trim().max(80).nullable().optional(),
     job_title: z.string().trim().max(140).nullable().optional(),
@@ -208,6 +214,15 @@ export const savePersonAndLink = createServerFn({ method: "POST" })
       : null;
     if (data.link.unit_id && !unit)
       throw new Error("Lotação inválida para esta entidade");
+
+    const regime = data.link.pension_regime_id
+      ? await queryOne<{ id: string }>(
+          "select id from public.pension_regimes where id = $1 and tenant_id = $2 and status = 'ativo'",
+          [data.link.pension_regime_id, data.tenant_id],
+        )
+      : null;
+    if (data.link.pension_regime_id && !regime)
+      throw new Error("Regime previdenciário inválido para esta entidade");
 
     const duplicateRegistration = await queryOne<{ id: string }>(
       `select id from public.employment_links
@@ -317,13 +332,15 @@ export const savePersonAndLink = createServerFn({ method: "POST" })
         data.link.admission_date || null,
         data.link.termination_date || null,
         data.link.status,
+        data.link.pension_regime_id ?? null,
       ];
       if (data.link.id) {
         await client.query(
           `update public.employment_links set person_id=$3, registration_number=$4,
              unit_id=$5, employment_type=$6, work_regime=$7, job_title=$8,
              function_title=$9, weekly_hours=$10, cost_center=$11, base_salary=$12,
-             admission_date=$13, termination_date=$14, status=$15
+             admission_date=$13, termination_date=$14, status=$15,
+             pension_regime_id=$16
            where id=$1 and tenant_id=$2`,
           params,
         );
@@ -333,8 +350,8 @@ export const savePersonAndLink = createServerFn({ method: "POST" })
              (id, tenant_id, person_id, registration_number, unit_id,
               employment_type, work_regime, job_title, function_title,
               weekly_hours, cost_center, base_salary, admission_date,
-              termination_date, status)
-           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+              termination_date, status, pension_regime_id)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
           params,
         );
       }

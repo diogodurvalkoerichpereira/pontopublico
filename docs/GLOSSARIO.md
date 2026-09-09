@@ -60,8 +60,10 @@ da área. Quando o termo tem tabela correspondente, ela está indicada.
 
 - **RGPS** — Regime Geral de Previdência Social (INSS). O regime dos celetistas.
 - **RPPS** — Regime Próprio de Previdência Social. O dos servidores efetivos;
-  cada ente tem o seu, com alíquotas em lei municipal. Hoje **inexistente** no
-  sistema (backlog O1-02).
+  cada ente tem o seu, com alíquotas em lei municipal. Modelado como
+  `pension_regimes` por ente (`regime_type` rpps/rgps) desde o O1-02b; a tabela de
+  faixas é uma `fiscal_tables` do ente + `table_lookup` (O1-02a). A atribuição
+  automática das rubricas por regime é o O1-02c.
 - **INSS / IRRF** — contribuição previdenciária e imposto de renda retido, ambos
   por tabela progressiva de faixas.
 - **eSocial** — sistema federal que recebe os eventos trabalhistas e de folha.
