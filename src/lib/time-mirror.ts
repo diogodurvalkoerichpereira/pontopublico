@@ -26,9 +26,29 @@ export interface MirrorDay {
   intervals: MirrorInterval[];
   workedMinutes: number;
   openInterval: boolean;
+  isHoliday: boolean;
+  holidayName: string | null;
+}
+
+/** Regra de feriado: `year` nulo recorre todo ano; senao vale só naquele ano. */
+export interface HolidayRule {
+  year: number | null;
+  month: number;
+  day: number;
+  name: string;
 }
 
 export const DEFAULT_TIME_ZONE = "America/Sao_Paulo";
+
+/** Nome do feriado que casa com a data `YYYY-MM-DD`, ou null. */
+function matchHoliday(date: string, holidays: HolidayRule[]): string | null {
+  const [year, month, day] = date.split("-").map(Number);
+  const hit = holidays.find(
+    (h) =>
+      h.month === month && h.day === day && (h.year == null || h.year === year),
+  );
+  return hit ? hit.name : null;
+}
 
 /** Dia-calendario local (no fuso do ente) de uma marcacao — estavel por fuso. */
 function localDayKey(iso: string, timeZone: string): string {
@@ -43,6 +63,7 @@ function localDayKey(iso: string, timeZone: string): string {
 export function buildTimeMirror(
   punches: MirrorPunch[],
   timeZone: string = DEFAULT_TIME_ZONE,
+  holidays: HolidayRule[] = [],
 ): { days: MirrorDay[]; totalMinutes: number } {
   const byDay = new Map<string, MirrorPunch[]>();
   for (const punch of [...punches].sort((a, b) => a.nsr - b.nsr)) {
@@ -71,12 +92,15 @@ export function buildTimeMirror(
       workedMinutes += minutes;
     }
     totalMinutes += workedMinutes;
+    const holidayName = matchHoliday(date, holidays);
     days.push({
       date,
       punches: dayPunches,
       intervals,
       workedMinutes,
       openInterval: dayPunches.length % 2 === 1,
+      isHoliday: holidayName !== null,
+      holidayName,
     });
   }
   return { days, totalMinutes };

@@ -350,10 +350,22 @@ intervalo aberto, jornada apurada, máscara de CPF), verificado por mutação.
 Tolerância/feriados/banco de horas são o O1-03d; o comprovante **oficial** da
 Portaria 671 é o O1-03b (exige homologação).
 
-### O1-03d — Feriados, tolerância e banco de horas
+### ✅ O1-03d — Calendário de feriados (por ente) + marcação no espelho
 
-P1. Tabela de feriados por ente, tolerância legal, banco de horas; ligação com a
-folha (`payroll_monthly_variables`, ver O1-04). Aposentar a leitura user-scoped de
+P1. **Feito.** `holidays` por ente (nacional = `tenant_id` nulo, semeado com os 9
+fixos federais incl. Consciência Negra; estadual/municipal/facultativo por ente;
+móveis por ano). `holidays.functions.ts` (get/save, `people.read`/`people.manage`,
+dedup por data). O espelho (`buildTimeMirror`/`getTimeMirror`) marca `isHoliday`/
+`holidayName` por dia (fixo casa todo ano; datado só no ano certo). Teste
+`tests/sprint-holidays.test.mjs`, verificado por mutação + PostgreSQL 16 real.
+
+### O1-03e — Tolerância legal e banco de horas
+
+P1 · depende de um modelo de jornada esperada (escala diária). Tolerância CLT art.
+58 §1 (5 min/marcação, 10 min/dia) e banco de horas exigem os minutos **previstos**
+por dia — hoje só existe `weekly_hours` escalar, sem escala diária. Modelar a escala
+(sobre `work_schedules`) e então apurar extras/faltas/saldo. Ligação com a folha
+(`payroll_monthly_variables`) é o O1-04. Aposentar a leitura user-scoped de
 `time_entries` em favor das marcações multi-tenant.
 
 ### O1-04 — Ligar as ilhas

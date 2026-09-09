@@ -12,7 +12,11 @@ import {
   requireTenantPermission,
 } from "./tenant-access.server";
 import { hashPunch, GENESIS_HASH } from "./time-clock.server";
-import { buildTimeMirror, type MirrorPunch } from "./time-mirror";
+import {
+  buildTimeMirror,
+  type MirrorPunch,
+  type HolidayRule,
+} from "./time-mirror";
 
 const RecordInput = z.object({
   tenant_id: z.string().uuid(),
@@ -228,7 +232,13 @@ export const getTimeMirror = createServerFn({ method: "POST" })
       recordHash: row.record_hash,
       source: row.source,
     }));
-    return buildTimeMirror(punches, data.time_zone);
+    // Feriados do ente + nacionais, marcados no espelho (O1-03d).
+    const holidays = await query<HolidayRule>(
+      `select year, month, day, name from public.holidays
+       where tenant_id=$1 or tenant_id is null`,
+      [data.tenant_id],
+    );
+    return buildTimeMirror(punches, data.time_zone, holidays);
   });
 
 const ReceiptInput = z.object({
