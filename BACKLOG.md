@@ -317,12 +317,37 @@ Só interface — o back-end de RPPS está completo (O1-02a/b/c). Eventual
 `base_code='rpps'` (widen do CHECK de `payroll_rubric_incidences`) se uma rubrica
 de RPPS precisar compor uma base própria.
 
-### O1-03 — Ponto conforme Portaria MTP 671/2021
+### ✅ O1-03a — Registro de ponto imutável e encadeado (base probatória)
 
-P0 · 3-4 semanas. NSR, AFD, AEJ, espelho, comprovante ao trabalhador, marcações
-imutáveis encadeadas, tabela de feriados, tolerância legal, banco de horas.
-Trazer `time_entries` para dentro do multi-tenant. Aceite: AFD e AEJ validados
-por ferramenta oficial.
+P0. **Feito.** `time_clock_punches` (multi-tenant, append-only) com **NSR
+sequencial por ente** e **encadeamento SHA-256** (cada marcação carrega o hash da
+anterior); `time_clock_counters` travado com `FOR UPDATE` gera NSR/cadeia sem
+corrida; trigger que **recusa todo UPDATE/DELETE** (correção = nova marcação).
+`time-clock.functions.ts` (`recordTimeClockPunch`/`getTimeClockPunches`/
+`verifyTimeClockChain`, guardados por `people.manage`/`people.read`) e
+`time-clock.server.ts` (hash canônico, fonte única). Teste
+`tests/sprint-time-clock.test.mjs` (NSR, cadeia, imutabilidade, detecção de
+adulteração em nível de banco), verificado por mutação + PostgreSQL 16 real. **Base
+interna** — não declara conformidade Portaria 671 (isso é O1-03b, exige
+homologação).
+
+### O1-03b — AFD/AEJ oficiais (⚠️ exige homologação)
+
+P0 · depende de O1-03a. Exportação **AFD** e **AEJ** no layout oficial da Portaria
+MTP 671/2021, sobre as marcações encadeadas, com assinatura. **Aceite: validados
+por ferramenta oficial** antes de qualquer declaração de conformidade
+(`conformance.ts`). Nenhum artefato leva o nome AFD/AEJ até passar.
+
+### O1-03c — Espelho e comprovante ao trabalhador
+
+P0 · depende de O1-03a. Espelho de ponto (jornada apurada) e **comprovante ao
+trabalhador** por marcação (recibo com NSR + hash).
+
+### O1-03d — Feriados, tolerância e banco de horas
+
+P1. Tabela de feriados por ente, tolerância legal, banco de horas; ligação com a
+folha (`payroll_monthly_variables`, ver O1-04). Aposentar a leitura user-scoped de
+`time_entries` em favor das marcações multi-tenant.
 
 ### O1-04 — Ligar as ilhas
 

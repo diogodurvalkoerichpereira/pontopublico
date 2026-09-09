@@ -111,3 +111,10 @@ civil de `persons` e o emprego de `employment_links`, nunca de `profiles`.
   sem vigência nem ente), congelado no O1-01b. A fonte fiscal viva é
   `fiscal_tables` / `fiscal_table_versions` (versionadas, com checksum). Fora do
   shim, só leitura no banco. Ver ADR 0003 e 0017.
+- **NSR** — Número Sequencial de Registro: contador monotônico por ente das
+  marcações de ponto (`time_clock_punches`), gerado sob trava para não repetir.
+- **Marcação encadeada** — cada marcação de ponto guarda o hash SHA-256 da
+  anterior (`previous_hash`) e o seu próprio (`record_hash`); a cadeia é
+  append-only (O1-03a), então adulterar uma marcação a posteriori quebra a
+  verificação. Base probatória; a exportação oficial AFD/AEJ (Portaria 671) é
+  O1-03b e exige homologação.

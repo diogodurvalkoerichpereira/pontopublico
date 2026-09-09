@@ -32,7 +32,8 @@ Legenda: 🟢 atende · 🟡 atende parcialmente · 🔴 não atende.
 | Ciclo de folha com aprovação e fechamento | 🟢 | Segregação de funções, lock otimista |
 | Tabelas fiscais versionadas por vigência | 🟢 | `fiscal_tables`/`fiscal_table_versions` por vigência e ente, checksum na memória (O1-01/O1-01b); `payroll_config` aposentado |
 | RPPS | 🟢 | Tabela do ente (O1-02a), regime como dado de primeira classe (O1-02b) e rubricas aplicadas automaticamente por regime no ciclo, com checksum na memória (O1-02c). Falta só a UI (O1-02d) |
-| Ponto eletrônico Portaria 671 (AFD/AEJ/NSR) | 🔴 | Só batida manual sem valor probatório (O1-03) |
+| Ponto — base probatória (NSR + marcação imutável encadeada) | 🟡 | `time_clock_punches` append-only, NSR por ente, encadeamento SHA-256 verificável (O1-03a) |
+| Ponto eletrônico Portaria 671 (AFD/AEJ oficiais) | 🔴 | Exportação oficial pendente de homologação por ferramenta oficial (O1-03b) |
 | Rescisão e férias com INSS/IRRF | 🟡 | Aritmética simplificada (O1-05) |
 | eSocial | 🔴 | Fila sem geração/assinatura/transmissão (O1-06) |
 | Remessa bancária CNAB 240 | 🔴 | Formato próprio, não CNAB 240 (O1-07) |
