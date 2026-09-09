@@ -31,7 +31,7 @@ Legenda: 🟢 atende · 🟡 atende parcialmente · 🔴 não atende.
 | Rubricas versionadas e memória de cálculo | 🟢 | AST auditável com checksum |
 | Ciclo de folha com aprovação e fechamento | 🟢 | Segregação de funções, lock otimista |
 | Tabelas fiscais versionadas por vigência | 🟢 | `fiscal_tables`/`fiscal_table_versions` por vigência e ente, checksum na memória (O1-01/O1-01b); `payroll_config` aposentado |
-| RPPS | 🟢 | Tabela do ente (O1-02a), regime como dado de primeira classe (O1-02b) e rubricas aplicadas automaticamente por regime no ciclo, com checksum na memória (O1-02c). Falta só a UI (O1-02d) |
+| RPPS | 🟢 | Tabela do ente (O1-02a), regime como dado de primeira classe (O1-02b), rubricas aplicadas automaticamente por regime no ciclo com checksum na memória (O1-02c) e tela de regimes + mapeamento de rubricas (O1-02d). Falta só o seletor de regime na ficha da pessoa e a tela do write-path de tabelas fiscais |
 | Ponto — base probatória (NSR + marcação imutável encadeada) | 🟡 | `time_clock_punches` append-only, NSR por ente, encadeamento SHA-256 verificável (O1-03a); espelho + comprovante interno (O1-03c); feriados por ente (O1-03d); apuração previsto×trabalhado com tolerância legal e extras/faltas (O1-03e) |
 | Ponto eletrônico Portaria 671 (AFD/AEJ oficiais) | 🔴 | Exportação oficial pendente de homologação por ferramenta oficial (O1-03b) |
 | Rescisão com INSS/IRRF | 🟢 | INSS progressivo + IRRF por faixa pelo motor fiscal versionado, em trilhas separadas (saldo de salário e 13º em tributação exclusiva); verbas indenizatórias isentas; `inss_amount`/`irrf_amount` e provenância na memória (O1-05a). Regime celetista/temporário |

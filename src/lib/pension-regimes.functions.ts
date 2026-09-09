@@ -41,6 +41,58 @@ export const getPensionRegimes = createServerFn({ method: "POST" })
     };
   });
 
+// Workspace da UI de previdencia (O1-02d): reune numa chamada os regimes do ente,
+// o catalogo de rubricas ativas (para o multi-select) e o mapa regime -> rubricas.
+// Espelha getSpecialPayrollWorkspace/getPayrollSimulationWorkspace. Leitura por
+// people.read; os flags dizem o que a tela pode gerir.
+export const getPensionWorkspace = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => TenantInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "people.read");
+    const [regimes, rubrics, regimeRubrics] = await Promise.all([
+      query<{
+        id: string;
+        code: string;
+        name: string;
+        regime_type: "rpps" | "rgps";
+        status: "ativo" | "inativo";
+        description: string | null;
+      }>(
+        `select id,code,name,regime_type,status,description
+         from public.pension_regimes where tenant_id=$1
+         order by lower(code)`,
+        [data.tenant_id],
+      ),
+      query<{
+        id: string;
+        code: string;
+        name: string;
+        nature: "provento" | "desconto" | "informativa";
+      }>(
+        `select id,code,name,nature from public.payroll_rubrics
+         where tenant_id=$1 and status='ativo'
+         order by calculation_order,code`,
+        [data.tenant_id],
+      ),
+      query<{ pension_regime_id: string; rubric_id: string }>(
+        `select pension_regime_id, rubric_id
+         from public.pension_regime_rubrics where tenant_id=$1`,
+        [data.tenant_id],
+      ),
+    ]);
+    return {
+      regimes,
+      rubrics,
+      regimeRubrics,
+      canManageRegimes: access.permissions.includes("people.manage"),
+      canManageRubrics: access.permissions.includes(
+        "payroll.assignments.manage",
+      ),
+    };
+  });
+
 const SaveRegimeInput = z.object({
   id: z.string().uuid().optional(),
   tenant_id: z.string().uuid(),

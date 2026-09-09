@@ -20,6 +20,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as RhVtVaRouteImport } from './routes/rh.vt-va'
 import { Route as RhSimulacoesRouteImport } from './routes/rh.simulacoes'
 import { Route as RhRubricasRouteImport } from './routes/rh.rubricas'
+import { Route as RhPrevidenciaRouteImport } from './routes/rh.previdencia'
 import { Route as RhPessoasRouteImport } from './routes/rh.pessoas'
 import { Route as RhMovimentacoesRouteImport } from './routes/rh.movimentacoes'
 import { Route as RhImportacoesRouteImport } from './routes/rh.importacoes'
@@ -95,6 +96,11 @@ const RhSimulacoesRoute = RhSimulacoesRouteImport.update({
 const RhRubricasRoute = RhRubricasRouteImport.update({
   id: '/rubricas',
   path: '/rubricas',
+  getParentRoute: () => RhRoute,
+} as any)
+const RhPrevidenciaRoute = RhPrevidenciaRouteImport.update({
+  id: '/previdencia',
+  path: '/previdencia',
   getParentRoute: () => RhRoute,
 } as any)
 const RhPessoasRoute = RhPessoasRouteImport.update({
@@ -232,6 +238,7 @@ export interface FileRoutesByFullPath {
   '/rh/importacoes': typeof RhImportacoesRoute
   '/rh/movimentacoes': typeof RhMovimentacoesRoute
   '/rh/pessoas': typeof RhPessoasRoute
+  '/rh/previdencia': typeof RhPrevidenciaRoute
   '/rh/rubricas': typeof RhRubricasRoute
   '/rh/simulacoes': typeof RhSimulacoesRoute
   '/rh/vt-va': typeof RhVtVaRoute
@@ -266,6 +273,7 @@ export interface FileRoutesByTo {
   '/rh/importacoes': typeof RhImportacoesRoute
   '/rh/movimentacoes': typeof RhMovimentacoesRoute
   '/rh/pessoas': typeof RhPessoasRoute
+  '/rh/previdencia': typeof RhPrevidenciaRoute
   '/rh/rubricas': typeof RhRubricasRoute
   '/rh/simulacoes': typeof RhSimulacoesRoute
   '/rh/vt-va': typeof RhVtVaRoute
@@ -301,6 +309,7 @@ export interface FileRoutesById {
   '/rh/importacoes': typeof RhImportacoesRoute
   '/rh/movimentacoes': typeof RhMovimentacoesRoute
   '/rh/pessoas': typeof RhPessoasRoute
+  '/rh/previdencia': typeof RhPrevidenciaRoute
   '/rh/rubricas': typeof RhRubricasRoute
   '/rh/simulacoes': typeof RhSimulacoesRoute
   '/rh/vt-va': typeof RhVtVaRoute
@@ -337,6 +346,7 @@ export interface FileRouteTypes {
     | '/rh/importacoes'
     | '/rh/movimentacoes'
     | '/rh/pessoas'
+    | '/rh/previdencia'
     | '/rh/rubricas'
     | '/rh/simulacoes'
     | '/rh/vt-va'
@@ -371,6 +381,7 @@ export interface FileRouteTypes {
     | '/rh/importacoes'
     | '/rh/movimentacoes'
     | '/rh/pessoas'
+    | '/rh/previdencia'
     | '/rh/rubricas'
     | '/rh/simulacoes'
     | '/rh/vt-va'
@@ -405,6 +416,7 @@ export interface FileRouteTypes {
     | '/rh/importacoes'
     | '/rh/movimentacoes'
     | '/rh/pessoas'
+    | '/rh/previdencia'
     | '/rh/rubricas'
     | '/rh/simulacoes'
     | '/rh/vt-va'
@@ -507,6 +519,13 @@ declare module '@tanstack/react-router' {
       path: '/rubricas'
       fullPath: '/rh/rubricas'
       preLoaderRoute: typeof RhRubricasRouteImport
+      parentRoute: typeof RhRoute
+    }
+    '/rh/previdencia': {
+      id: '/rh/previdencia'
+      path: '/previdencia'
+      fullPath: '/rh/previdencia'
+      preLoaderRoute: typeof RhPrevidenciaRouteImport
       parentRoute: typeof RhRoute
     }
     '/rh/pessoas': {
@@ -695,6 +714,7 @@ interface RhRouteChildren {
   RhImportacoesRoute: typeof RhImportacoesRoute
   RhMovimentacoesRoute: typeof RhMovimentacoesRoute
   RhPessoasRoute: typeof RhPessoasRoute
+  RhPrevidenciaRoute: typeof RhPrevidenciaRoute
   RhRubricasRoute: typeof RhRubricasRoute
   RhSimulacoesRoute: typeof RhSimulacoesRoute
   RhVtVaRoute: typeof RhVtVaRoute
@@ -711,6 +731,7 @@ const RhRouteChildren: RhRouteChildren = {
   RhImportacoesRoute: RhImportacoesRoute,
   RhMovimentacoesRoute: RhMovimentacoesRoute,
   RhPessoasRoute: RhPessoasRoute,
+  RhPrevidenciaRoute: RhPrevidenciaRoute,
   RhRubricasRoute: RhRubricasRoute,
   RhSimulacoesRoute: RhSimulacoesRoute,
   RhVtVaRoute: RhVtVaRoute,

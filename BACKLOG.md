@@ -309,13 +309,19 @@ Teste `tests/sprint-pension-rubrics.test.mjs` roda a folha **ponta a ponta**
 `runPayrollSimulation` com o valor progressivo e o checksum na memória),
 verificado por mutação.
 
-### O1-02d — UI de previdência (RPPS)
+### O1-02d — UI de previdência (RPPS) ✅
 
-P1 · depende de O1-02c. Tela de regimes + mapeamento de rubricas, seletor de
-regime em `rh.pessoas.tsx` (SelectField), tela do write-path de tabelas fiscais.
-Só interface — o back-end de RPPS está completo (O1-02a/b/c). Eventual
+P1 · feito (parcial). Rota `rh.previdencia.tsx` (menu RH → Previdência,
+`people.read`): lista/cria/edita regimes (RPPS/RGPS) e mapeia as rubricas de
+contribuição por regime, consumindo `getPensionWorkspace` (agregador novo:
+regimes + catálogo de rubricas ativas + mapa regime→rubricas), `savePensionRegime`
+e `setPensionRegimeRubrics`. O agregador tem teste de comportamento
+(`tests/sprint-pension-workspace.test.mjs`) verificado por mutação. **Ainda
+pendente nesta linha** (registrado, sem bloquear): seletor de regime em
+`rh.pessoas.tsx` (gravar `employment_links.pension_regime_id` pela tela) e a tela
+do write-path de tabelas fiscais do ente (O1-02a já tem back-end). Eventual
 `base_code='rpps'` (widen do CHECK de `payroll_rubric_incidences`) se uma rubrica
-de RPPS precisar compor uma base própria.
+de RPPS precisar compor base própria.
 
 ### ✅ O1-03a — Registro de ponto imutável e encadeado (base probatória)
 

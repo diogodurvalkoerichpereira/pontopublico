@@ -35,6 +35,7 @@ import {
   Scale,
   Bot,
   ArchiveRestore,
+  Landmark,
 } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
 import { SupportWidget } from "@/components/SupportWidget";
@@ -249,6 +250,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       to: "/rh/ferias",
       label: "Férias",
       icon: Palmtree,
+      section: "Recursos Humanos",
+    });
+  if (hasTenantPermission("people.read"))
+    items.push({
+      to: "/rh/previdencia",
+      label: "Previdência",
+      icon: Landmark,
       section: "Recursos Humanos",
     });
   if (hasTenantPermission("payroll.import.read"))
