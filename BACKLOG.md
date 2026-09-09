@@ -376,15 +376,18 @@ P1. Modelar a **escala diária** (rotativa, sábado, turnos) sobre `work_schedul
 como saldo acumulado (persistente) dos extras/faltas apurados. Aposentar a leitura
 user-scoped de `time_entries` em favor das marcações multi-tenant.
 
-### ◑ O1-04 — Ligar as ilhas
+### ✅ O1-04 — Ligar as ilhas (ponto → folha)
 
-P1. **Metade feita.** `payroll_monthly_variables` **passa a ser lida** por
-`runPayrollSimulation` (O1-04a): cada valor por vínculo/rubrica/competência entra
-como `fixed_amount`, somado às atribuições por vínculo e às rubricas de regime, com
-dedup de precedência (assignment > regime > variável mensal). Teste
-`tests/sprint-monthly-variables.test.mjs`, verificado por mutação. **Falta O1-04b:**
-o ponto apurado (O1-03e) **valorado** (extras/faltas × `valor_hora`) depositado em
-`payroll_monthly_variables` para o ciclo consumir — fecha o laço ponto→folha.
+P1. **Feito.** (O1-04a) `payroll_monthly_variables` passou a ser **lida** por
+`runPayrollSimulation`: cada valor por vínculo/rubrica/competência entra como
+`fixed_amount`, somado às atribuições por vínculo e às rubricas de regime, com
+dedup de precedência (assignment > regime > variável mensal). (O1-04b)
+`depositTimeApuracao` **valora** o ponto apurado (O1-03e) — extras/faltas ×
+salário-hora × adicional, com **parâmetros explícitos do RH** (rubrica, adicional,
+divisor; nada adivinhado) — e grava em `payroll_monthly_variables`
+(re-depósito substitui, idempotente). O laço **ponto → apuração → valoração →
+folha** fecha ponta a ponta. Testes `tests/sprint-monthly-variables.test.mjs` e
+`tests/sprint-ponto-folha.test.mjs`, verificados por mutação.
 
 ### O1-05 — Rescisão e férias corretas
 
