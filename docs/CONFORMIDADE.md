@@ -36,6 +36,7 @@ Legenda: 🟢 atende · 🟡 atende parcialmente · 🔴 não atende.
 | Ponto eletrônico Portaria 671 (AFD/AEJ oficiais) | 🔴 | Exportação oficial pendente de homologação por ferramenta oficial (O1-03b) |
 | Rescisão com INSS/IRRF | 🟢 | INSS progressivo + IRRF por faixa pelo motor fiscal versionado, em trilhas separadas (saldo de salário e 13º em tributação exclusiva); verbas indenizatórias isentas; `inss_amount`/`irrf_amount` e provenância na memória (O1-05a). Regime celetista/temporário |
 | Férias com INSS/IRRF | 🟢 | `depositVacationToPayroll` deposita a remuneração (base + 1/3) em `payroll_monthly_variables`; o ciclo tributa a base combinada com o salário (teto único do INSS), com recomposição provada por teste (O1-05b) |
+| Empenho da folha (interface PCASP) | 🟡 | Requisição de empenho de folha fechada, por natureza de despesa, linhas somam a despesa bruta (O1-08). Interface para a Onda 2; a emissão/reserva/escrituração no SIAFIC nasce na Onda 2 |
 | eSocial | 🔴 | Fila sem geração/assinatura/transmissão (O1-06) |
 | Remessa bancária CNAB 240 | 🔴 | Formato próprio, não CNAB 240 (O1-07) |
 | Exportação para TCE/SIOPE | 🔴 | CSV genérico, não os layouts oficiais |

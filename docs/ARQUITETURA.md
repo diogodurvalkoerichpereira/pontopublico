@@ -74,6 +74,7 @@ aplicação inteira. Manter o shim é decisão consciente — [ADR 0012](adr/001
 | Folha                    | `payroll_rubrics` → `payroll_rubric_versions` (AST) → `payroll_cycles` → `payroll_cycle_results`; o ciclo aplica atribuições por vínculo + rubricas de regime + `payroll_monthly_variables` (O1-04), sempre na ordem de `calculation_order` para as bases de incidência (INSS/IRRF) acumularem certo (O1-05b). Férias entram por `payroll_monthly_variables` para tributar recompostas com a competência |
 | Tabelas fiscais          | `fiscal_tables` → `fiscal_table_versions` (INSS/IRRF/RPPS versionadas; `tenant_id` nulo = nacional) — nó `table_lookup`        |
 | Ponto                    | `time_clock_punches` (marcação imutável encadeada, NSR por ente) + `time_clock_counters` (O1-03a); espelho/comprovante em `time-mirror.ts` (O1-03c); `holidays` por ente/nacional (O1-03d); `time_entries`/`work_schedules` (geração legada, user-scoped) |
+| Empenho da folha         | `payroll_empenho_requests` → `payroll_empenho_request_lines` — requisição de empenho de uma folha fechada, por natureza de despesa (PCASP); linhas somam a despesa bruta de pessoal (O1-08). Interface para a Onda 2; não é empenho homologado no SIAFIC |
 | Auditoria                | `audit_events`                                                                                                                |
 | Analítico                | schema `analytics`: `fact_payroll`, `fact_payroll_item`, `fact_movement`                                                      |
 

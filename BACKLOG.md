@@ -438,10 +438,22 @@ P0 · 6-8 dias. `src/lib/cnab/` com descritores de campo declarativos e writer
 da Tesouraria na Onda 2). Aceite: arquivo aceito pelo banco; posições conferidas
 contra o manual.
 
-### O1-08 — Interface de empenho da folha
+### O1-08 — Interface de empenho da folha ✅
 
-P1 · 1 semana. A folha emite requisição de empenho no formato PCASP, para o
-modelo de dados nascer certo antes da Onda 2.
+P1 · feito. Uma folha mensal **fechada** emite uma **requisição de empenho**
+(`emitPayrollEmpenhoRequest`, `payroll-empenho.functions.ts`): a despesa bruta de
+pessoal (proventos do ciclo) classificada por **natureza de despesa (PCASP)** em
+linhas que **têm de somar** a despesa bruta — invariante testado, sem sobra nem
+falta. Retenções (INSS/IRRF/consignações) são extra-orçamentárias e não entram;
+obrigações patronais (3.1.90.13) entram quando o cálculo patronal existir. Uma
+requisição por folha; provenância (`cycle_id`, base, linhas) + checksum na memória.
+É a **interface** para a contabilidade da Onda 2 — o modelo de dados nasce certo
+antes do núcleo SIAFIC. **Não** é empenho homologado no SIAFIC (a emissão, reserva
+orçamentária e escrituração vêm na Onda 2), por isso o artefato é "requisição de
+empenho". Guardas: `payroll.cycles.close` (emitir) / `payroll.cycles.read` (ler); um
+`budget.empenho.manage` dedicado nasce na Onda 2. Migration
+`20260909110000_o1_08_payroll_empenho.sql`; teste `tests/sprint-empenho-folha.test.mjs`
+verificado por mutação.
 
 ---
 
