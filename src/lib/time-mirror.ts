@@ -105,3 +105,92 @@ export function buildTimeMirror(
   }
   return { days, totalMinutes };
 }
+
+// --- Apuração de jornada (O1-03e): previsto × trabalhado, tolerância, extras/faltas.
+
+export interface ApuracaoConfig {
+  /** Minutos previstos por dia da semana (índice 0=domingo … 6=sábado). */
+  expectedMinutesByWeekday: number[];
+  /** Tolerância legal por dia (CLT art. 58 §1). Desvio até aqui é desconsiderado. */
+  toleranceMinutesPerDay: number;
+}
+
+export interface ApuracaoDay {
+  date: string;
+  weekday: number;
+  expectedMinutes: number;
+  workedMinutes: number;
+  isHoliday: boolean;
+  withinTolerance: boolean;
+  extraMinutes: number;
+  faltaMinutes: number;
+}
+
+export interface ApuracaoResult {
+  days: ApuracaoDay[];
+  totals: {
+    expectedMinutes: number;
+    workedMinutes: number;
+    extraMinutes: number;
+    faltaMinutes: number;
+  };
+}
+
+/** Dia da semana (0=domingo) do dia-calendario `YYYY-MM-DD`. */
+function weekdayOf(date: string): number {
+  return new Date(`${date}T00:00:00Z`).getUTCDay();
+}
+
+/**
+ * Apura a jornada a partir dos dias do espelho e da config de previsto. Feriado
+ * tem previsto 0 (todo trabalho no feriado é extra). O desvio dentro da tolerância
+ * legal é desconsiderado (nem extra nem falta); acima dela, o desvio inteiro conta.
+ */
+export function apurarJornada(
+  days: MirrorDay[],
+  config: ApuracaoConfig,
+): ApuracaoResult {
+  const out: ApuracaoDay[] = [];
+  const totals = {
+    expectedMinutes: 0,
+    workedMinutes: 0,
+    extraMinutes: 0,
+    faltaMinutes: 0,
+  };
+  for (const day of days) {
+    const weekday = weekdayOf(day.date);
+    const expectedMinutes = day.isHoliday
+      ? 0
+      : (config.expectedMinutesByWeekday[weekday] ?? 0);
+    const deviation = day.workedMinutes - expectedMinutes;
+    const withinTolerance =
+      Math.abs(deviation) <= config.toleranceMinutesPerDay;
+    const extraMinutes = withinTolerance ? 0 : Math.max(0, deviation);
+    const faltaMinutes = withinTolerance ? 0 : Math.max(0, -deviation);
+    out.push({
+      date: day.date,
+      weekday,
+      expectedMinutes,
+      workedMinutes: day.workedMinutes,
+      isHoliday: day.isHoliday,
+      withinTolerance,
+      extraMinutes,
+      faltaMinutes,
+    });
+    totals.expectedMinutes += expectedMinutes;
+    totals.workedMinutes += day.workedMinutes;
+    totals.extraMinutes += extraMinutes;
+    totals.faltaMinutes += faltaMinutes;
+  }
+  return { days: out, totals };
+}
+
+/**
+ * Config de previsto padrão a partir da jornada semanal: distribui as horas de
+ * seg-sex igualmente, sábado/domingo 0. Escala customizada (rotativa, sábado) é o
+ * O1-04b.
+ */
+export function defaultExpectedByWeekday(weeklyHours: number): number[] {
+  const perWorkday = Math.round((weeklyHours * 60) / 5);
+  return [0, perWorkday, perWorkday, perWorkday, perWorkday, perWorkday, 0];
+}

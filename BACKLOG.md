@@ -359,14 +359,22 @@ dedup por data). O espelho (`buildTimeMirror`/`getTimeMirror`) marca `isHoliday`
 `holidayName` por dia (fixo casa todo ano; datado só no ano certo). Teste
 `tests/sprint-holidays.test.mjs`, verificado por mutação + PostgreSQL 16 real.
 
-### O1-03e — Tolerância legal e banco de horas
+### ✅ O1-03e — Apuração de jornada (previsto × trabalhado, tolerância, extras/faltas)
 
-P1 · depende de um modelo de jornada esperada (escala diária). Tolerância CLT art.
-58 §1 (5 min/marcação, 10 min/dia) e banco de horas exigem os minutos **previstos**
-por dia — hoje só existe `weekly_hours` escalar, sem escala diária. Modelar a escala
-(sobre `work_schedules`) e então apurar extras/faltas/saldo. Ligação com a folha
-(`payroll_monthly_variables`) é o O1-04. Aposentar a leitura user-scoped de
-`time_entries` em favor das marcações multi-tenant.
+P1. **Feito.** `apurarJornada` (puro, em `time-mirror.ts`): por dia, previsto ×
+trabalhado, com **tolerância legal** (CLT art. 58 §1; desvio até o limite é
+desconsiderado), extras e faltas, e feriado com previsto 0 (todo trabalho no
+feriado vira extra). `getTimeApuracao` puxa a jornada semanal do vínculo
+(`weekly_hours`) + feriados + marcações e apura o período. Previsto padrão:
+`weekly_hours` distribuído seg-sex (`defaultExpectedByWeekday`). Sem migration.
+Teste `tests/sprint-time-apuracao.test.mjs`, verificado por mutação.
+
+### O1-03f — Escala diária customizada + banco de horas persistente
+
+P1. Modelar a **escala diária** (rotativa, sábado, turnos) sobre `work_schedules`
+— hoje o previsto é `weekly_hours` distribuído seg-sex. E o **banco de horas**
+como saldo acumulado (persistente) dos extras/faltas apurados. Aposentar a leitura
+user-scoped de `time_entries` em favor das marcações multi-tenant.
 
 ### O1-04 — Ligar as ilhas
 

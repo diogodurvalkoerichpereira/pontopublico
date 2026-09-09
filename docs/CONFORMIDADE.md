@@ -32,7 +32,7 @@ Legenda: 🟢 atende · 🟡 atende parcialmente · 🔴 não atende.
 | Ciclo de folha com aprovação e fechamento | 🟢 | Segregação de funções, lock otimista |
 | Tabelas fiscais versionadas por vigência | 🟢 | `fiscal_tables`/`fiscal_table_versions` por vigência e ente, checksum na memória (O1-01/O1-01b); `payroll_config` aposentado |
 | RPPS | 🟢 | Tabela do ente (O1-02a), regime como dado de primeira classe (O1-02b) e rubricas aplicadas automaticamente por regime no ciclo, com checksum na memória (O1-02c). Falta só a UI (O1-02d) |
-| Ponto — base probatória (NSR + marcação imutável encadeada) | 🟡 | `time_clock_punches` append-only, NSR por ente, encadeamento SHA-256 verificável (O1-03a); espelho de jornada + comprovante interno com código verificador (O1-03c) |
+| Ponto — base probatória (NSR + marcação imutável encadeada) | 🟡 | `time_clock_punches` append-only, NSR por ente, encadeamento SHA-256 verificável (O1-03a); espelho + comprovante interno (O1-03c); feriados por ente (O1-03d); apuração previsto×trabalhado com tolerância legal e extras/faltas (O1-03e) |
 | Ponto eletrônico Portaria 671 (AFD/AEJ oficiais) | 🔴 | Exportação oficial pendente de homologação por ferramenta oficial (O1-03b) |
 | Rescisão e férias com INSS/IRRF | 🟡 | Aritmética simplificada (O1-05) |
 | eSocial | 🔴 | Fila sem geração/assinatura/transmissão (O1-06) |

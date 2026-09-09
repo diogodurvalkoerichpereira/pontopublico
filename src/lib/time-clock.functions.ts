@@ -14,6 +14,8 @@ import {
 import { hashPunch, GENESIS_HASH } from "./time-clock.server";
 import {
   buildTimeMirror,
+  apurarJornada,
+  defaultExpectedByWeekday,
   type MirrorPunch,
   type HolidayRule,
 } from "./time-mirror";
@@ -296,4 +298,59 @@ export const getPunchReceipt = createServerFn({ method: "POST" })
         unit_name: row.unit_name,
       },
     };
+  });
+
+const ApuracaoInput = z.object({
+  tenant_id: z.string().uuid(),
+  employment_link_id: z.string().uuid(),
+  from: z.string().datetime(),
+  to: z.string().datetime(),
+  time_zone: z.string().max(64).optional(),
+  tolerance_minutes: z.number().int().min(0).max(60).default(10),
+});
+
+/** Apuracao de jornada no periodo: previsto (da jornada semanal) x trabalhado, com
+ *  tolerancia legal, extras e faltas por dia e no total. Feriado tem previsto 0. */
+export const getTimeApuracao = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => ApuracaoInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "people.read");
+    const link = await queryOne<{ weekly_hours: number | null }>(
+      "select weekly_hours from public.employment_links where id=$1 and tenant_id=$2",
+      [data.employment_link_id, data.tenant_id],
+    );
+    if (!link) throw new Error("Vínculo inválido para esta entidade");
+    const rows = await query<{
+      nsr: number;
+      punch_time: string;
+      source: string;
+      record_hash: string;
+    }>(
+      `select nsr, punch_time, source, record_hash
+       from public.time_clock_punches
+       where tenant_id=$1 and employment_link_id=$2
+         and punch_time>=$3 and punch_time<=$4
+       order by nsr`,
+      [data.tenant_id, data.employment_link_id, data.from, data.to],
+    );
+    const punches: MirrorPunch[] = rows.map((row) => ({
+      nsr: Number(row.nsr),
+      punchTime: new Date(row.punch_time).toISOString(),
+      recordHash: row.record_hash,
+      source: row.source,
+    }));
+    const holidays = await query<HolidayRule>(
+      `select year, month, day, name from public.holidays
+       where tenant_id=$1 or tenant_id is null`,
+      [data.tenant_id],
+    );
+    const { days } = buildTimeMirror(punches, data.time_zone, holidays);
+    return apurarJornada(days, {
+      expectedMinutesByWeekday: defaultExpectedByWeekday(
+        Number(link.weekly_hours ?? 0),
+      ),
+      toleranceMinutesPerDay: data.tolerance_minutes,
+    });
   });
