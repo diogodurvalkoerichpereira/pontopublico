@@ -70,7 +70,7 @@ aplicação inteira. Manter o shim é decisão consciente — [ADR 0012](adr/001
 | Estrutura organizacional | `unidades` (árvore com anti-ciclo)                                                                                            |
 | Pessoas e vínculos       | `persons`, `employment_links` (→ `pension_regimes`), `person_dependents`, `pension_beneficiaries`                             |
 | Previdência              | `pension_regimes` por ente (RPPS/RGPS); `employment_links.pension_regime_id`; `pension_regime_rubrics` (rubricas aplicadas por regime no ciclo) |
-| Folha                    | `payroll_rubrics` → `payroll_rubric_versions` (AST) → `payroll_cycles` → `payroll_cycle_results`                              |
+| Folha                    | `payroll_rubrics` → `payroll_rubric_versions` (AST) → `payroll_cycles` → `payroll_cycle_results`; o ciclo aplica atribuições por vínculo + rubricas de regime + `payroll_monthly_variables` (O1-04) |
 | Tabelas fiscais          | `fiscal_tables` → `fiscal_table_versions` (INSS/IRRF/RPPS versionadas; `tenant_id` nulo = nacional) — nó `table_lookup`        |
 | Ponto                    | `time_clock_punches` (marcação imutável encadeada, NSR por ente) + `time_clock_counters` (O1-03a); espelho/comprovante em `time-mirror.ts` (O1-03c); `holidays` por ente/nacional (O1-03d); `time_entries`/`work_schedules` (geração legada, user-scoped) |
 | Auditoria                | `audit_events`                                                                                                                |

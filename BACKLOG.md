@@ -376,10 +376,15 @@ P1. Modelar a **escala diária** (rotativa, sábado, turnos) sobre `work_schedul
 como saldo acumulado (persistente) dos extras/faltas apurados. Aposentar a leitura
 user-scoped de `time_entries` em favor das marcações multi-tenant.
 
-### O1-04 — Ligar as ilhas
+### ◑ O1-04 — Ligar as ilhas
 
-P1 · 4 dias. O ponto alimenta a folha; `payroll_monthly_variables` passa a ser
-lida por `runPayrollSimulation`.
+P1. **Metade feita.** `payroll_monthly_variables` **passa a ser lida** por
+`runPayrollSimulation` (O1-04a): cada valor por vínculo/rubrica/competência entra
+como `fixed_amount`, somado às atribuições por vínculo e às rubricas de regime, com
+dedup de precedência (assignment > regime > variável mensal). Teste
+`tests/sprint-monthly-variables.test.mjs`, verificado por mutação. **Falta O1-04b:**
+o ponto apurado (O1-03e) **valorado** (extras/faltas × `valor_hora`) depositado em
+`payroll_monthly_variables` para o ciclo consumir — fecha o laço ponto→folha.
 
 ### O1-05 — Rescisão e férias corretas
 

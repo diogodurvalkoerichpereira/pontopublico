@@ -339,17 +339,52 @@ export const runPayrollSimulation = createServerFn({ method: "POST" })
       [data.tenant_id, linkIds, referenceDate],
     );
 
+    // Variaveis mensais (O1-04): valores por vinculo/rubrica/competencia (folha de
+    // ponto valorada, importacoes, itens pontuais). Entram como `fixed_amount` — a
+    // formula da rubrica os aplica. Somadas por (rubrica, parcela) na competencia.
+    const monthlyVarSources = await query<
+      CalculationSource & { installment_number: number }
+    >(
+      `select mv.id as assignment_id,mv.employment_link_id,
+         rubric.id as rubric_id,rubric.code as rubric_code,rubric.name as rubric_name,
+         rubric.nature,rubric.calculation_order,link.base_salary,
+         mv.amount as fixed_amount,null::numeric as quantity,'{}'::jsonb as parameters,
+         version.id as version_id,version.version_number,version.formula_ast,
+         version.formula_checksum,version.rounding_scale,version.rounding_mode,
+         mv.installment_number
+       from public.payroll_monthly_variables mv
+       join public.employment_links link on link.id=mv.employment_link_id
+       join public.payroll_rubrics rubric on rubric.id=mv.rubric_id
+       join public.payroll_rubric_versions version on version.rubric_id=rubric.id
+         and version.tenant_id=mv.tenant_id and version.status='publicada'
+         and version.valid_from<=$3::date
+         and (version.valid_to is null or version.valid_to>=$3::date)
+       where mv.tenant_id=$1 and mv.employment_link_id=any($2::uuid[])
+         and mv.reference_month=$3::date
+         and mv.installment_number=1 and rubric.status='ativo'
+       order by mv.employment_link_id,rubric.calculation_order,rubric.code`,
+      [data.tenant_id, linkIds, referenceDate],
+    );
+
     // A atribuicao explicita por vinculo tem precedencia: uma rubrica ja atribuida
-    // ao vinculo nao e reaplicada pela regra do regime (evita dupla contagem).
+    // ao vinculo nao e reaplicada pela regra do regime nem pela variavel mensal
+    // (evita dupla contagem). Ordem de precedencia: assignment > regime > mensal.
     const assignedKey = new Set(
       assignmentSources.map((s) => `${s.employment_link_id}:${s.rubric_id}`),
     );
-    const sources = [
+    const sources: CalculationSource[] = [
       ...assignmentSources,
       ...regimeSources.filter(
         (s) => !assignedKey.has(`${s.employment_link_id}:${s.rubric_id}`),
       ),
     ];
+    const presentKey = new Set(
+      sources.map((s) => `${s.employment_link_id}:${s.rubric_id}`),
+    );
+    for (const mv of monthlyVarSources) {
+      if (!presentKey.has(`${mv.employment_link_id}:${mv.rubric_id}`))
+        sources.push(mv);
+    }
 
     const incidenceRows = await query<{
       version_id: string;
