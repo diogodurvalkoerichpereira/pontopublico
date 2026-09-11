@@ -669,7 +669,11 @@ um por imóvel/exercício, ligando o cadastro à arrecadação — reusa `taxes.
 O4-05 cadastro mobiliário + ISS (`service_taxpayers` com inscrição municipal,
 atividade e alíquota; `launchIss` gera o crédito ISS = base × alíquota por
 competência em `tax_credits`, inscrição "inscricao/competencia", um por
-competência — reusa `taxes.*`). Pendente (externo/homologação): NFS-e padrão
+competência — reusa `taxes.*`); O4-06 ITBI sobre transmissão (`launchItbi`:
+crédito = valor da transmissão × alíquota por transmissão, inscrição
+"inscricao/ITBI/data", sobre o cadastro imobiliário — reusa `taxes.*`, sem
+migration). Trio municipal completo (IPTU/ISS/ITBI + ITBI/taxas) no mesmo fluxo
+de arrecadação → dívida ativa → parcelamento. Pendente (externo/homologação): NFS-e padrão
 nacional; emissão da CND com autenticação e layout do ente; execução fiscal
 integrada ao Judiciário.
 
