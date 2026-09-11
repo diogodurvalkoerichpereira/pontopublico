@@ -49,7 +49,7 @@ Legenda: 🟢 atende · 🟡 atende parcialmente · 🔴 não atende.
 | Contabilidade PCASP (empenho→liquidação→pagamento) | 🟡 — despesa empenho→liquidação→pagamento sobre `budget_commitments` com reserva/devolução de saldo (O2-02/O2-03); folha→empenho (O2-04); razão contábil em **partidas dobradas** com balancete que fecha em zero (O2-05). Faltam os roteiros de contabilização automática por fato, restos a pagar, encerramento e os balanços |
 | Tesouraria | 🔴 |
 | Tributação e receita (IPTU/ISS/ITBI, dívida ativa, NFS-e) | 🔴 |
-| Materiais (compras 14.133, contratos, patrimônio, frotas, PNCP) | 🔴 |
+| Materiais (compras 14.133, contratos, patrimônio, frotas, PNCP) | 🟡 — contratos administrativos (`procurement_contracts`) com fornecedor, modalidade 14.133, valor/vigência/saldo e permissões `contracts.*` (O3-01). Faltam licitação, itens, almoxarifado, patrimônio, frotas e a remessa ao PNCP |
 | Protocolo e processo eletrônico | 🔴 |
 | Controle interno | 🟡 (só a trilha técnica) |
 | Portal da transparência | 🔴 |
