@@ -945,6 +945,14 @@ acompanhamento aberto→em_implementacao→implementado/nao_implementado, numera
 por ano, reusa `analytics.*`). Pendente: assinatura ICP-Brasil, dados abertos
 publicáveis.
 
+**O5-03b — Painel da ouvidoria (Lei 13.460) ✅.** `getOmbudsmanSummary` consolida as
+manifestações **por tipo** (denúncia/reclamação/sugestão/elogio/informação/solicitação),
+conta as em aberto (recebida/em_analise), as **vencidas** (em aberto com prazo passado) e a
+tempestividade das respondidas (no prazo até o limite; fora depois). Reusa `protocol.read`,
+sem migration; `/ouvidoria` ganha os cartões por tipo + em aberto/vencidas/no prazo. Teste
+`tests/sprint-ombudsman-summary.test.mjs` verificado por mutação (agrupar tipo errado, ou
+contar em aberto no prazo como vencida, derruba).
+
 **O5-04b — Painel de prazos do e-SIC (LAI) ✅.** `getEsicSummary` consolida a contagem por
 situação e destaca os pedidos **em aberto** (recebido/prorrogado) com prazo de resposta
 vencido, além da **tempestividade** dos respondidos/indeferidos (no prazo quando

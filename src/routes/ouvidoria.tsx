@@ -28,6 +28,7 @@ import {
   getManifestations,
   openManifestation,
   respondManifestation,
+  getOmbudsmanSummary,
 } from "@/lib/ombudsman.functions";
 import {
   getOmbudsmanSatisfaction,
@@ -123,11 +124,31 @@ function Content() {
     enabled: Boolean(activeTenant),
     queryFn: () => loadTimeliness({ data: { tenant_id: activeTenant!.id } }),
   });
+  const loadSummary = useServerFn(getOmbudsmanSummary);
+  const { data: summary } = useQuery({
+    queryKey: ["ombudsman-summary", activeTenant?.id],
+    enabled: Boolean(activeTenant),
+    queryFn: () => loadSummary({ data: { tenant_id: activeTenant!.id } }),
+  });
+  const TIPO_LABEL: Record<string, string> = {
+    denuncia: "Denúncia",
+    reclamacao: "Reclamação",
+    sugestao: "Sugestão",
+    elogio: "Elogio",
+    informacao: "Informação",
+    solicitacao: "Solicitação",
+  };
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["ombudsman", activeTenant?.id] });
     qc.invalidateQueries({
       queryKey: ["ombudsman-satisfaction", activeTenant?.id],
+    });
+    qc.invalidateQueries({
+      queryKey: ["ombudsman-summary", activeTenant?.id],
+    });
+    qc.invalidateQueries({
+      queryKey: ["response-timeliness", activeTenant?.id],
     });
   };
 
@@ -244,6 +265,55 @@ function Content() {
           </Button>
         )}
       </div>
+
+      {summary && (
+        <div className="space-y-3">
+          <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+            {Object.entries(summary.porTipo).map(([tipo, qtd]) => (
+              <div key={tipo} className="rounded-xl border bg-card p-3">
+                <div className="text-xs text-muted-foreground">
+                  {TIPO_LABEL[tipo] ?? tipo}
+                </div>
+                <div className="text-xl font-bold">{qtd}</div>
+              </div>
+            ))}
+          </div>
+          <div className="grid gap-3 grid-cols-2 sm:grid-cols-3">
+            <div className="rounded-xl border bg-card p-4">
+              <div className="text-sm text-muted-foreground">Em aberto</div>
+              <div className="text-2xl font-bold">{summary.emAberto}</div>
+            </div>
+            <div
+              className={`rounded-xl border p-4 ${
+                summary.vencidas > 0
+                  ? "border-destructive/50 bg-destructive/5"
+                  : "bg-card"
+              }`}
+            >
+              <div className="text-sm text-muted-foreground">Vencidas</div>
+              <div
+                className={`text-2xl font-bold ${
+                  summary.vencidas > 0 ? "text-destructive" : ""
+                }`}
+              >
+                {summary.vencidas}
+              </div>
+            </div>
+            <div className="rounded-xl border bg-card p-4">
+              <div className="text-sm text-muted-foreground">
+                Respondidas no prazo
+              </div>
+              <div className="text-2xl font-bold">
+                {summary.respondidasNoPrazo}
+                <span className="text-sm font-normal text-muted-foreground">
+                  {" "}
+                  / {summary.respondidasNoPrazo + summary.respondidasForaPrazo}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="rounded-xl border bg-card p-4 flex items-center gap-3">
         <Star className="size-5 text-amber-500" />

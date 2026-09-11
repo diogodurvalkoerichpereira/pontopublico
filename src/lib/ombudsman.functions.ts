@@ -19,6 +19,77 @@ const GetInput = z.object({
   ano: z.number().int().min(2000).max(2200).optional(),
 });
 
+const SummaryInput = z.object({
+  tenant_id: z.string().uuid(),
+  data_referencia: z.string().date().optional(),
+});
+
+// O5-03b — Painel da ouvidoria (Lei 13.460). Consolida as manifestações por **tipo**
+// (denúncia, reclamação, sugestão, elogio, informação, solicitação), a contagem em aberto
+// (recebida/em_analise), as **vencidas** (em aberto com prazo passado) e a tempestividade
+// das respondidas (no prazo quando respondida até o prazo; fora quando depois). Reusa
+// protocol.read.
+export const getOmbudsmanSummary = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => SummaryInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "protocol.read");
+    const ref = data.data_referencia ?? new Date().toISOString().slice(0, 10);
+    const row = (
+      await query<{
+        denuncia: string;
+        reclamacao: string;
+        sugestao: string;
+        elogio: string;
+        informacao: string;
+        solicitacao: string;
+        em_aberto: string;
+        vencidas: string;
+        respondidas_no_prazo: string;
+        respondidas_fora_prazo: string;
+        total: string;
+      }>(
+        `select
+           count(*) filter (where tipo='denuncia')::text as denuncia,
+           count(*) filter (where tipo='reclamacao')::text as reclamacao,
+           count(*) filter (where tipo='sugestao')::text as sugestao,
+           count(*) filter (where tipo='elogio')::text as elogio,
+           count(*) filter (where tipo='informacao')::text as informacao,
+           count(*) filter (where tipo='solicitacao')::text as solicitacao,
+           count(*) filter (where status in ('recebida','em_analise'))::text as em_aberto,
+           count(*) filter (
+             where status in ('recebida','em_analise') and prazo_resposta < $2::date
+           )::text as vencidas,
+           count(*) filter (
+             where respondida_em is not null and respondida_em <= prazo_resposta
+           )::text as respondidas_no_prazo,
+           count(*) filter (
+             where respondida_em is not null and respondida_em > prazo_resposta
+           )::text as respondidas_fora_prazo,
+           count(*)::text as total
+         from public.ombudsman_manifestations where tenant_id = $1`,
+        [data.tenant_id, ref],
+      )
+    )[0];
+    return {
+      data_referencia: ref,
+      porTipo: {
+        denuncia: Number(row.denuncia),
+        reclamacao: Number(row.reclamacao),
+        sugestao: Number(row.sugestao),
+        elogio: Number(row.elogio),
+        informacao: Number(row.informacao),
+        solicitacao: Number(row.solicitacao),
+      },
+      emAberto: Number(row.em_aberto),
+      vencidas: Number(row.vencidas),
+      respondidasNoPrazo: Number(row.respondidas_no_prazo),
+      respondidasForaPrazo: Number(row.respondidas_fora_prazo),
+      total: Number(row.total),
+    };
+  });
+
 export const getManifestations = createServerFn({ method: "POST" })
   .middleware([requireAuth])
   .validator((data: unknown) => GetInput.parse(data))
