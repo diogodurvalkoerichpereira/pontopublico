@@ -747,6 +747,16 @@ homologação/ferramenta do ente). Migration `..._o4_08_active_debt_certificate.
 `tests/sprint-active-debt-certificate.test.mjs` verificado por mutação (usar o valor
 lançado em vez do saldo derruba). Próximo: execução fiscal (ajuizamento) sobre a CDA.
 
+**O4-09 — Execução fiscal (Lei 6.830) ✅.** `fileFiscalExecution` ajuíza a cobrança de
+uma CDA ativa: registra número do processo (informado), data e valor ajuizado (fixado do
+valor inscrito na CDA); uma execução por CDA (`unique` + guarda de estado).
+`updateFiscalExecutionStatus` move o andamento (ajuizada → suspensa → extinta/quitada) e
+trava execuções encerradas; `getFiscalExecutions` lista. É o **registro** interno — não
+peticiona nem integra ao Judiciário (integração externa). Migration
+`..._o4_09_fiscal_execution.sql`, reusa `taxes.*`. Teste
+`tests/sprint-fiscal-execution.test.mjs` verificado por mutação (aceitar CDA não ativa
+derruba). Próximo (UI): painel de dívida ativa (CDA + execução) no `/tributos`.
+
 ### Onda 5 — Apoio, controle e transparência (10-14 sem)
 
 Protocolo e processo eletrônico com ICP-Brasil · e-SIC/LAI · controle interno ·
