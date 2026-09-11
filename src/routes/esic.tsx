@@ -29,6 +29,7 @@ import {
   openEsicRequest,
   extendEsicRequest,
   respondEsicRequest,
+  getEsicSummary,
 } from "@/lib/esic.functions";
 import {
   fileEsicAppeal,
@@ -82,6 +83,7 @@ function Content() {
   const appeal = useServerFn(fileEsicAppeal);
   const loadAppeals = useServerFn(getEsicAppeals);
   const decideAppeal = useServerFn(decideEsicAppeal);
+  const loadSummary = useServerFn(getEsicSummary);
   const qc = useQueryClient();
 
   const [openDialog, setOpenDialog] = useState(false);
@@ -126,9 +128,16 @@ function Content() {
     return r ? `${r.numero}/${r.ano}` : "—";
   };
 
+  const { data: summary } = useQuery({
+    queryKey: ["esic-summary", activeTenant?.id],
+    enabled: Boolean(activeTenant),
+    queryFn: () => loadSummary({ data: { tenant_id: activeTenant!.id } }),
+  });
+
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["esic", activeTenant?.id] });
     qc.invalidateQueries({ queryKey: ["esic-appeals", activeTenant?.id] });
+    qc.invalidateQueries({ queryKey: ["esic-summary", activeTenant?.id] });
   };
 
   const doDecide = async (
@@ -291,6 +300,49 @@ function Content() {
           </Button>
         )}
       </div>
+
+      {summary && (
+        <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+          <div className="rounded-xl border bg-card p-4">
+            <div className="text-sm text-muted-foreground">Pedidos</div>
+            <div className="text-2xl font-bold">{summary.total}</div>
+          </div>
+          <div
+            className={`rounded-xl border p-4 ${
+              summary.vencidos > 0
+                ? "border-destructive/50 bg-destructive/5"
+                : "bg-card"
+            }`}
+          >
+            <div className="text-sm text-muted-foreground">
+              Em aberto vencidos
+            </div>
+            <div
+              className={`text-2xl font-bold ${
+                summary.vencidos > 0 ? "text-destructive" : ""
+              }`}
+            >
+              {summary.vencidos}
+            </div>
+          </div>
+          <div className="rounded-xl border bg-card p-4">
+            <div className="text-sm text-muted-foreground">
+              Respondidos no prazo
+            </div>
+            <div className="text-2xl font-bold">
+              {summary.respondidosNoPrazo}
+            </div>
+          </div>
+          <div className="rounded-xl border bg-card p-4">
+            <div className="text-sm text-muted-foreground">
+              Respondidos fora do prazo
+            </div>
+            <div className="text-2xl font-bold">
+              {summary.respondidosForaPrazo}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="rounded-xl border bg-card overflow-x-auto">
         <table className="w-full text-sm">

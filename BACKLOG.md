@@ -935,6 +935,14 @@ acompanhamento aberto→em_implementacao→implementado/nao_implementado, numera
 por ano, reusa `analytics.*`). Pendente: assinatura ICP-Brasil, dados abertos
 publicáveis.
 
+**O5-04b — Painel de prazos do e-SIC (LAI) ✅.** `getEsicSummary` consolida a contagem por
+situação e destaca os pedidos **em aberto** (recebido/prorrogado) com prazo de resposta
+vencido, além da **tempestividade** dos respondidos/indeferidos (no prazo quando
+respondido até o prazo; fora quando depois — limite `<=`). Reusa `protocol.read`, sem
+migration; `/esic` ganha os cartões (pedidos, vencidos em destaque, respondidos no/fora do
+prazo). Teste `tests/sprint-esic-summary.test.mjs` verificado por mutação (contar em aberto
+no prazo como vencido, ou tratar resposta no limite como fora do prazo, derruba).
+
 **O5-05b — Painel de acompanhamento do controle interno ✅.** `getInternalControlSummary`
 consolida a contagem de apontamentos por situação e destaca os **vencidos**: os ainda em
 curso (aberto/em_implementacao) com prazo anterior à data de referência — apontamento

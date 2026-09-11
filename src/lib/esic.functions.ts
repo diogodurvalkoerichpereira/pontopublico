@@ -29,6 +29,67 @@ const GetInput = z.object({
   ano: z.number().int().min(2000).max(2200).optional(),
 });
 
+const SummaryInput = z.object({
+  tenant_id: z.string().uuid(),
+  data_referencia: z.string().date().optional(),
+});
+
+// O5-04b — Painel de prazos do e-SIC (LAI). Consolida a contagem por situação, destaca os
+// pedidos EM ABERTO (recebido/prorrogado) com prazo de resposta vencido e a tempestividade
+// dos já respondidos/indeferidos: dentro do prazo quando respondido até o prazo, fora do
+// prazo quando depois. Reusa protocol.read.
+export const getEsicSummary = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => SummaryInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "protocol.read");
+    const ref = data.data_referencia ?? new Date().toISOString().slice(0, 10);
+    const row = (
+      await query<{
+        recebido: string;
+        prorrogado: string;
+        respondido: string;
+        indeferido: string;
+        vencidos: string;
+        respondidos_no_prazo: string;
+        respondidos_fora_prazo: string;
+        total: string;
+      }>(
+        `select
+           count(*) filter (where status='recebido')::text as recebido,
+           count(*) filter (where status='prorrogado')::text as prorrogado,
+           count(*) filter (where status='respondido')::text as respondido,
+           count(*) filter (where status='indeferido')::text as indeferido,
+           count(*) filter (
+             where status in ('recebido','prorrogado') and prazo_resposta < $2::date
+           )::text as vencidos,
+           count(*) filter (
+             where respondido_em is not null and respondido_em <= prazo_resposta
+           )::text as respondidos_no_prazo,
+           count(*) filter (
+             where respondido_em is not null and respondido_em > prazo_resposta
+           )::text as respondidos_fora_prazo,
+           count(*)::text as total
+         from public.esic_requests where tenant_id = $1`,
+        [data.tenant_id, ref],
+      )
+    )[0];
+    return {
+      data_referencia: ref,
+      porStatus: {
+        recebido: Number(row.recebido),
+        prorrogado: Number(row.prorrogado),
+        respondido: Number(row.respondido),
+        indeferido: Number(row.indeferido),
+      },
+      vencidos: Number(row.vencidos),
+      respondidosNoPrazo: Number(row.respondidos_no_prazo),
+      respondidosForaPrazo: Number(row.respondidos_fora_prazo),
+      total: Number(row.total),
+    };
+  });
+
 export const getEsicRequests = createServerFn({ method: "POST" })
   .middleware([requireAuth])
   .validator((data: unknown) => GetInput.parse(data))
