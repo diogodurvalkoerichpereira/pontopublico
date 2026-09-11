@@ -18,6 +18,7 @@ import { Route as GestorRouteImport } from './routes/gestor'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as RhVtVaRouteImport } from './routes/rh.vt-va'
+import { Route as RhTabelasFiscaisRouteImport } from './routes/rh.tabelas-fiscais'
 import { Route as RhSimulacoesRouteImport } from './routes/rh.simulacoes'
 import { Route as RhRubricasRouteImport } from './routes/rh.rubricas'
 import { Route as RhPrevidenciaRouteImport } from './routes/rh.previdencia'
@@ -86,6 +87,11 @@ const IndexRoute = IndexRouteImport.update({
 const RhVtVaRoute = RhVtVaRouteImport.update({
   id: '/vt-va',
   path: '/vt-va',
+  getParentRoute: () => RhRoute,
+} as any)
+const RhTabelasFiscaisRoute = RhTabelasFiscaisRouteImport.update({
+  id: '/tabelas-fiscais',
+  path: '/tabelas-fiscais',
   getParentRoute: () => RhRoute,
 } as any)
 const RhSimulacoesRoute = RhSimulacoesRouteImport.update({
@@ -241,6 +247,7 @@ export interface FileRoutesByFullPath {
   '/rh/previdencia': typeof RhPrevidenciaRoute
   '/rh/rubricas': typeof RhRubricasRoute
   '/rh/simulacoes': typeof RhSimulacoesRoute
+  '/rh/tabelas-fiscais': typeof RhTabelasFiscaisRoute
   '/rh/vt-va': typeof RhVtVaRoute
   '/rh/funcionarios/$id': typeof RhFuncionariosIdRoute
 }
@@ -276,6 +283,7 @@ export interface FileRoutesByTo {
   '/rh/previdencia': typeof RhPrevidenciaRoute
   '/rh/rubricas': typeof RhRubricasRoute
   '/rh/simulacoes': typeof RhSimulacoesRoute
+  '/rh/tabelas-fiscais': typeof RhTabelasFiscaisRoute
   '/rh/vt-va': typeof RhVtVaRoute
   '/rh/funcionarios/$id': typeof RhFuncionariosIdRoute
 }
@@ -312,6 +320,7 @@ export interface FileRoutesById {
   '/rh/previdencia': typeof RhPrevidenciaRoute
   '/rh/rubricas': typeof RhRubricasRoute
   '/rh/simulacoes': typeof RhSimulacoesRoute
+  '/rh/tabelas-fiscais': typeof RhTabelasFiscaisRoute
   '/rh/vt-va': typeof RhVtVaRoute
   '/rh/funcionarios/$id': typeof RhFuncionariosIdRoute
 }
@@ -349,6 +358,7 @@ export interface FileRouteTypes {
     | '/rh/previdencia'
     | '/rh/rubricas'
     | '/rh/simulacoes'
+    | '/rh/tabelas-fiscais'
     | '/rh/vt-va'
     | '/rh/funcionarios/$id'
   fileRoutesByTo: FileRoutesByTo
@@ -384,6 +394,7 @@ export interface FileRouteTypes {
     | '/rh/previdencia'
     | '/rh/rubricas'
     | '/rh/simulacoes'
+    | '/rh/tabelas-fiscais'
     | '/rh/vt-va'
     | '/rh/funcionarios/$id'
   id:
@@ -419,6 +430,7 @@ export interface FileRouteTypes {
     | '/rh/previdencia'
     | '/rh/rubricas'
     | '/rh/simulacoes'
+    | '/rh/tabelas-fiscais'
     | '/rh/vt-va'
     | '/rh/funcionarios/$id'
   fileRoutesById: FileRoutesById
@@ -505,6 +517,13 @@ declare module '@tanstack/react-router' {
       path: '/vt-va'
       fullPath: '/rh/vt-va'
       preLoaderRoute: typeof RhVtVaRouteImport
+      parentRoute: typeof RhRoute
+    }
+    '/rh/tabelas-fiscais': {
+      id: '/rh/tabelas-fiscais'
+      path: '/tabelas-fiscais'
+      fullPath: '/rh/tabelas-fiscais'
+      preLoaderRoute: typeof RhTabelasFiscaisRouteImport
       parentRoute: typeof RhRoute
     }
     '/rh/simulacoes': {
@@ -717,6 +736,7 @@ interface RhRouteChildren {
   RhPrevidenciaRoute: typeof RhPrevidenciaRoute
   RhRubricasRoute: typeof RhRubricasRoute
   RhSimulacoesRoute: typeof RhSimulacoesRoute
+  RhTabelasFiscaisRoute: typeof RhTabelasFiscaisRoute
   RhVtVaRoute: typeof RhVtVaRoute
 }
 
@@ -734,6 +754,7 @@ const RhRouteChildren: RhRouteChildren = {
   RhPrevidenciaRoute: RhPrevidenciaRoute,
   RhRubricasRoute: RhRubricasRoute,
   RhSimulacoesRoute: RhSimulacoesRoute,
+  RhTabelasFiscaisRoute: RhTabelasFiscaisRoute,
   RhVtVaRoute: RhVtVaRoute,
 }
 

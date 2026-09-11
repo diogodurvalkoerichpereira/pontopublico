@@ -259,6 +259,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       icon: Landmark,
       section: "Recursos Humanos",
     });
+  if (hasTenantPermission("fiscal.read"))
+    items.push({
+      to: "/rh/tabelas-fiscais",
+      label: "Tabelas fiscais",
+      icon: Scale,
+      section: "Folha de Pagamento",
+    });
   if (hasTenantPermission("payroll.import.read"))
     items.push({
       to: "/rh/importacoes",
