@@ -46,6 +46,58 @@ export const getProtocolProcesses = createServerFn({ method: "POST" })
     };
   });
 
+const DetailInput = z.object({
+  tenant_id: z.string().uuid(),
+  process_id: z.string().uuid(),
+});
+
+// O5-01b — Histórico de tramitação do processo. Devolve o cabeçalho do processo e o
+// trilho de movimentações em ordem cronológica (do despacho mais antigo ao mais recente),
+// com o nome das unidades de origem e destino. É a linha do tempo do processo para o
+// detalhe e a auditoria. Reusa protocol.read.
+export const getProtocolMovements = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => DetailInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "protocol.read");
+    const process = await query<{
+      id: string;
+      ano: number;
+      numero: string;
+      assunto: string;
+      interessado: string;
+      status: string;
+      aberto_em: string;
+      unidade_atual: string | null;
+    }>(
+      `select p.id, p.ano, p.numero::text, p.assunto, p.interessado, p.status,
+         p.aberto_em::text, u.nome as unidade_atual
+       from public.protocol_processes p
+       left join public.unidades u on u.id = p.unidade_atual_id
+       where p.id = $1 and p.tenant_id = $2`,
+      [data.process_id, data.tenant_id],
+    );
+    if (process.length === 0) throw new Error("Processo não encontrado");
+    const movements = await query<{
+      id: string;
+      unidade_origem: string | null;
+      unidade_destino: string | null;
+      despacho: string;
+      data_movimento: string;
+    }>(
+      `select m.id, o.nome as unidade_origem, d.nome as unidade_destino,
+         m.despacho, m.data_movimento::text
+       from public.protocol_movements m
+       left join public.unidades o on o.id = m.unidade_origem_id
+       left join public.unidades d on d.id = m.unidade_destino_id
+       where m.process_id = $1 and m.tenant_id = $2
+       order by m.data_movimento, m.id`,
+      [data.process_id, data.tenant_id],
+    );
+    return { process: process[0], movements };
+  });
+
 const OpenInput = z.object({
   tenant_id: z.string().uuid(),
   assunto: z.string().trim().min(3).max(300),

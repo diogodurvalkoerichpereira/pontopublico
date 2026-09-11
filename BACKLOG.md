@@ -924,6 +924,14 @@ acompanhamento aberto→em_implementacao→implementado/nao_implementado, numera
 por ano, reusa `analytics.*`). Pendente: assinatura ICP-Brasil, dados abertos
 publicáveis.
 
+**O5-01b — Histórico de tramitação do processo ✅.** `getProtocolMovements` devolve o
+cabeçalho do processo e o trilho de movimentações em ordem cronológica (mais antiga →
+mais recente), com o nome das unidades de origem/destino, e **só do processo pedido**
+(isolamento por `process_id`). É a linha do tempo do processo para o detalhe e a
+auditoria. Reusa `protocol.read`, sem migration. Teste
+`tests/sprint-protocol-movements.test.mjs` verificado por mutação (vazar movimentos de
+outro processo, ou remover a ordenação por data, derruba).
+
 **O5-06 — Recurso de e-SIC (LAI art. 15) ✅.** `fileEsicAppeal` interpõe recurso da
 negativa de acesso: 1ª instância exige pedido **indeferido**; 2ª instância exige o de
 1ª **improvido**; um recurso por pedido/instância. `decideEsicAppeal` decide o recurso

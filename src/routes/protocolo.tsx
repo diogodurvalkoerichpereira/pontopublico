@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { FileStack, Plus, Send } from "lucide-react";
+import { FileStack, Plus, Send, History } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ import {
   getProtocolProcesses,
   openProtocolProcess,
   recordProtocolMovement,
+  getProtocolMovements,
 } from "@/lib/protocol.functions";
 
 export const Route = createFileRoute("/protocolo")({ component: Page });
@@ -48,6 +49,14 @@ type ProtocolProcess = {
   aberto_em: string;
 };
 
+type Movement = {
+  id: string;
+  unidade_origem: string | null;
+  unidade_destino: string | null;
+  despacho: string;
+  data_movimento: string;
+};
+
 const hoje = () => new Date().toISOString().slice(0, 10);
 const statusVariant: Record<
   string,
@@ -63,12 +72,17 @@ function Content() {
   const load = useServerFn(getProtocolProcesses);
   const openProc = useServerFn(openProtocolProcess);
   const move = useServerFn(recordProtocolMovement);
+  const loadMovements = useServerFn(getProtocolMovements);
   const qc = useQueryClient();
 
   const [openDialog, setOpenDialog] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [target, setTarget] = useState<ProtocolProcess | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const [histOpen, setHistOpen] = useState(false);
+  const [histProcess, setHistProcess] = useState<ProtocolProcess | null>(null);
+  const [movements, setMovements] = useState<Movement[]>([]);
 
   const [assunto, setAssunto] = useState("");
   const [interessado, setInteressado] = useState("");
@@ -116,6 +130,23 @@ function Content() {
     setDespacho("");
     setConcluir(false);
     setMoveOpen(true);
+  };
+
+  const openHistory = async (p: ProtocolProcess) => {
+    if (!activeTenant) return;
+    setHistProcess(p);
+    setMovements([]);
+    setHistOpen(true);
+    try {
+      const r = await loadMovements({
+        data: { tenant_id: activeTenant.id, process_id: p.id },
+      });
+      setMovements(r.movements as Movement[]);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Falha no histórico",
+      );
+    }
   };
 
   const submitMove = async () => {
@@ -170,7 +201,7 @@ function Content() {
               <th className="p-3 font-semibold">Interessado</th>
               <th className="p-3 font-semibold">Aberto em</th>
               <th className="p-3 font-semibold">Situação</th>
-              {canManage && <th className="p-3 font-semibold">Ações</th>}
+              <th className="p-3 font-semibold">Ações</th>
             </tr>
           </thead>
           <tbody>
@@ -189,9 +220,16 @@ function Content() {
                     {p.status.replace("_", " ")}
                   </Badge>
                 </td>
-                {canManage && (
-                  <td className="p-3">
-                    {p.status === "em_tramitacao" && (
+                <td className="p-3">
+                  <div className="flex gap-2 flex-wrap">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => openHistory(p)}
+                    >
+                      <History className="size-4" /> Histórico
+                    </Button>
+                    {canManage && p.status === "em_tramitacao" && (
                       <Button
                         size="sm"
                         variant="outline"
@@ -200,14 +238,14 @@ function Content() {
                         <Send className="size-4" /> Tramitar
                       </Button>
                     )}
-                  </td>
-                )}
+                  </div>
+                </td>
               </tr>
             ))}
             {items.length === 0 && (
               <tr>
                 <td
-                  colSpan={canManage ? 6 : 5}
+                  colSpan={6}
                   className="p-6 text-center text-muted-foreground"
                 >
                   Nenhum processo aberto.
@@ -279,6 +317,40 @@ function Content() {
               Registrar
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Histórico de tramitação */}
+      <Dialog open={histOpen} onOpenChange={setHistOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              Tramitação — {histProcess?.numero}/{histProcess?.ano}
+            </DialogTitle>
+          </DialogHeader>
+          <ol className="space-y-3">
+            {movements.map((m) => (
+              <li
+                key={m.id}
+                className="rounded-lg border bg-muted/20 p-3 text-sm"
+              >
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span className="font-medium">
+                    {m.unidade_origem ?? "—"} → {m.unidade_destino ?? "—"}
+                  </span>
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    {m.data_movimento.slice(0, 10)}
+                  </span>
+                </div>
+                <p className="mt-1 whitespace-pre-wrap">{m.despacho}</p>
+              </li>
+            ))}
+            {movements.length === 0 && (
+              <li className="p-4 text-center text-muted-foreground">
+                Sem tramitações registradas.
+              </li>
+            )}
+          </ol>
         </DialogContent>
       </Dialog>
     </section>
