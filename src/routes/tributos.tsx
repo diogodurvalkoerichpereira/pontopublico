@@ -2,7 +2,14 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Landmark, Home, HandCoins, FileWarning } from "lucide-react";
+import {
+  Landmark,
+  Home,
+  HandCoins,
+  FileWarning,
+  Briefcase,
+  ArrowLeftRight,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,6 +36,8 @@ import {
   inscribeDividaAtiva,
 } from "@/lib/taxes.functions";
 import { getProperties, launchIptu } from "@/lib/real-estate.functions";
+import { getServiceTaxpayers, launchIss } from "@/lib/service-tax.functions";
+import { launchItbi } from "@/lib/itbi.functions";
 
 export const Route = createFileRoute("/tributos")({ component: Page });
 
@@ -63,6 +72,13 @@ type Property = {
   valor_venal: string;
   status: string;
 };
+type Taxpayer = {
+  id: string;
+  inscricao_municipal: string;
+  razao_social: string;
+  aliquota_iss: string;
+  status: string;
+};
 
 const brl = (v: number | string) =>
   Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -81,9 +97,12 @@ function Content() {
   const { activeTenant } = useAuth();
   const loadCredits = useServerFn(getTaxCredits);
   const loadProps = useServerFn(getProperties);
+  const loadTaxpayers = useServerFn(getServiceTaxpayers);
   const pay = useServerFn(recordTaxPayment);
   const inscribe = useServerFn(inscribeDividaAtiva);
   const launch = useServerFn(launchIptu);
+  const doLaunchIss = useServerFn(launchIss);
+  const doLaunchItbi = useServerFn(launchItbi);
   const qc = useQueryClient();
 
   const [payOpen, setPayOpen] = useState(false);
@@ -95,6 +114,18 @@ function Content() {
   const [exercicio, setExercicio] = useState(String(new Date().getFullYear()));
   const [aliquota, setAliquota] = useState("1");
   const [vencimento, setVencimento] = useState(hoje());
+
+  const [issOpen, setIssOpen] = useState(false);
+  const [issTaxpayerId, setIssTaxpayerId] = useState("");
+  const [competencia, setCompetencia] = useState(hoje().slice(0, 7));
+  const [baseIss, setBaseIss] = useState("");
+
+  const [itbiOpen, setItbiOpen] = useState(false);
+  const [itbiPropertyId, setItbiPropertyId] = useState("");
+  const [adquirente, setAdquirente] = useState("");
+  const [adquirenteDoc, setAdquirenteDoc] = useState("");
+  const [valorTransmissao, setValorTransmissao] = useState("");
+  const [aliquotaItbi, setAliquotaItbi] = useState("2");
 
   const [busy, setBusy] = useState(false);
 
@@ -108,10 +139,16 @@ function Content() {
     enabled: Boolean(activeTenant),
     queryFn: () => loadProps({ data: { tenant_id: activeTenant!.id } }),
   });
+  const { data: taxpayersData } = useQuery({
+    queryKey: ["service-taxpayers", activeTenant?.id],
+    enabled: Boolean(activeTenant),
+    queryFn: () => loadTaxpayers({ data: { tenant_id: activeTenant!.id } }),
+  });
 
   const credits = (data?.credits ?? []) as Credit[];
   const canManage = data?.canManage ?? false;
   const properties = (propsData?.properties ?? []) as Property[];
+  const taxpayers = (taxpayersData?.taxpayers ?? []) as Taxpayer[];
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["tax-credits", activeTenant?.id] });
@@ -189,6 +226,57 @@ function Content() {
     }
   };
 
+  const submitIss = async () => {
+    if (!activeTenant || !issTaxpayerId) return;
+    setBusy(true);
+    try {
+      const r = await doLaunchIss({
+        data: {
+          tenant_id: activeTenant.id,
+          taxpayer_id: issTaxpayerId,
+          competencia,
+          base_calculo: Number(baseIss),
+          vencimento: hoje(),
+        },
+      });
+      toast.success(`ISS lançado: ${brl(r.valor)}`);
+      setIssOpen(false);
+      setBaseIss("");
+      refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao lançar");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitItbi = async () => {
+    if (!activeTenant || !itbiPropertyId) return;
+    setBusy(true);
+    try {
+      const r = await doLaunchItbi({
+        data: {
+          tenant_id: activeTenant.id,
+          property_id: itbiPropertyId,
+          adquirente: adquirente.trim(),
+          adquirente_documento: adquirenteDoc.trim(),
+          valor_transmissao: Number(valorTransmissao),
+          aliquota: Number(aliquotaItbi),
+          data_transmissao: hoje(),
+          vencimento: hoje(),
+        },
+      });
+      toast.success(`ITBI lançado: ${brl(r.valor)}`);
+      setItbiOpen(false);
+      setValorTransmissao("");
+      refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao lançar");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <section className="space-y-6">
       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -202,16 +290,38 @@ function Content() {
           </div>
         </div>
         {canManage && (
-          <Button
-            variant="outline"
-            onClick={() => {
-              setPropertyId(properties[0]?.id ?? "");
-              setIptuOpen(true);
-            }}
-            disabled={properties.length === 0}
-          >
-            <Home className="size-4" /> Lançar IPTU
-          </Button>
+          <div className="flex gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setPropertyId(properties[0]?.id ?? "");
+                setIptuOpen(true);
+              }}
+              disabled={properties.length === 0}
+            >
+              <Home className="size-4" /> Lançar IPTU
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIssTaxpayerId(taxpayers[0]?.id ?? "");
+                setIssOpen(true);
+              }}
+              disabled={taxpayers.length === 0}
+            >
+              <Briefcase className="size-4" /> Lançar ISS
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setItbiPropertyId(properties[0]?.id ?? "");
+                setItbiOpen(true);
+              }}
+              disabled={properties.length === 0}
+            >
+              <ArrowLeftRight className="size-4" /> Lançar ITBI
+            </Button>
+          </div>
         )}
       </div>
 
@@ -363,6 +473,123 @@ function Content() {
           </div>
           <DialogFooter>
             <Button onClick={submitIptu} disabled={busy}>
+              Lançar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Lançar ISS */}
+      <Dialog open={issOpen} onOpenChange={setIssOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Lançar ISS</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Prestador</Label>
+              <Select value={issTaxpayerId} onValueChange={setIssTaxpayerId}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {taxpayers.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.inscricao_municipal} — {t.razao_social} (
+                      {t.aliquota_iss}
+                      %)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label>Competência</Label>
+                <Input
+                  type="month"
+                  value={competencia}
+                  onChange={(e) => setCompetencia(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label>Base de cálculo</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={baseIss}
+                  onChange={(e) => setBaseIss(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={submitIss} disabled={busy}>
+              Lançar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Lançar ITBI */}
+      <Dialog open={itbiOpen} onOpenChange={setItbiOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Lançar ITBI</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Imóvel</Label>
+              <Select value={itbiPropertyId} onValueChange={setItbiPropertyId}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {properties.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.inscricao_imobiliaria} — {p.proprietario}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label>Adquirente</Label>
+                <Input
+                  value={adquirente}
+                  onChange={(e) => setAdquirente(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label>Documento</Label>
+                <Input
+                  value={adquirenteDoc}
+                  onChange={(e) => setAdquirenteDoc(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label>Valor da transmissão</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={valorTransmissao}
+                  onChange={(e) => setValorTransmissao(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label>Alíquota (%)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={aliquotaItbi}
+                  onChange={(e) => setAliquotaItbi(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={submitItbi} disabled={busy}>
               Lançar
             </Button>
           </DialogFooter>
