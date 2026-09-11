@@ -179,3 +179,59 @@ export const payRestoAPagar = createServerFn({ method: "POST" })
       return { id: data.resto_id, status: "pago" };
     });
   });
+
+const CancelInput = z.object({
+  tenant_id: z.string().uuid(),
+  resto_id: z.string().uuid(),
+  motivo: z.string().trim().min(3).max(500),
+  data_cancelamento: z.string().date(),
+});
+
+// O2-20 — Cancela um resto a pagar inscrito (Lei 4.320 art. 38 — prescrição/
+// insubsistência). A obrigação é extinta: o resto vai a 'cancelado' e o empenho de
+// origem, a 'anulado'. Não devolve saldo à dotação (o exercício de origem está encerrado).
+export const cancelRestoAPagar = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => CancelInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "budget.manage");
+    return withTransaction(async (client) => {
+      const resto = (
+        await client.query<{ commitment_id: string; status: string }>(
+          `select commitment_id, status from public.restos_a_pagar
+           where id=$1 and tenant_id=$2 for update`,
+          [data.resto_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!resto) throw new Error("Resto a pagar não encontrado");
+      if (resto.status !== "inscrito")
+        throw new Error("Só um resto inscrito pode ser cancelado");
+      await client.query(
+        `update public.restos_a_pagar
+         set status='cancelado', updated_at=now()
+         where id=$1 and tenant_id=$2`,
+        [data.resto_id, data.tenant_id],
+      );
+      // Extingue a obrigação: o empenho de origem é anulado.
+      await client.query(
+        `update public.budget_commitments
+         set status='anulado', anulado_em=now(), anulado_por=$3,
+             anulado_motivo=$4
+         where id=$1 and tenant_id=$2`,
+        [resto.commitment_id, data.tenant_id, context.userId, data.motivo],
+      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "cancelar_resto",
+        resource: "restos_a_pagar",
+        recordId: data.resto_id,
+        after: {
+          motivo: data.motivo,
+          data_cancelamento: data.data_cancelamento,
+        },
+      });
+      return { id: data.resto_id, status: "cancelado" };
+    });
+  });

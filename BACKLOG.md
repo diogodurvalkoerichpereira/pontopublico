@@ -551,6 +551,14 @@ e anulado não inscrevem; cada empenho inscreve uma só vez (idempotente).
 `payRestoAPagar` quita o resto e o empenho de origem; `getRestosAPagar` lista.
 Reusa `budget.*`. Migration `20260909300000_o2_09_restos_a_pagar.sql`; teste
 `tests/sprint-restos-a-pagar.test.mjs` verificado por mutação.
+
+**O2-20 — Cancelamento de restos a pagar (Lei 4.320 art. 38) ✅.** `cancelRestoAPagar`
+cancela um resto **inscrito** (prescrição/insubsistência): o resto vai a `cancelado` e o
+empenho de origem a `anulado` (obrigação extinta), sem devolver saldo à dotação (o
+exercício de origem está encerrado); resto pago/cancelado não cancela. Reusa
+`budget.manage`, sem migration (o status `cancelado` já existia). Teste
+`tests/sprint-restos-cancel.test.mjs` verificado por mutação (aceitar resto não inscrito
+derruba). Próximo (UI): gestão de restos a pagar (inscrever/pagar/cancelar).
 **O2-10 — Balanço orçamentário (Lei 4.320, Anexo 1) ✅.** `getBudgetBalance`
 consolida o exercício: RECEITA (prevista × arrecadada × diferença), DESPESA
 (fixada × empenhada × liquidada × paga × saldo de dotação), o resultado
