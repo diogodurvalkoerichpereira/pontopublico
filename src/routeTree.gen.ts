@@ -20,6 +20,7 @@ import { Route as OuvidoriaRouteImport } from './routes/ouvidoria'
 import { Route as OrcamentoRouteImport } from './routes/orcamento'
 import { Route as MeusDocumentosRouteImport } from './routes/meus-documentos'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as LicitacoesRouteImport } from './routes/licitacoes'
 import { Route as GestorRouteImport } from './routes/gestor'
 import { Route as ContratosRouteImport } from './routes/contratos'
 import { Route as AppRouteImport } from './routes/app'
@@ -105,6 +106,11 @@ const MeusDocumentosRoute = MeusDocumentosRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LicitacoesRoute = LicitacoesRouteImport.update({
+  id: '/licitacoes',
+  path: '/licitacoes',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GestorRoute = GestorRouteImport.update({
@@ -269,6 +275,7 @@ export interface FileRoutesByFullPath {
   '/app': typeof AppRoute
   '/contratos': typeof ContratosRoute
   '/gestor': typeof GestorRouteWithChildren
+  '/licitacoes': typeof LicitacoesRoute
   '/login': typeof LoginRoute
   '/meus-documentos': typeof MeusDocumentosRoute
   '/orcamento': typeof OrcamentoRoute
@@ -313,6 +320,7 @@ export interface FileRoutesByTo {
   '/app': typeof AppRoute
   '/contratos': typeof ContratosRoute
   '/gestor': typeof GestorRouteWithChildren
+  '/licitacoes': typeof LicitacoesRoute
   '/login': typeof LoginRoute
   '/meus-documentos': typeof MeusDocumentosRoute
   '/orcamento': typeof OrcamentoRoute
@@ -358,6 +366,7 @@ export interface FileRoutesById {
   '/app': typeof AppRoute
   '/contratos': typeof ContratosRoute
   '/gestor': typeof GestorRouteWithChildren
+  '/licitacoes': typeof LicitacoesRoute
   '/login': typeof LoginRoute
   '/meus-documentos': typeof MeusDocumentosRoute
   '/orcamento': typeof OrcamentoRoute
@@ -404,6 +413,7 @@ export interface FileRouteTypes {
     | '/app'
     | '/contratos'
     | '/gestor'
+    | '/licitacoes'
     | '/login'
     | '/meus-documentos'
     | '/orcamento'
@@ -448,6 +458,7 @@ export interface FileRouteTypes {
     | '/app'
     | '/contratos'
     | '/gestor'
+    | '/licitacoes'
     | '/login'
     | '/meus-documentos'
     | '/orcamento'
@@ -492,6 +503,7 @@ export interface FileRouteTypes {
     | '/app'
     | '/contratos'
     | '/gestor'
+    | '/licitacoes'
     | '/login'
     | '/meus-documentos'
     | '/orcamento'
@@ -537,6 +549,7 @@ export interface RootRouteChildren {
   AppRoute: typeof AppRoute
   ContratosRoute: typeof ContratosRoute
   GestorRoute: typeof GestorRouteWithChildren
+  LicitacoesRoute: typeof LicitacoesRoute
   LoginRoute: typeof LoginRoute
   MeusDocumentosRoute: typeof MeusDocumentosRoute
   OrcamentoRoute: typeof OrcamentoRoute
@@ -635,6 +648,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/licitacoes': {
+      id: '/licitacoes'
+      path: '/licitacoes'
+      fullPath: '/licitacoes'
+      preLoaderRoute: typeof LicitacoesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/gestor': {
@@ -926,6 +946,7 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRoute,
   ContratosRoute: ContratosRoute,
   GestorRoute: GestorRouteWithChildren,
+  LicitacoesRoute: LicitacoesRoute,
   LoginRoute: LoginRoute,
   MeusDocumentosRoute: MeusDocumentosRoute,
   OrcamentoRoute: OrcamentoRoute,

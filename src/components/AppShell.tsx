@@ -43,6 +43,7 @@ import {
   Boxes,
   Building,
   FileStack,
+  Gavel,
 } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
 import { SupportWidget } from "@/components/SupportWidget";
@@ -355,6 +356,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       label: "Tributos",
       icon: Landmark,
       section: "Contabilidade e Finanças",
+    });
+  if (hasTenantPermission("contracts.read"))
+    items.push({
+      to: "/licitacoes",
+      label: "Licitações",
+      icon: Gavel,
+      section: "Contratações",
     });
   if (hasTenantPermission("contracts.read"))
     items.push({
