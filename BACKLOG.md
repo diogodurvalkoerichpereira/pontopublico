@@ -487,8 +487,13 @@ avança `parcelas_pagas` de uma consignação **ativa** sem passar do total e a 
 alcançá-lo (liberando a margem, pois só as ativas comprometem); consignação
 quitada/cancelada não amortiza. Reusa `people.manage`, sem migration; teste
 `tests/sprint-consignment-amortize.test.mjs` verificado por mutação (não quitar ao
-alcançar o total derruba). **Pendente:** amortização automática no fechamento do ciclo e
-UI de consignações (margem/registro/amortização).
+alcançar o total derruba). **O1-09d ✅ (UI):** rota `/consignacoes` — seletor de
+servidor/matrícula, cartões de margem (base, margem 35%, comprometido, disponível),
+tabela das consignações ativas com ações **Amortizar** e **Cancelar**, e **Nova
+consignação** (tipo, consignatário, parcela, nº, início), reusando
+`getConsignmentMargin`/`registerConsignment`/`amortizeConsignment`/`cancelConsignment`;
+item de menu em Recursos Humanos. **Pendente:** amortização automática no fechamento do
+ciclo.
 
 ---
 

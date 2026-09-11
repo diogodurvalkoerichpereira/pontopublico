@@ -30,6 +30,7 @@ import { Route as EsicRouteImport } from './routes/esic'
 import { Route as DividaAtivaRouteImport } from './routes/divida-ativa'
 import { Route as ControleInternoRouteImport } from './routes/controle-interno'
 import { Route as ContratosRouteImport } from './routes/contratos'
+import { Route as ConsignacoesRouteImport } from './routes/consignacoes'
 import { Route as CartaServicosRouteImport } from './routes/carta-servicos'
 import { Route as BalancosRouteImport } from './routes/balancos'
 import { Route as AtasRouteImport } from './routes/atas'
@@ -166,6 +167,11 @@ const ControleInternoRoute = ControleInternoRouteImport.update({
 const ContratosRoute = ContratosRouteImport.update({
   id: '/contratos',
   path: '/contratos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConsignacoesRoute = ConsignacoesRouteImport.update({
+  id: '/consignacoes',
+  path: '/consignacoes',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CartaServicosRoute = CartaServicosRouteImport.update({
@@ -336,6 +342,7 @@ export interface FileRoutesByFullPath {
   '/atas': typeof AtasRoute
   '/balancos': typeof BalancosRoute
   '/carta-servicos': typeof CartaServicosRoute
+  '/consignacoes': typeof ConsignacoesRoute
   '/contratos': typeof ContratosRoute
   '/controle-interno': typeof ControleInternoRoute
   '/divida-ativa': typeof DividaAtivaRoute
@@ -391,6 +398,7 @@ export interface FileRoutesByTo {
   '/atas': typeof AtasRoute
   '/balancos': typeof BalancosRoute
   '/carta-servicos': typeof CartaServicosRoute
+  '/consignacoes': typeof ConsignacoesRoute
   '/contratos': typeof ContratosRoute
   '/controle-interno': typeof ControleInternoRoute
   '/divida-ativa': typeof DividaAtivaRoute
@@ -447,6 +455,7 @@ export interface FileRoutesById {
   '/atas': typeof AtasRoute
   '/balancos': typeof BalancosRoute
   '/carta-servicos': typeof CartaServicosRoute
+  '/consignacoes': typeof ConsignacoesRoute
   '/contratos': typeof ContratosRoute
   '/controle-interno': typeof ControleInternoRoute
   '/divida-ativa': typeof DividaAtivaRoute
@@ -504,6 +513,7 @@ export interface FileRouteTypes {
     | '/atas'
     | '/balancos'
     | '/carta-servicos'
+    | '/consignacoes'
     | '/contratos'
     | '/controle-interno'
     | '/divida-ativa'
@@ -559,6 +569,7 @@ export interface FileRouteTypes {
     | '/atas'
     | '/balancos'
     | '/carta-servicos'
+    | '/consignacoes'
     | '/contratos'
     | '/controle-interno'
     | '/divida-ativa'
@@ -614,6 +625,7 @@ export interface FileRouteTypes {
     | '/atas'
     | '/balancos'
     | '/carta-servicos'
+    | '/consignacoes'
     | '/contratos'
     | '/controle-interno'
     | '/divida-ativa'
@@ -670,6 +682,7 @@ export interface RootRouteChildren {
   AtasRoute: typeof AtasRoute
   BalancosRoute: typeof BalancosRoute
   CartaServicosRoute: typeof CartaServicosRoute
+  ConsignacoesRoute: typeof ConsignacoesRoute
   ContratosRoute: typeof ContratosRoute
   ControleInternoRoute: typeof ControleInternoRoute
   DividaAtivaRoute: typeof DividaAtivaRoute
@@ -848,6 +861,13 @@ declare module '@tanstack/react-router' {
       path: '/contratos'
       fullPath: '/contratos'
       preLoaderRoute: typeof ContratosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/consignacoes': {
+      id: '/consignacoes'
+      path: '/consignacoes'
+      fullPath: '/consignacoes'
+      preLoaderRoute: typeof ConsignacoesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/carta-servicos': {
@@ -1147,6 +1167,7 @@ const rootRouteChildren: RootRouteChildren = {
   AtasRoute: AtasRoute,
   BalancosRoute: BalancosRoute,
   CartaServicosRoute: CartaServicosRoute,
+  ConsignacoesRoute: ConsignacoesRoute,
   ContratosRoute: ContratosRoute,
   ControleInternoRoute: ControleInternoRoute,
   DividaAtivaRoute: DividaAtivaRoute,

@@ -43,6 +43,7 @@ import {
   BookOpen,
   CalendarClock,
   ClipboardList,
+  CreditCard,
   FileSignature,
   Boxes,
   Building,
@@ -196,6 +197,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       to: "/rh/pessoas",
       label: "Pessoas e vínculos",
       icon: Users,
+      section: "Recursos Humanos",
+    });
+  }
+  if (hasTenantPermission("people.read")) {
+    items.push({
+      to: "/consignacoes",
+      label: "Consignações",
+      icon: CreditCard,
       section: "Recursos Humanos",
     });
   }
