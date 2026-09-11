@@ -614,7 +614,13 @@ passa a descontar o bloqueado — tanto em `getBudgetAppropriations` quanto na r
 empenho (`reserveOnAppropriation`), então o contingenciamento efetivamente barra novos
 empenhos. Migration `..._o2_23_budget_contingency.sql` (ALTER + 2 checks), reusa
 `budget.*`; teste `tests/sprint-budget-contingency.test.mjs` verificado por mutação (não
-descontar o bloqueado do saldo derruba). Próximo (UI): contingenciar no `/orcamento`.
+descontar o bloqueado do saldo derruba).
+
+**O2-24 — Contingenciamento e crédito suplementar no `/orcamento` (UI) ✅.** A tela de
+orçamento passa a exibir a coluna **Bloqueado** e o saldo empenhável já líquido; cada
+dotação ativa tem a ação **Contingenciar** (valor + motivo) e o cabeçalho o botão
+**Crédito suplementar** (destino, fonte, valor, justificativa, por excesso de
+arrecadação). Reusa `contingenciarDotacao` e `openSupplementaryCredit`. Sem novo backend.
 
 **O2-14 — Execução da receita por natureza ✅.** `getRevenueExecution` consolida,
 por natureza de receita, previsto × arrecadado × a arrecadar (piso zero) no

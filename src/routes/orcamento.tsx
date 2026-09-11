@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { PiggyBank, Plus, CalendarClock } from "lucide-react";
+import { PiggyBank, Plus, CalendarClock, Lock, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useAuth } from "@/lib/auth-context";
 import {
   getBudgetAppropriations,
@@ -24,6 +31,8 @@ import {
   getDisbursementSchedule,
   saveDisbursementQuota,
 } from "@/lib/disbursement-schedule.functions";
+import { contingenciarDotacao } from "@/lib/budget-contingency.functions";
+import { openSupplementaryCredit } from "@/lib/supplementary-credit.functions";
 
 const MESES = [
   "Jan",
@@ -66,6 +75,7 @@ type Appropriation = {
   fonte_recurso: string;
   valor_orcado: string;
   valor_empenhado: string;
+  valor_bloqueado: string;
   saldo: string;
   status: string;
 };
@@ -79,10 +89,21 @@ function Content() {
   const save = useServerFn(saveBudgetAppropriation);
   const loadSchedule = useServerFn(getDisbursementSchedule);
   const saveQuota = useServerFn(saveDisbursementQuota);
+  const contingenciar = useServerFn(contingenciarDotacao);
+  const suplementar = useServerFn(openSupplementaryCredit);
   const qc = useQueryClient();
 
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [blockTarget, setBlockTarget] = useState<Appropriation | null>(null);
+  const [blockForm, setBlockForm] = useState({ valor: "", motivo: "" });
+  const [suppOpen, setSuppOpen] = useState(false);
+  const [suppForm, setSuppForm] = useState({
+    destino_id: "",
+    fonte_recurso: "",
+    valor: "",
+    justificativa: "",
+  });
   const [scheduleYear, setScheduleYear] = useState(
     String(new Date().getFullYear()),
   );
@@ -127,6 +148,68 @@ function Content() {
     qc.invalidateQueries({
       queryKey: ["disbursement-schedule", activeTenant?.id, scheduleYear],
     });
+
+  const refreshAppropriations = () =>
+    qc.invalidateQueries({
+      queryKey: ["budget-appropriations", activeTenant?.id],
+    });
+
+  const submitBlock = async () => {
+    if (!activeTenant || !blockTarget) return;
+    setBusy(true);
+    try {
+      await contingenciar({
+        data: {
+          tenant_id: activeTenant.id,
+          appropriation_id: blockTarget.id,
+          valor: Number(blockForm.valor),
+          motivo: blockForm.motivo.trim(),
+        },
+      });
+      toast.success("Dotação contingenciada");
+      setBlockTarget(null);
+      setBlockForm({ valor: "", motivo: "" });
+      refreshAppropriations();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Falha ao contingenciar",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitSupp = async () => {
+    if (!activeTenant || !suppForm.destino_id) return;
+    setBusy(true);
+    try {
+      await suplementar({
+        data: {
+          tenant_id: activeTenant.id,
+          destino_id: suppForm.destino_id,
+          fonte_recurso: suppForm.fonte_recurso.trim(),
+          valor: Number(suppForm.valor),
+          data_referencia: new Date().toISOString().slice(0, 10),
+          justificativa: suppForm.justificativa.trim(),
+        },
+      });
+      toast.success("Crédito suplementar aberto");
+      setSuppOpen(false);
+      setSuppForm({
+        destino_id: "",
+        fonte_recurso: "",
+        valor: "",
+        justificativa: "",
+      });
+      refreshAppropriations();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Falha no crédito suplementar",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const submitQuota = async () => {
     if (!activeTenant) return;
@@ -224,9 +307,18 @@ function Content() {
           </div>
         </div>
         {canManage && (
-          <Button variant="outline" onClick={() => setOpen(true)}>
-            <Plus className="size-4" /> Nova dotação
-          </Button>
+          <div className="flex gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              onClick={() => setSuppOpen(true)}
+              disabled={items.length === 0}
+            >
+              <TrendingUp className="size-4" /> Crédito suplementar
+            </Button>
+            <Button variant="outline" onClick={() => setOpen(true)}>
+              <Plus className="size-4" /> Nova dotação
+            </Button>
+          </div>
         )}
       </div>
 
@@ -255,8 +347,10 @@ function Content() {
               <th className="p-3 font-semibold">Fonte</th>
               <th className="p-3 font-semibold text-right">Orçado</th>
               <th className="p-3 font-semibold text-right">Empenhado</th>
+              <th className="p-3 font-semibold text-right">Bloqueado</th>
               <th className="p-3 font-semibold text-right">Saldo</th>
               <th className="p-3 font-semibold">Situação</th>
+              {canManage && <th className="p-3 font-semibold">Ações</th>}
             </tr>
           </thead>
           <tbody>
@@ -274,6 +368,9 @@ function Content() {
                 <td className="p-3 text-right tabular-nums">
                   {brl(a.valor_empenhado)}
                 </td>
+                <td className="p-3 text-right tabular-nums">
+                  {brl(a.valor_bloqueado)}
+                </td>
                 <td className="p-3 text-right tabular-nums">{brl(a.saldo)}</td>
                 <td className="p-3">
                   <Badge
@@ -282,12 +379,28 @@ function Content() {
                     {a.status}
                   </Badge>
                 </td>
+                {canManage && (
+                  <td className="p-3">
+                    {a.status === "ativa" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setBlockTarget(a);
+                          setBlockForm({ valor: "", motivo: "" });
+                        }}
+                      >
+                        <Lock className="size-4" /> Contingenciar
+                      </Button>
+                    )}
+                  </td>
+                )}
               </tr>
             ))}
             {items.length === 0 && (
               <tr>
                 <td
-                  colSpan={8}
+                  colSpan={canManage ? 10 : 9}
                   className="p-6 text-center text-muted-foreground"
                 >
                   Nenhuma dotação cadastrada.
@@ -442,6 +555,130 @@ function Content() {
           <DialogFooter>
             <Button onClick={submit} disabled={busy}>
               Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Contingenciamento (LRF art. 9) */}
+      <Dialog
+        open={Boolean(blockTarget)}
+        onOpenChange={(o) => !o && setBlockTarget(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Contingenciar dotação</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Saldo empenhável: {brl(blockTarget?.saldo ?? 0)}. O bloqueio não
+              invade o já empenhado.
+            </p>
+            <div>
+              <Label>Valor a bloquear</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={blockForm.valor}
+                onChange={(e) =>
+                  setBlockForm((f) => ({ ...f, valor: e.target.value }))
+                }
+              />
+            </div>
+            <div>
+              <Label>Motivo</Label>
+              <Input
+                value={blockForm.motivo}
+                onChange={(e) =>
+                  setBlockForm((f) => ({ ...f, motivo: e.target.value }))
+                }
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={submitBlock} disabled={busy || !blockForm.valor}>
+              Contingenciar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Crédito suplementar por excesso de arrecadação (art. 43) */}
+      <Dialog open={suppOpen} onOpenChange={setSuppOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Crédito suplementar (excesso de arrecadação)
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Dotação de destino</Label>
+              <Select
+                value={suppForm.destino_id}
+                onValueChange={(v) =>
+                  setSuppForm((f) => ({ ...f, destino_id: v }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione a dotação" />
+                </SelectTrigger>
+                <SelectContent>
+                  {items
+                    .filter((a) => a.status === "ativa")
+                    .map((a) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {a.unidade_orcamentaria} — {a.natureza_despesa} (
+                        {a.fonte_recurso})
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label>Fonte de recurso</Label>
+                <Input
+                  value={suppForm.fonte_recurso}
+                  onChange={(e) =>
+                    setSuppForm((f) => ({
+                      ...f,
+                      fonte_recurso: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+              <div>
+                <Label>Valor</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={suppForm.valor}
+                  onChange={(e) =>
+                    setSuppForm((f) => ({ ...f, valor: e.target.value }))
+                  }
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Justificativa</Label>
+              <Input
+                value={suppForm.justificativa}
+                onChange={(e) =>
+                  setSuppForm((f) => ({
+                    ...f,
+                    justificativa: e.target.value,
+                  }))
+                }
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={submitSupp}
+              disabled={busy || !suppForm.destino_id}
+            >
+              Abrir crédito
             </Button>
           </DialogFooter>
         </DialogContent>
