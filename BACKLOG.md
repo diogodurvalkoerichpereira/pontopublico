@@ -690,6 +690,15 @@ licitação não homologada derruba).
 Próximo: ligar a baixa de estoque (O3-02) à entrada de bem em patrimônio (O3-03)
 quando o material for um bem permanente; remessa ao PNCP (externo, homologação).
 
+**O3-12 — Ata de Registro de Preços (SRP, Lei 14.133 art. 82-86) ✅.**
+`createPriceRegistration` forma a ata a partir de uma licitação **homologada**, com itens
+(unidade, quantidade registrada, preço) e **vigência de até 1 ano** (art. 84);
+`drawFromPriceRegistration` consome do **saldo registrado** (registrada − consumida),
+nunca acima, com a ata vigente (status e data); `getPriceRegistrations` lista.
+Migration `..._o3_12_price_registration.sql` (2 tabelas), reusa `contracts.*`. Teste
+`tests/sprint-price-registration.test.mjs` verificado por mutação (inverter o teste de
+saldo no consumo derruba). Próximo (UI): painel de atas + consumo no `/licitacoes`.
+
 **O3-11 — Baixa / alienação de bem patrimonial ✅.** `disposeAsset` registra a saída
 do bem do acervo (alienação, desfazimento, perda) e apura o resultado da baixa = valor
 de alienação − valor líquido contábil (aquisição − depreciação acumulada): ganho se
