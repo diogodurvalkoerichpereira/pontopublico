@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Building, Plus, TrendingDown } from "lucide-react";
+import { Building, Plus, TrendingDown, Archive } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth-context";
-import { getAssets, saveAsset, depreciateAsset } from "@/lib/assets.functions";
+import {
+  getAssets,
+  saveAsset,
+  depreciateAsset,
+  disposeAsset,
+} from "@/lib/assets.functions";
 
 export const Route = createFileRoute("/patrimonio")({ component: Page });
 
@@ -53,10 +58,13 @@ function Content() {
   const load = useServerFn(getAssets);
   const save = useServerFn(saveAsset);
   const depreciate = useServerFn(depreciateAsset);
+  const dispose = useServerFn(disposeAsset);
   const qc = useQueryClient();
 
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [disposeTarget, setDisposeTarget] = useState<Asset | null>(null);
+  const [disposeForm, setDisposeForm] = useState({ motivo: "", valor: "0" });
   const [form, setForm] = useState({
     tombamento: "",
     descricao: "",
@@ -124,6 +132,38 @@ function Content() {
       toast.error(
         error instanceof Error ? error.message : "Falha ao depreciar",
       );
+    }
+  };
+
+  const openDispose = (a: Asset) => {
+    setDisposeTarget(a);
+    setDisposeForm({ motivo: "", valor: "0" });
+  };
+
+  const submitDispose = async () => {
+    if (!activeTenant || !disposeTarget) return;
+    setBusy(true);
+    try {
+      const r = await dispose({
+        data: {
+          tenant_id: activeTenant.id,
+          asset_id: disposeTarget.id,
+          data_baixa: new Date().toISOString().slice(0, 10),
+          motivo: disposeForm.motivo.trim(),
+          valor_alienacao: Number(disposeForm.valor || 0),
+        },
+      });
+      toast.success(
+        `Bem baixado — resultado ${brl(r.resultado)} (${
+          r.resultado >= 0 ? "ganho" : "perda"
+        })`,
+      );
+      setDisposeTarget(null);
+      refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao baixar");
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -195,14 +235,25 @@ function Content() {
                 </td>
                 {canManage && (
                   <td className="p-3">
-                    {a.status === "ativo" && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => doDepreciate(a, 1)}
-                      >
-                        <TrendingDown className="size-4" /> Depreciar mês
-                      </Button>
+                    {a.status === "ativo" ? (
+                      <div className="flex gap-2 flex-wrap">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => doDepreciate(a, 1)}
+                        >
+                          <TrendingDown className="size-4" /> Depreciar mês
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openDispose(a)}
+                        >
+                          <Archive className="size-4" /> Baixar
+                        </Button>
+                      </div>
+                    ) : (
+                      <Badge variant="secondary">baixado</Badge>
                     )}
                   </td>
                 )}
@@ -280,6 +331,48 @@ function Content() {
           <DialogFooter>
             <Button onClick={submit} disabled={busy}>
               Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(disposeTarget)}
+        onOpenChange={(o) => !o && setDisposeTarget(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Baixar bem {disposeTarget?.tombamento}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Valor líquido contábil: {brl(disposeTarget?.valor_liquido ?? 0)}.
+              O resultado da baixa = alienação − líquido.
+            </p>
+            <div>
+              <Label>Motivo</Label>
+              <Input
+                value={disposeForm.motivo}
+                onChange={(e) =>
+                  setDisposeForm((f) => ({ ...f, motivo: e.target.value }))
+                }
+              />
+            </div>
+            <div>
+              <Label>Valor de alienação (0 se desfazimento)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={disposeForm.valor}
+                onChange={(e) =>
+                  setDisposeForm((f) => ({ ...f, valor: e.target.value }))
+                }
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={submitDispose} disabled={busy}>
+              Confirmar baixa
             </Button>
           </DialogFooter>
         </DialogContent>

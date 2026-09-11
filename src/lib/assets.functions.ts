@@ -190,3 +190,70 @@ export const depreciateAsset = createServerFn({ method: "POST" })
       };
     });
   });
+
+const DisposeInput = z.object({
+  tenant_id: z.string().uuid(),
+  asset_id: z.string().uuid(),
+  data_baixa: z.string().date(),
+  motivo: z.string().trim().min(3).max(500),
+  valor_alienacao: z.number().min(0).max(1_000_000_000_000).default(0),
+});
+
+// O3-11 — Baixa / alienação de bem. Apura o resultado da baixa = valor de alienação −
+// valor líquido contábil (aquisição − depreciação acumulada): ganho se positivo, perda
+// se negativo. Só um bem ativo pode ser baixado; a baixa é definitiva (não deprecia mais).
+export const disposeAsset = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => DisposeInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "assets.manage");
+    return withTransaction(async (client) => {
+      const asset = (
+        await client.query<{
+          valor_aquisicao: string;
+          depreciacao_acumulada: string;
+          status: string;
+        }>(
+          `select valor_aquisicao::text, depreciacao_acumulada::text, status
+           from public.patrimony_assets where id=$1 and tenant_id=$2 for update`,
+          [data.asset_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!asset) throw new Error("Bem não encontrado");
+      if (asset.status !== "ativo") throw new Error("Bem já baixado");
+      const valorLiquido = round2(
+        Number(asset.valor_aquisicao) - Number(asset.depreciacao_acumulada),
+      );
+      // Resultado da baixa: alienação − valor líquido (ganho > 0, perda < 0).
+      const resultado = round2(data.valor_alienacao - valorLiquido);
+      await client.query(
+        `update public.patrimony_assets
+         set status='baixado', baixa_em=$3, baixa_motivo=$4, valor_alienacao=$5,
+             resultado_baixa=$6, baixa_por=$7, updated_at=now()
+         where id=$1 and tenant_id=$2`,
+        [
+          data.asset_id,
+          data.tenant_id,
+          data.data_baixa,
+          data.motivo,
+          data.valor_alienacao,
+          resultado,
+          context.userId,
+        ],
+      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "dispose",
+        resource: "patrimony_assets",
+        recordId: data.asset_id,
+        after: {
+          valor_liquido: valorLiquido,
+          valor_alienacao: data.valor_alienacao,
+          resultado,
+        },
+      });
+      return { valor_liquido: valorLiquido, resultado };
+    });
+  });

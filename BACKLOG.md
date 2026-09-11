@@ -690,6 +690,16 @@ licitação não homologada derruba).
 Próximo: ligar a baixa de estoque (O3-02) à entrada de bem em patrimônio (O3-03)
 quando o material for um bem permanente; remessa ao PNCP (externo, homologação).
 
+**O3-11 — Baixa / alienação de bem patrimonial ✅.** `disposeAsset` registra a saída
+do bem do acervo (alienação, desfazimento, perda) e apura o resultado da baixa = valor
+de alienação − valor líquido contábil (aquisição − depreciação acumulada): ganho se
+positivo, perda se negativo. Só um bem ativo baixa; a baixa é definitiva (não deprecia
+mais). Migration `..._o3_11_asset_disposal.sql` (ALTER aditivo: baixa_em, baixa_motivo,
+valor_alienacao, resultado_baixa, baixa_por); reusa `assets.*`; ação "Baixar" no
+`/patrimonio`. Teste `tests/sprint-asset-disposal.test.mjs` verificado por mutação
+(inverter para líquido − alienação derruba o sinal). Próximo: baixa contabilizada como
+VPD/VPA de alienação (evento contábil dedicado) e remessa ao PNCP (externo).
+
 ### Onda 4 — Tributação e Receita (14-20 sem)
 
 Cadastros imobiliário/mobiliário · IPTU, ISS, ITBI · dívida ativa (CDA, execução
