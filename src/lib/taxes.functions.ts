@@ -19,6 +19,54 @@ const GetInput = z.object({
     .optional(),
 });
 
+const SummaryInput = z.object({ tenant_id: z.string().uuid() });
+
+// O4-01b — Resumo da arrecadação tributária. Consolida os créditos por situação
+// (lancado/divida_ativa/quitado/cancelado), o total lançado e o **arrecadado** (soma dos
+// pagamentos) dos créditos não cancelados, e o **a receber** (saldo lançado − pago dos
+// créditos ainda em cobrança: lancado + divida_ativa). Crédito cancelado não entra nos
+// totais. Reusa taxes.read.
+export const getTaxCreditsSummary = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => SummaryInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "taxes.read");
+    const row = (
+      await query<{
+        lancado: string;
+        divida_ativa: string;
+        quitado: string;
+        cancelado: string;
+        valor_lancado: string;
+        arrecadado: string;
+        a_receber: string;
+      }>(
+        `select
+           count(*) filter (where status='lancado')::text as lancado,
+           count(*) filter (where status='divida_ativa')::text as divida_ativa,
+           count(*) filter (where status='quitado')::text as quitado,
+           count(*) filter (where status='cancelado')::text as cancelado,
+           coalesce(sum(valor_lancado) filter (where status <> 'cancelado'),0)::text as valor_lancado,
+           coalesce(sum(valor_pago) filter (where status <> 'cancelado'),0)::text as arrecadado,
+           coalesce(sum(valor_lancado - valor_pago) filter (where status in ('lancado','divida_ativa')),0)::text as a_receber
+         from public.tax_credits where tenant_id = $1`,
+        [data.tenant_id],
+      )
+    )[0];
+    return {
+      porStatus: {
+        lancado: Number(row.lancado),
+        divida_ativa: Number(row.divida_ativa),
+        quitado: Number(row.quitado),
+        cancelado: Number(row.cancelado),
+      },
+      valorLancado: Number(row.valor_lancado),
+      arrecadado: Number(row.arrecadado),
+      aReceber: Number(row.a_receber),
+    };
+  });
+
 export const getTaxCredits = createServerFn({ method: "POST" })
   .middleware([requireAuth])
   .validator((data: unknown) => GetInput.parse(data))

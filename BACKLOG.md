@@ -873,6 +873,14 @@ VPD/VPA de alienação (evento contábil dedicado) e remessa ao PNCP (externo).
 Cadastros imobiliário/mobiliário · IPTU, ISS, ITBI · dívida ativa (CDA, execução
 fiscal) · NFS-e padrão nacional · certidões.
 
+**O4-01b — Resumo da arrecadação tributária ✅.** `getTaxCreditsSummary` consolida os
+créditos por situação (lancado/divida_ativa/quitado/cancelado), o total **lançado**, o
+**arrecadado** (soma dos pagamentos dos não cancelados) e o **a receber** (saldo dos
+créditos em cobrança: lancado + divida_ativa); cancelado fora dos totais. Reusa
+`taxes.read`, sem migration; `/tributos` ganha os cartões (lançado/arrecadado/a receber/em
+dívida ativa). Teste `tests/sprint-tax-credits-summary.test.mjs` verificado por mutação
+(arrecadado pelo lançado em vez do pago, ou incluir cancelado, derruba).
+
 Entregue (base): O4-01 créditos tributários (lançamento, arrecadação, inscrição
 em dívida ativa — Lei 6.830); O4-02 parcelamento de dívida ativa (REFIS: rateio
 do saldo em N parcelas mensais com soma exata, cada parcela arrecada no crédito,
