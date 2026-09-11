@@ -44,6 +44,54 @@ export const getActiveDebtCertificates = createServerFn({ method: "POST" })
     };
   });
 
+// O4-14 — Consolidação da dívida ativa por contribuinte. Junta as CDAs ao crédito de
+// origem e agrupa por documento do contribuinte: quantidade de CDAs, total inscrito e o
+// recorte por situação (ativa/quitada/cancelada). O saldo em cobrança considera SÓ as
+// CDAs 'ativa' — quitadas e canceladas não são estoque de dívida. Reusa taxes.read.
+export const getActiveDebtByTaxpayer = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => GetInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "taxes.read");
+    const rows = await query<{
+      contribuinte: string;
+      contribuinte_documento: string;
+      qtd_cdas: string;
+      total_inscrito: string;
+      total_ativa: string;
+      total_quitada: string;
+      total_cancelada: string;
+    }>(
+      `select tc.contribuinte, tc.contribuinte_documento,
+         count(*)::text as qtd_cdas,
+         coalesce(sum(c.valor_inscrito),0)::text as total_inscrito,
+         coalesce(sum(c.valor_inscrito) filter (where c.status='ativa'),0)::text as total_ativa,
+         coalesce(sum(c.valor_inscrito) filter (where c.status='quitada'),0)::text as total_quitada,
+         coalesce(sum(c.valor_inscrito) filter (where c.status='cancelada'),0)::text as total_cancelada
+       from public.active_debt_certificates c
+       join public.tax_credits tc on tc.id = c.credit_id
+       where c.tenant_id = $1
+       group by tc.contribuinte, tc.contribuinte_documento
+       order by total_ativa desc, tc.contribuinte`,
+      [data.tenant_id],
+    );
+    const contribuintes = rows.map((r) => ({
+      contribuinte: r.contribuinte,
+      contribuinte_documento: r.contribuinte_documento,
+      qtd_cdas: Number(r.qtd_cdas),
+      total_inscrito: Number(r.total_inscrito),
+      total_ativa: Number(r.total_ativa),
+      total_quitada: Number(r.total_quitada),
+      total_cancelada: Number(r.total_cancelada),
+    }));
+    const round2 = (v: number) => Number(v.toFixed(2));
+    const saldoEmCobranca = round2(
+      contribuintes.reduce((s, c) => s + c.total_ativa, 0),
+    );
+    return { contribuintes, saldoEmCobranca };
+  });
+
 const EmitInput = z.object({
   tenant_id: z.string().uuid(),
   credit_id: z.string().uuid(),

@@ -16,7 +16,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth-context";
-import { getActiveDebtCertificates } from "@/lib/active-debt-certificate.functions";
+import {
+  getActiveDebtCertificates,
+  getActiveDebtByTaxpayer,
+} from "@/lib/active-debt-certificate.functions";
 import {
   getFiscalExecutions,
   fileFiscalExecution,
@@ -54,6 +57,15 @@ type Execution = {
   valor_ajuizado: string;
   status: string;
 };
+type TaxpayerDebt = {
+  contribuinte: string;
+  contribuinte_documento: string;
+  qtd_cdas: number;
+  total_inscrito: number;
+  total_ativa: number;
+  total_quitada: number;
+  total_cancelada: number;
+};
 
 const brl = (v: number | string) =>
   Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -62,6 +74,7 @@ const hoje = () => new Date().toISOString().slice(0, 10);
 function Content() {
   const { activeTenant } = useAuth();
   const loadCdas = useServerFn(getActiveDebtCertificates);
+  const loadByTaxpayer = useServerFn(getActiveDebtByTaxpayer);
   const loadExecs = useServerFn(getFiscalExecutions);
   const file = useServerFn(fileFiscalExecution);
   const updateStatus = useServerFn(updateFiscalExecutionStatus);
@@ -81,6 +94,13 @@ function Content() {
     enabled: Boolean(activeTenant),
     queryFn: () => loadExecs({ data: { tenant_id: activeTenant!.id } }),
   });
+  const { data: byTaxpayer } = useQuery({
+    queryKey: ["active-debt-by-taxpayer", activeTenant?.id],
+    enabled: Boolean(activeTenant),
+    queryFn: () => loadByTaxpayer({ data: { tenant_id: activeTenant!.id } }),
+  });
+  const contribuintes = (byTaxpayer?.contribuintes ?? []) as TaxpayerDebt[];
+  const saldoEmCobranca = byTaxpayer?.saldoEmCobranca ?? 0;
 
   const cdas = (cdaData?.certificates ?? []) as Cda[];
   const executions = useMemo(
@@ -97,6 +117,9 @@ function Content() {
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["cdas", activeTenant?.id] });
     qc.invalidateQueries({ queryKey: ["fiscal-executions", activeTenant?.id] });
+    qc.invalidateQueries({
+      queryKey: ["active-debt-by-taxpayer", activeTenant?.id],
+    });
   };
 
   const submitFile = async () => {
@@ -154,6 +177,50 @@ function Content() {
           </p>
         </div>
       </div>
+
+      <div className="rounded-xl border bg-card p-4">
+        <div className="text-sm text-muted-foreground">
+          Saldo em cobrança (CDAs ativas)
+        </div>
+        <div className="text-2xl font-bold">{brl(saldoEmCobranca)}</div>
+      </div>
+
+      {contribuintes.length > 0 && (
+        <div className="rounded-xl border bg-card overflow-x-auto">
+          <h2 className="font-bold p-3">Consolidação por contribuinte</h2>
+          <table className="w-full text-sm">
+            <thead className="border-b bg-muted/40 text-left">
+              <tr>
+                <th className="p-3 font-semibold">Contribuinte</th>
+                <th className="p-3 font-semibold">Documento</th>
+                <th className="p-3 font-semibold text-right">CDAs</th>
+                <th className="p-3 font-semibold text-right">Inscrito</th>
+                <th className="p-3 font-semibold text-right">Em cobrança</th>
+              </tr>
+            </thead>
+            <tbody>
+              {contribuintes.map((c) => (
+                <tr
+                  key={c.contribuinte_documento}
+                  className="border-b last:border-0"
+                >
+                  <td className="p-3 font-medium">{c.contribuinte}</td>
+                  <td className="p-3 tabular-nums">
+                    {c.contribuinte_documento}
+                  </td>
+                  <td className="p-3 text-right tabular-nums">{c.qtd_cdas}</td>
+                  <td className="p-3 text-right tabular-nums">
+                    {brl(c.total_inscrito)}
+                  </td>
+                  <td className="p-3 text-right tabular-nums font-medium">
+                    {brl(c.total_ativa)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <div className="rounded-xl border bg-card overflow-x-auto">
         <h2 className="font-bold p-3">Certidões (CDA)</h2>

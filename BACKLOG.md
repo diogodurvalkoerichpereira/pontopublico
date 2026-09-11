@@ -896,8 +896,16 @@ lista as CDAs (nº, exercício, valor inscrito, situação) com ação "Ajuizar"
 execuções fiscais (CDA, processo, valor, andamento) com transições suspender/quitar/
 extinguir. Reusa `getActiveDebtCertificates`, `getFiscalExecutions`,
 `fileFiscalExecution`, `updateFiscalExecutionStatus`; item de menu em Contabilidade e
-Finanças. Sem novo backend/migration. Próximo: painel de dívida ativa por contribuinte e
-consolidação da receita de dívida ativa nos balanços.
+Finanças. Sem novo backend/migration.
+
+**O4-14 — Consolidação de dívida ativa por contribuinte ✅.** `getActiveDebtByTaxpayer`
+junta as CDAs ao crédito de origem e agrupa por documento do contribuinte: quantidade,
+total inscrito e recorte por situação (ativa/quitada/cancelada); o **saldo em cobrança**
+soma SÓ as CDAs `ativa` (quitadas/canceladas não são estoque de dívida). Reusa
+`taxes.read`, sem migration; `/divida-ativa` ganha o cartão de saldo em cobrança e a
+tabela por contribuinte. Teste `tests/sprint-active-debt-by-taxpayer.test.mjs` verificado
+por mutação (somar quitada/cancelada no saldo em cobrança derruba). Próximo: consolidação
+da receita de dívida ativa nos balanços.
 
 ### Onda 5 — Apoio, controle e transparência (10-14 sem)
 
