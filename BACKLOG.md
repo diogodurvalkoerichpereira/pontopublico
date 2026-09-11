@@ -558,8 +558,17 @@ orçamentário (arrecadada − empenhada: superávit/déficit) e os restos a pag
 inscritos por tipo. Read-only, cada total em consulta própria (sem JOIN, não
 infla por fan-out). Reusa `budget.read`, sem migration. Teste
 `tests/sprint-budget-balance.test.mjs` verificado por mutação.
+**O2-11 — Tesouraria (contas, movimentação, transferência) ✅.**
+`treasury_accounts` (caixa/banco do ente) e `treasury_movements`:
+`recordTreasuryMovement` (ingresso soma, saída subtrai e **nunca deixa o saldo
+negativo**; grava o saldo após), `transferBetweenAccounts` (saída da origem +
+ingresso no destino, **atômico**, contas travadas em ordem estável),
+`saveTreasuryAccount`/`getTreasuryAccounts`. Base do balanço financeiro e da
+conciliação. Reusa `accounting.*`. Migration `20260909360000_o2_11_treasury.sql`;
+teste `tests/sprint-treasury.test.mjs` verificado por mutação (permitir saldo
+negativo derruba).
 Próximo: balanço financeiro e patrimonial, demonstração das variações
-patrimoniais (DCASP); depois tesouraria (OB, conciliação) e MSC-SICONFI.
+patrimoniais (DCASP); conciliação bancária; ordem bancária (OB) e MSC-SICONFI.
 
 ### Onda 3 — Materiais e Contratações (14-18 sem)
 
