@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { FileSignature, Plus } from "lucide-react";
+import { FileSignature, Plus, Ruler } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,10 @@ import {
 } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth-context";
 import { getContracts, saveContract } from "@/lib/contracts.functions";
+import {
+  getContractMeasurements,
+  recordContractMeasurement,
+} from "@/lib/contract-measurements.functions";
 
 export const Route = createFileRoute("/contratos")({ component: Page });
 
@@ -80,10 +84,19 @@ function Content() {
   const { activeTenant } = useAuth();
   const load = useServerFn(getContracts);
   const save = useServerFn(saveContract);
+  const loadMeasurements = useServerFn(getContractMeasurements);
+  const measure = useServerFn(recordContractMeasurement);
   const qc = useQueryClient();
 
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [measureContract, setMeasureContract] = useState<Contract | null>(null);
+  const [mForm, setMForm] = useState({
+    competencia: new Date().toISOString().slice(0, 7),
+    valor: "",
+    descricao: "",
+  });
   const [form, setForm] = useState({
     numero: "",
     ano: String(new Date().getFullYear()),
@@ -106,8 +119,50 @@ function Content() {
   const items = (data?.contracts ?? []) as Contract[];
   const canManage = data?.canManage ?? false;
 
-  const refresh = () =>
+  const { data: measurements } = useQuery({
+    queryKey: ["contract-measurements", activeTenant?.id, expanded],
+    enabled: Boolean(activeTenant) && Boolean(expanded),
+    queryFn: () =>
+      loadMeasurements({
+        data: { tenant_id: activeTenant!.id, contract_id: expanded! },
+      }),
+  });
+
+  const refresh = () => {
     qc.invalidateQueries({ queryKey: ["contracts", activeTenant?.id] });
+    qc.invalidateQueries({
+      queryKey: ["contract-measurements", activeTenant?.id],
+    });
+  };
+
+  const submitMeasure = async () => {
+    if (!activeTenant || !measureContract) return;
+    setBusy(true);
+    try {
+      await measure({
+        data: {
+          tenant_id: activeTenant.id,
+          contract_id: measureContract.id,
+          competencia: mForm.competencia.trim(),
+          valor: Number(mForm.valor),
+          descricao: mForm.descricao.trim(),
+          data_medicao: new Date().toISOString().slice(0, 10),
+        },
+      });
+      toast.success("Medição registrada");
+      setMeasureContract(null);
+      setMForm({
+        competencia: new Date().toISOString().slice(0, 7),
+        valor: "",
+        descricao: "",
+      });
+      refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao medir");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const submit = async () => {
     if (!activeTenant) return;
@@ -171,6 +226,7 @@ function Content() {
               <th className="p-3 font-semibold text-right">Saldo</th>
               <th className="p-3 font-semibold">Vigência</th>
               <th className="p-3 font-semibold">Situação</th>
+              <th className="p-3 font-semibold">Ações</th>
             </tr>
           </thead>
           <tbody>
@@ -198,12 +254,34 @@ function Content() {
                     {c.status}
                   </Badge>
                 </td>
+                <td className="p-3">
+                  <div className="flex gap-2 flex-wrap">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        setExpanded((e) => (e === c.id ? null : c.id))
+                      }
+                    >
+                      {expanded === c.id ? "Ocultar" : "Medições"}
+                    </Button>
+                    {canManage && c.status === "vigente" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setMeasureContract(c)}
+                      >
+                        <Ruler className="size-4" /> Medir
+                      </Button>
+                    )}
+                  </div>
+                </td>
               </tr>
             ))}
             {items.length === 0 && (
               <tr>
                 <td
-                  colSpan={8}
+                  colSpan={9}
                   className="p-6 text-center text-muted-foreground"
                 >
                   Nenhum contrato cadastrado.
@@ -213,6 +291,46 @@ function Content() {
           </tbody>
         </table>
       </div>
+
+      {expanded && (
+        <div className="rounded-xl border bg-card overflow-x-auto">
+          <h2 className="font-bold p-3">Medições do contrato</h2>
+          <table className="w-full text-sm">
+            <thead className="border-b bg-muted/40 text-left">
+              <tr>
+                <th className="p-3 font-semibold">Nº</th>
+                <th className="p-3 font-semibold">Competência</th>
+                <th className="p-3 font-semibold">Descrição</th>
+                <th className="p-3 font-semibold text-right">Valor</th>
+                <th className="p-3 font-semibold">Recebimento</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(measurements?.measurements ?? []).map((m) => (
+                <tr key={m.id} className="border-b last:border-0">
+                  <td className="p-3 tabular-nums">{m.numero}</td>
+                  <td className="p-3">{m.competencia}</td>
+                  <td className="p-3">{m.descricao}</td>
+                  <td className="p-3 text-right tabular-nums">
+                    {brl(m.valor)}
+                  </td>
+                  <td className="p-3 capitalize">{m.recebimento}</td>
+                </tr>
+              ))}
+              {(measurements?.measurements ?? []).length === 0 && (
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="p-6 text-center text-muted-foreground"
+                  >
+                    Nenhuma medição registrada.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
@@ -305,6 +423,59 @@ function Content() {
           <DialogFooter>
             <Button onClick={submit} disabled={busy}>
               Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(measureContract)}
+        onOpenChange={(o) => !o && setMeasureContract(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Medir contrato {measureContract?.numero}/{measureContract?.ano}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Empenhado: {brl(measureContract?.valor_empenhado ?? 0)}. A medição
+              acumulada não pode exceder o empenhado.
+            </p>
+            <div>
+              <Label>Competência</Label>
+              <Input
+                value={mForm.competencia}
+                onChange={(e) =>
+                  setMForm((f) => ({ ...f, competencia: e.target.value }))
+                }
+              />
+            </div>
+            <div>
+              <Label>Valor</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={mForm.valor}
+                onChange={(e) =>
+                  setMForm((f) => ({ ...f, valor: e.target.value }))
+                }
+              />
+            </div>
+            <div>
+              <Label>Descrição</Label>
+              <Input
+                value={mForm.descricao}
+                onChange={(e) =>
+                  setMForm((f) => ({ ...f, descricao: e.target.value }))
+                }
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={submitMeasure} disabled={busy || !mForm.valor}>
+              Registrar medição
             </Button>
           </DialogFooter>
         </DialogContent>

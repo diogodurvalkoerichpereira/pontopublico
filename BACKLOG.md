@@ -720,8 +720,12 @@ quando o material for um bem permanente; remessa ao PNCP (externo, homologação
 empenhado** (só se liquida o que foi empenhado — Lei 4.320). `getContractMeasurements`
 lista. Migration `..._o3_14_contract_measurements.sql` (ALTER aditivo + tabela), reusa
 `contracts.*`. Teste `tests/sprint-contract-measurements.test.mjs` verificado por mutação
-(usar o valor total em vez do empenhado no teto derruba). Próximo (UI): medições no
-`/contratos`.
+(usar o valor total em vez do empenhado no teto derruba).
+
+**O3-15 — Medições no painel de contratos (UI) ✅.** No `/contratos`, cada contrato
+expande as suas medições (nº, competência, descrição, valor, recebimento) e tem a ação
+"Medir" (contrato vigente) que registra uma medição respeitando o teto do empenhado.
+Reusa `getContractMeasurements` e `recordContractMeasurement`. Sem novo backend.
 
 **O3-12 — Ata de Registro de Preços (SRP, Lei 14.133 art. 82-86) ✅.**
 `createPriceRegistration` forma a ata a partir de uma licitação **homologada**, com itens
