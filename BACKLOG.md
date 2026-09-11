@@ -749,6 +749,14 @@ licitação não homologada derruba).
 Próximo: ligar a baixa de estoque (O3-02) à entrada de bem em patrimônio (O3-03)
 quando o material for um bem permanente; remessa ao PNCP (externo, homologação).
 
+**O3-16 — Transição de contrato (Lei 14.133 art. 137-139) ✅.** `transitionContract` move
+o contrato pela máquina de estados: vigente ↔ suspenso, e vigente/suspenso →
+encerrado/rescindido (terminais); cada ação só vale a partir do estado de origem correto.
+Reusa `contracts.manage`, sem migration (o enum de status já existia); ações
+Suspender/Retomar/Encerrar/Rescindir no `/contratos`. Teste
+`tests/sprint-contract-transition.test.mjs` verificado por mutação (aceitar ação a partir
+de estado terminal derruba).
+
 **O3-14 — Medição / recebimento de contrato (Lei 14.133 art. 140) ✅.**
 `recordContractMeasurement` registra a medição de um contrato **vigente**, acumulando o
 `valor_executado` e numerando por contrato; a execução acumulada **nunca passa do valor

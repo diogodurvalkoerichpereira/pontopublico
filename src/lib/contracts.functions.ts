@@ -165,3 +165,58 @@ export const saveContract = createServerFn({ method: "POST" })
     });
     return { id };
   });
+
+const TransitionInput = z.object({
+  tenant_id: z.string().uuid(),
+  contract_id: z.string().uuid(),
+  acao: z.enum(["suspender", "retomar", "encerrar", "rescindir"]),
+  motivo: z.string().trim().max(500).optional(),
+});
+
+// Estados de origem válidos por ação. 'encerrado'/'rescindido' são terminais.
+const TRANSICOES: Record<string, { de: string[]; para: string }> = {
+  suspender: { de: ["vigente"], para: "suspenso" },
+  retomar: { de: ["suspenso"], para: "vigente" },
+  encerrar: { de: ["vigente", "suspenso"], para: "encerrado" },
+  rescindir: { de: ["vigente", "suspenso"], para: "rescindido" },
+};
+
+// O3-16 — Transiciona o contrato pela máquina de estados (Lei 14.133 art. 137-139):
+// vigente ↔ suspenso, e vigente/suspenso → encerrado/rescindido (terminais). A ação só
+// vale a partir do estado de origem correto. Reusa contracts.manage.
+export const transitionContract = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => TransitionInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "contracts.manage");
+    return withTransaction(async (client) => {
+      const contract = (
+        await client.query<{ status: string }>(
+          `select status from public.procurement_contracts
+           where id=$1 and tenant_id=$2 for update`,
+          [data.contract_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!contract) throw new Error("Contrato não encontrado");
+      const t = TRANSICOES[data.acao];
+      if (!t.de.includes(contract.status))
+        throw new Error(
+          `Contrato '${contract.status}' não admite a ação '${data.acao}'`,
+        );
+      await client.query(
+        `update public.procurement_contracts set status=$3, updated_at=now()
+         where id=$1 and tenant_id=$2`,
+        [data.contract_id, data.tenant_id, t.para],
+      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: `contrato_${data.acao}`,
+        resource: "procurement_contracts",
+        recordId: data.contract_id,
+        after: { status: t.para, motivo: data.motivo ?? null },
+      });
+      return { id: data.contract_id, status: t.para };
+    });
+  });

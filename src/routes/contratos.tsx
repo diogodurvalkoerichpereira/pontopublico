@@ -23,7 +23,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth-context";
-import { getContracts, saveContract } from "@/lib/contracts.functions";
+import {
+  getContracts,
+  saveContract,
+  transitionContract,
+} from "@/lib/contracts.functions";
 import {
   getContractMeasurements,
   recordContractMeasurement,
@@ -86,6 +90,7 @@ function Content() {
   const save = useServerFn(saveContract);
   const loadMeasurements = useServerFn(getContractMeasurements);
   const measure = useServerFn(recordContractMeasurement);
+  const transition = useServerFn(transitionContract);
   const qc = useQueryClient();
 
   const [open, setOpen] = useState(false);
@@ -133,6 +138,24 @@ function Content() {
     qc.invalidateQueries({
       queryKey: ["contract-measurements", activeTenant?.id],
     });
+  };
+
+  const doTransition = async (
+    c: Contract,
+    acao: "suspender" | "retomar" | "encerrar" | "rescindir",
+  ) => {
+    if (!activeTenant) return;
+    try {
+      await transition({
+        data: { tenant_id: activeTenant.id, contract_id: c.id, acao },
+      });
+      toast.success("Situação do contrato atualizada");
+      refresh();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Falha na transição",
+      );
+    }
   };
 
   const submitMeasure = async () => {
@@ -274,6 +297,43 @@ function Content() {
                         <Ruler className="size-4" /> Medir
                       </Button>
                     )}
+                    {canManage && c.status === "vigente" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => doTransition(c, "suspender")}
+                      >
+                        Suspender
+                      </Button>
+                    )}
+                    {canManage && c.status === "suspenso" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => doTransition(c, "retomar")}
+                      >
+                        Retomar
+                      </Button>
+                    )}
+                    {canManage &&
+                      (c.status === "vigente" || c.status === "suspenso") && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => doTransition(c, "encerrar")}
+                          >
+                            Encerrar
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => doTransition(c, "rescindir")}
+                          >
+                            Rescindir
+                          </Button>
+                        </>
+                      )}
                   </div>
                 </td>
               </tr>
