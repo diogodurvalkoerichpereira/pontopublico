@@ -40,6 +40,7 @@ import {
   MessageSquareWarning,
   PiggyBank,
   Banknote,
+  BookOpen,
   FileSignature,
   Boxes,
   Building,
@@ -437,6 +438,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       to: "/esic",
       label: "e-SIC",
       icon: FileSearch,
+      section: "Controle e Transparência",
+    });
+  if (hasTenantPermission("protocol.read"))
+    items.push({
+      to: "/carta-servicos",
+      label: "Carta de Serviços",
+      icon: BookOpen,
       section: "Controle e Transparência",
     });
   if (hasTenantPermission("analytics.read"))

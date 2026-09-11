@@ -807,6 +807,14 @@ Read-only, reusa `protocol.read`, sem migration; cartões no `/ouvidoria`. Teste
 `tests/sprint-response-timeliness.test.mjs` verificado por mutação (inverter a comparação
 de prazo derruba). Próximo: carta de serviços ao cidadão (Lei 13.460 art. 7º).
 
+**O5-09 — Carta de Serviços ao Cidadão (Lei 13.460 art. 7º) ✅.** `saveCitizenService`
+mantém o catálogo dos serviços do ente (descrição, requisitos, prazo, canais, taxa; nome
+único); `publishCitizenService` só publica um serviço **completo** — com descrição, prazo
+> 0 e canais —, despublicar é sempre permitido; `getCitizenServices` lista. Migration
+`..._o5_09_citizen_services.sql`, reusa `protocol.*`; rota `/carta-servicos`. Teste
+`tests/sprint-citizen-services.test.mjs` verificado por mutação (ignorar a completude ao
+publicar derruba). Próximo: painel de decisão de recursos do e-SIC e dados abertos.
+
 ### Onda 6 — Conformidade contínua ⚠️ (contínuo)
 
 Layout do TCE estadual (um por vez; a referência de Timóteo é SICOM/MG, não

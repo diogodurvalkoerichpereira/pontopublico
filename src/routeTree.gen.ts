@@ -28,6 +28,7 @@ import { Route as EsicRouteImport } from './routes/esic'
 import { Route as DividaAtivaRouteImport } from './routes/divida-ativa'
 import { Route as ControleInternoRouteImport } from './routes/controle-interno'
 import { Route as ContratosRouteImport } from './routes/contratos'
+import { Route as CartaServicosRouteImport } from './routes/carta-servicos'
 import { Route as BalancosRouteImport } from './routes/balancos'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as AlmoxarifadoRouteImport } from './routes/almoxarifado'
@@ -152,6 +153,11 @@ const ControleInternoRoute = ControleInternoRouteImport.update({
 const ContratosRoute = ContratosRouteImport.update({
   id: '/contratos',
   path: '/contratos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CartaServicosRoute = CartaServicosRouteImport.update({
+  id: '/carta-servicos',
+  path: '/carta-servicos',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BalancosRoute = BalancosRouteImport.update({
@@ -310,6 +316,7 @@ export interface FileRoutesByFullPath {
   '/almoxarifado': typeof AlmoxarifadoRoute
   '/app': typeof AppRoute
   '/balancos': typeof BalancosRoute
+  '/carta-servicos': typeof CartaServicosRoute
   '/contratos': typeof ContratosRoute
   '/controle-interno': typeof ControleInternoRoute
   '/divida-ativa': typeof DividaAtivaRoute
@@ -361,6 +368,7 @@ export interface FileRoutesByTo {
   '/almoxarifado': typeof AlmoxarifadoRoute
   '/app': typeof AppRoute
   '/balancos': typeof BalancosRoute
+  '/carta-servicos': typeof CartaServicosRoute
   '/contratos': typeof ContratosRoute
   '/controle-interno': typeof ControleInternoRoute
   '/divida-ativa': typeof DividaAtivaRoute
@@ -413,6 +421,7 @@ export interface FileRoutesById {
   '/almoxarifado': typeof AlmoxarifadoRoute
   '/app': typeof AppRoute
   '/balancos': typeof BalancosRoute
+  '/carta-servicos': typeof CartaServicosRoute
   '/contratos': typeof ContratosRoute
   '/controle-interno': typeof ControleInternoRoute
   '/divida-ativa': typeof DividaAtivaRoute
@@ -466,6 +475,7 @@ export interface FileRouteTypes {
     | '/almoxarifado'
     | '/app'
     | '/balancos'
+    | '/carta-servicos'
     | '/contratos'
     | '/controle-interno'
     | '/divida-ativa'
@@ -517,6 +527,7 @@ export interface FileRouteTypes {
     | '/almoxarifado'
     | '/app'
     | '/balancos'
+    | '/carta-servicos'
     | '/contratos'
     | '/controle-interno'
     | '/divida-ativa'
@@ -568,6 +579,7 @@ export interface FileRouteTypes {
     | '/almoxarifado'
     | '/app'
     | '/balancos'
+    | '/carta-servicos'
     | '/contratos'
     | '/controle-interno'
     | '/divida-ativa'
@@ -620,6 +632,7 @@ export interface RootRouteChildren {
   AlmoxarifadoRoute: typeof AlmoxarifadoRoute
   AppRoute: typeof AppRoute
   BalancosRoute: typeof BalancosRoute
+  CartaServicosRoute: typeof CartaServicosRoute
   ContratosRoute: typeof ContratosRoute
   ControleInternoRoute: typeof ControleInternoRoute
   DividaAtivaRoute: typeof DividaAtivaRoute
@@ -782,6 +795,13 @@ declare module '@tanstack/react-router' {
       path: '/contratos'
       fullPath: '/contratos'
       preLoaderRoute: typeof ContratosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/carta-servicos': {
+      id: '/carta-servicos'
+      path: '/carta-servicos'
+      fullPath: '/carta-servicos'
+      preLoaderRoute: typeof CartaServicosRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/balancos': {
@@ -1065,6 +1085,7 @@ const rootRouteChildren: RootRouteChildren = {
   AlmoxarifadoRoute: AlmoxarifadoRoute,
   AppRoute: AppRoute,
   BalancosRoute: BalancosRoute,
+  CartaServicosRoute: CartaServicosRoute,
   ContratosRoute: ContratosRoute,
   ControleInternoRoute: ControleInternoRoute,
   DividaAtivaRoute: DividaAtivaRoute,
