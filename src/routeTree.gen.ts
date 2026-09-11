@@ -19,6 +19,7 @@ import { Route as OrcamentoRouteImport } from './routes/orcamento'
 import { Route as MeusDocumentosRouteImport } from './routes/meus-documentos'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as GestorRouteImport } from './routes/gestor'
+import { Route as ContratosRouteImport } from './routes/contratos'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as RhVtVaRouteImport } from './routes/rh.vt-va'
@@ -96,6 +97,11 @@ const LoginRoute = LoginRouteImport.update({
 const GestorRoute = GestorRouteImport.update({
   id: '/gestor',
   path: '/gestor',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ContratosRoute = ContratosRouteImport.update({
+  id: '/contratos',
+  path: '/contratos',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppRoute = AppRouteImport.update({
@@ -242,6 +248,7 @@ const RhFuncionariosIdRoute = RhFuncionariosIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRoute
+  '/contratos': typeof ContratosRoute
   '/gestor': typeof GestorRouteWithChildren
   '/login': typeof LoginRoute
   '/meus-documentos': typeof MeusDocumentosRoute
@@ -282,6 +289,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/app': typeof AppRoute
+  '/contratos': typeof ContratosRoute
   '/gestor': typeof GestorRouteWithChildren
   '/login': typeof LoginRoute
   '/meus-documentos': typeof MeusDocumentosRoute
@@ -323,6 +331,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/app': typeof AppRoute
+  '/contratos': typeof ContratosRoute
   '/gestor': typeof GestorRouteWithChildren
   '/login': typeof LoginRoute
   '/meus-documentos': typeof MeusDocumentosRoute
@@ -365,6 +374,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/app'
+    | '/contratos'
     | '/gestor'
     | '/login'
     | '/meus-documentos'
@@ -405,6 +415,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/app'
+    | '/contratos'
     | '/gestor'
     | '/login'
     | '/meus-documentos'
@@ -445,6 +456,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/app'
+    | '/contratos'
     | '/gestor'
     | '/login'
     | '/meus-documentos'
@@ -486,6 +498,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRoute
+  ContratosRoute: typeof ContratosRoute
   GestorRoute: typeof GestorRouteWithChildren
   LoginRoute: typeof LoginRoute
   MeusDocumentosRoute: typeof MeusDocumentosRoute
@@ -576,6 +589,13 @@ declare module '@tanstack/react-router' {
       path: '/gestor'
       fullPath: '/gestor'
       preLoaderRoute: typeof GestorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/contratos': {
+      id: '/contratos'
+      path: '/contratos'
+      fullPath: '/contratos'
+      preLoaderRoute: typeof ContratosRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/app': {
@@ -843,6 +863,7 @@ const RhRouteWithChildren = RhRoute._addFileChildren(RhRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRoute,
+  ContratosRoute: ContratosRoute,
   GestorRoute: GestorRouteWithChildren,
   LoginRoute: LoginRoute,
   MeusDocumentosRoute: MeusDocumentosRoute,

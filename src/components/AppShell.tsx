@@ -39,6 +39,7 @@ import {
   Wallet,
   MessageSquareWarning,
   PiggyBank,
+  FileSignature,
 } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
 import { SupportWidget } from "@/components/SupportWidget";
@@ -351,6 +352,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       label: "Tributos",
       icon: Landmark,
       section: "Contabilidade e Finanças",
+    });
+  if (hasTenantPermission("contracts.read"))
+    items.push({
+      to: "/contratos",
+      label: "Contratos",
+      icon: FileSignature,
+      section: "Contratações",
     });
   if (hasTenantPermission("protocol.read"))
     items.push({
