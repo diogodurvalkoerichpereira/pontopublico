@@ -44,6 +44,7 @@ import {
   Building,
   FileStack,
   Gavel,
+  Car,
 } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
 import { SupportWidget } from "@/components/SupportWidget";
@@ -383,6 +384,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       to: "/patrimonio",
       label: "Patrimônio",
       icon: Building,
+      section: "Materiais e Patrimônio",
+    });
+  if (hasTenantPermission("assets.read"))
+    items.push({
+      to: "/frotas",
+      label: "Frotas",
+      icon: Car,
       section: "Materiais e Patrimônio",
     });
   if (hasTenantPermission("protocol.read"))
