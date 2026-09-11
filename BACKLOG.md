@@ -689,6 +689,14 @@ subtrair no saldo derruba). Próximo: balanço financeiro (Anexo 13) e MSC-SICON
 Compras Lei 14.133 → contratos → almoxarifado → patrimônio (depreciação NBC TSP)
 → frotas → integração PNCP. Emite empenho pelo mesmo primitivo da folha.
 
+**O3-01b — Resumo dos contratos ✅.** `getContractsSummary` consolida a contagem por
+situação e, dos contratos **vigentes**, o valor contratado, empenhado, executado (medições)
+e o **saldo a executar** (contratado − executado) — encerrado/rescindido fora da carteira
+vigente. Reusa `contracts.read`, sem migration; `/contratos` ganha os cartões
+(contratado/empenhado/executado/saldo). Teste `tests/sprint-contracts-summary.test.mjs`
+verificado por mutação (saldo = contratado ignorando o executado, ou somar não-vigentes,
+derruba).
+
 **O3-01 — Contratos administrativos (Lei 14.133) ✅.** `procurement_contracts`:
 contrato com fornecedor, objeto, modalidade (pregão, concorrência, dispensa,
 inexigibilidade...), valor/vigência, `valor_empenhado` e saldo, com invariante

@@ -27,6 +27,7 @@ import {
   getContracts,
   saveContract,
   transitionContract,
+  getContractsSummary,
 } from "@/lib/contracts.functions";
 import {
   getContractMeasurements,
@@ -124,6 +125,13 @@ function Content() {
   const items = (data?.contracts ?? []) as Contract[];
   const canManage = data?.canManage ?? false;
 
+  const loadSummary = useServerFn(getContractsSummary);
+  const { data: summary } = useQuery({
+    queryKey: ["contracts-summary", activeTenant?.id],
+    enabled: Boolean(activeTenant),
+    queryFn: () => loadSummary({ data: { tenant_id: activeTenant!.id } }),
+  });
+
   const { data: measurements } = useQuery({
     queryKey: ["contract-measurements", activeTenant?.id, expanded],
     enabled: Boolean(activeTenant) && Boolean(expanded),
@@ -138,6 +146,7 @@ function Content() {
     qc.invalidateQueries({
       queryKey: ["contract-measurements", activeTenant?.id],
     });
+    qc.invalidateQueries({ queryKey: ["contracts-summary", activeTenant?.id] });
   };
 
   const doTransition = async (
@@ -236,6 +245,44 @@ function Content() {
           </Button>
         )}
       </div>
+
+      {summary && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="rounded-xl border bg-card p-4">
+            <div className="text-sm text-muted-foreground">
+              Contratado (vigentes)
+            </div>
+            <div className="text-xl font-bold">
+              {brl(summary.valorContratado)}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {summary.porStatus.vigente} vigentes
+            </div>
+          </div>
+          <div className="rounded-xl border bg-card p-4">
+            <div className="text-sm text-muted-foreground">Empenhado</div>
+            <div className="text-xl font-bold">
+              {brl(summary.valorEmpenhado)}
+            </div>
+          </div>
+          <div className="rounded-xl border bg-card p-4">
+            <div className="text-sm text-muted-foreground">
+              Executado (medições)
+            </div>
+            <div className="text-xl font-bold">
+              {brl(summary.valorExecutado)}
+            </div>
+          </div>
+          <div className="rounded-xl border bg-card p-4">
+            <div className="text-sm text-muted-foreground">
+              Saldo a executar
+            </div>
+            <div className="text-xl font-bold">
+              {brl(summary.saldoAExecutar)}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="rounded-xl border bg-card overflow-x-auto">
         <table className="w-full text-sm">

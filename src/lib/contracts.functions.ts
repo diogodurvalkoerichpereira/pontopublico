@@ -53,6 +53,60 @@ export const getContracts = createServerFn({ method: "POST" })
     };
   });
 
+const SummaryInput = z.object({
+  tenant_id: z.string().uuid(),
+  ano: z.number().int().min(2000).max(2200).optional(),
+});
+
+// O3-01b — Resumo dos contratos administrativos. Consolida a contagem por situação e, dos
+// contratos **vigentes**, o valor contratado, o empenhado, o executado (medições) e o
+// saldo a executar (contratado − executado). Contrato encerrado/rescindido não entra no
+// carteira vigente. Reusa contracts.read.
+export const getContractsSummary = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => SummaryInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "contracts.read");
+    const row = (
+      await query<{
+        vigentes: string;
+        suspensos: string;
+        encerrados: string;
+        rescindidos: string;
+        valor_contratado: string;
+        valor_empenhado: string;
+        valor_executado: string;
+        saldo_a_executar: string;
+      }>(
+        `select
+           count(*) filter (where status='vigente')::text as vigentes,
+           count(*) filter (where status='suspenso')::text as suspensos,
+           count(*) filter (where status='encerrado')::text as encerrados,
+           count(*) filter (where status='rescindido')::text as rescindidos,
+           coalesce(sum(valor_total) filter (where status='vigente'),0)::text as valor_contratado,
+           coalesce(sum(valor_empenhado) filter (where status='vigente'),0)::text as valor_empenhado,
+           coalesce(sum(valor_executado) filter (where status='vigente'),0)::text as valor_executado,
+           coalesce(sum(valor_total - valor_executado) filter (where status='vigente'),0)::text as saldo_a_executar
+         from public.procurement_contracts
+         where tenant_id = $1 and ($2::int is null or ano = $2)`,
+        [data.tenant_id, data.ano ?? null],
+      )
+    )[0];
+    return {
+      porStatus: {
+        vigente: Number(row.vigentes),
+        suspenso: Number(row.suspensos),
+        encerrado: Number(row.encerrados),
+        rescindido: Number(row.rescindidos),
+      },
+      valorContratado: Number(row.valor_contratado),
+      valorEmpenhado: Number(row.valor_empenhado),
+      valorExecutado: Number(row.valor_executado),
+      saldoAExecutar: Number(row.saldo_a_executar),
+    };
+  });
+
 const SaveInput = z.object({
   id: z.string().uuid().optional(),
   tenant_id: z.string().uuid(),
