@@ -38,6 +38,7 @@ import {
   Landmark,
   Wallet,
   MessageSquareWarning,
+  PiggyBank,
 } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
 import { SupportWidget } from "@/components/SupportWidget";
@@ -330,6 +331,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     icon: ShieldCheck,
     section: "Geral",
   });
+  if (hasTenantPermission("budget.read"))
+    items.push({
+      to: "/orcamento",
+      label: "Orçamento",
+      icon: PiggyBank,
+      section: "Contabilidade e Finanças",
+    });
   if (hasTenantPermission("accounting.read"))
     items.push({
       to: "/tesouraria",
