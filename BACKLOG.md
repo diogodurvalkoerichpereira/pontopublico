@@ -467,6 +467,20 @@ empenho". Guardas: `payroll.cycles.close` (emitir) / `payroll.cycles.read` (ler)
 `20260909110000_o1_08_payroll_empenho.sql`; teste `tests/sprint-empenho-folha.test.mjs`
 verificado por mutação.
 
+### O1-09 — Consignações e margem consignável ✅
+
+P1 · feito. Descontos consignados (empréstimo, sindicato, plano de saúde, pensão)
+em `payroll_consignments` com controle de **margem consignável** (Lei 10.820/2003):
+o teto padrão de **35% da remuneração de base** (`employment_links.base_salary`,
+percentual configurável) é conferido na inclusão sobre a soma das parcelas ativas —
+`registerConsignment` só inclui se a parcela couber na margem disponível;
+`getConsignmentMargin` devolve base/teto/comprometido/disponível;
+`cancelConsignment` libera a margem. Reusa `people.read`/`people.manage`. Migration
+`20260909330000_o1_09_payroll_consignments.sql`; teste
+`tests/sprint-consignments.test.mjs` verificado por mutação (comparar a parcela ao
+teto cheio, ignorando o já comprometido, derruba). **Pendente:** amortização
+automática das parcelas por competência via ciclo de folha.
+
 ---
 
 ## Ondas 2–6 — épicos
