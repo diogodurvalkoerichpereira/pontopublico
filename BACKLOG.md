@@ -534,6 +534,43 @@ balanços Lei 4.320/DCASP; depois tesouraria (OB, conciliação) e MSC-SICONFI.
 Compras Lei 14.133 → contratos → almoxarifado → patrimônio (depreciação NBC TSP)
 → frotas → integração PNCP. Emite empenho pelo mesmo primitivo da folha.
 
+**O3-01 — Contratos administrativos (Lei 14.133) ✅.** `procurement_contracts`:
+contrato com fornecedor, objeto, modalidade (pregão, concorrência, dispensa,
+inexigibilidade...), valor/vigência, `valor_empenhado` e saldo, com invariante
+`empenhado ≤ total`. Permissões `contracts.read`/`contracts.manage`.
+`getContracts` (com saldo) e `saveContract` (dedup número/ano; o total não cai
+abaixo do já empenhado). Base para almoxarifado, patrimônio e PNCP. Migration
+`20260909190000_o3_01_contracts.sql`; teste `tests/sprint-contracts.test.mjs`
+verificado por mutação.
+**O3-02 — Almoxarifado (estoque de materiais) ✅.** `material_items` (catálogo +
+saldo em quantidade/valor) e `material_movements` (entrada/saída).
+`recordMaterialMovement`: entrada soma; saída baixa a **custo médio** e nunca
+excede o saldo. `getMaterialItems`/`saveMaterialItem`. Permissões
+`materials.read`/`materials.manage`. Migration
+`20260909200000_o3_02_materials.sql`; teste `tests/sprint-materials.test.mjs`
+verificado por mutação.
+**O3-03 — Patrimônio + depreciação linear (NBC TSP) ✅.** `patrimony_assets`: bem
+com aquisição, residual, vida útil e depreciação acumulada. `depreciateAsset`
+deprecia linear (cotas constantes); a acumulada nunca passa da base depreciável
+(aquisição − residual) e respeita a vida útil (preserva o valor residual).
+`getAssets`/`saveAsset`. Permissões `assets.read`/`assets.manage`. Migration
+`20260909210000_o3_03_assets.sql`; teste `tests/sprint-assets.test.mjs`
+verificado por mutação (remover o cap de meses derruba).
+**O3-04 — Contrato → orçamento ✅.** `commitContractEmpenho`
+(`budget.functions.ts`) empenha uma parcela do contrato (O3-01) contra dotação,
+pelo mesmo primitivo `reserveOnAppropriation` da folha (O2-04) — um contrato
+pode ser empenhado em várias parcelas (execuções/exercícios diferentes), nunca
+acima do saldo do contrato nem da dotação, e só um contrato **vigente** pode ser
+empenhado. `transitionBudgetCommitment` (O2-03) passou a devolver o saldo
+reservado também ao contrato — não só à dotação — quando um empenho de origem
+`contrato` é anulado. CHECK de origem do empenho ampliado para `'contrato'`.
+Migration `20260909220000_o3_04_contract_empenho.sql`; teste
+`tests/sprint-contract-empenho.test.mjs` verificado por mutação.
+Próximo: itens do contrato (materiais/serviços por linha, com quantidade e
+preço unitário) e o vínculo com a licitação que o originou (dispensa/pregão);
+ligar a baixa de estoque (O3-02) à entrada de bem em patrimônio (O3-03) quando
+o material for um bem permanente.
+
 ### Onda 4 — Tributação e Receita (14-20 sem)
 
 Cadastros imobiliário/mobiliário · IPTU, ISS, ITBI · dívida ativa (CDA, execução

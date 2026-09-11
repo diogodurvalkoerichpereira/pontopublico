@@ -299,7 +299,7 @@ type ReserveParams = {
   credor: string;
   historico: string;
   valor: number;
-  source: "manual" | "folha";
+  source: "manual" | "folha" | "contrato";
   sourceRef?: string | null;
   actorId: string;
 };
@@ -529,6 +529,89 @@ export const commitPayrollEmpenho = createServerFn({ method: "POST" })
     });
   });
 
+const CommitContractInput = z.object({
+  tenant_id: z.string().uuid(),
+  contract_id: z.string().uuid(),
+  appropriation_id: z.string().uuid(),
+  data_empenho: z.string().date(),
+  tipo: z.enum(["ordinario", "global", "estimativo"]).default("global"),
+  valor: z.number().positive().max(1_000_000_000_000),
+});
+
+// O3-04 — contrato → orçamento: emite empenho real contra dotação para uma
+// parcela do contrato (O3-01), reservando saldo pelo mesmo primitivo da folha
+// (O2-04). Nunca acima do saldo do contrato (valor_total - valor_empenhado);
+// um contrato pode ser empenhado em várias parcelas (exercícios/exec. diferentes).
+export const commitContractEmpenho = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => CommitContractInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "budget.manage");
+    return withTransaction(async (client) => {
+      const contract = (
+        await client.query<{
+          numero: string;
+          ano: number;
+          fornecedor: string;
+          objeto: string;
+          status: string;
+          valor_total: string;
+          valor_empenhado: string;
+        }>(
+          `select numero, ano, fornecedor, objeto, status,
+             valor_total::text, valor_empenhado::text
+           from public.procurement_contracts
+           where id = $1 and tenant_id = $2 for update`,
+          [data.contract_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!contract) throw new Error("Contrato não encontrado");
+      if (contract.status !== "vigente")
+        throw new Error("Só um contrato vigente pode ser empenhado");
+      const saldoContrato =
+        Number(contract.valor_total) - Number(contract.valor_empenhado);
+      if (data.valor > saldoContrato)
+        throw new Error(
+          `Valor do empenho (${data.valor.toFixed(2)}) excede o saldo do contrato (${saldoContrato.toFixed(2)})`,
+        );
+
+      const result = await reserveOnAppropriation({
+        client,
+        tenantId: data.tenant_id,
+        appropriationId: data.appropriation_id,
+        dataEmpenho: data.data_empenho,
+        tipo: data.tipo,
+        credor: contract.fornecedor,
+        historico: `Contrato nº ${contract.numero}/${contract.ano} — ${contract.objeto}`,
+        valor: data.valor,
+        source: "contrato",
+        sourceRef: data.contract_id,
+        actorId: context.userId,
+      });
+
+      await client.query(
+        `update public.procurement_contracts
+         set valor_empenhado = valor_empenhado + $3, updated_at = now()
+         where id = $1 and tenant_id = $2`,
+        [data.contract_id, data.tenant_id, data.valor],
+      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "commit_contract_empenho",
+        resource: "procurement_contracts",
+        recordId: data.contract_id,
+        after: {
+          commitment_id: result.id,
+          numero: result.numero,
+          valor: data.valor,
+        },
+      });
+      return result;
+    });
+  });
+
 const TransitionInput = z.object({
   tenant_id: z.string().uuid(),
   commitment_id: z.string().uuid(),
@@ -552,8 +635,10 @@ export const transitionBudgetCommitment = createServerFn({ method: "POST" })
           appropriation_id: string;
           valor: string;
           exercicio: number;
+          source: string;
+          source_ref: string | null;
         }>(
-          `select status, appropriation_id, valor::text, exercicio
+          `select status, appropriation_id, valor::text, exercicio, source, source_ref
            from public.budget_commitments
            where id = $1 and tenant_id = $2 for update`,
           [data.commitment_id, data.tenant_id],
@@ -620,6 +705,20 @@ export const transitionBudgetCommitment = createServerFn({ method: "POST" })
            where id = $1 and tenant_id = $2`,
           [commitment.appropriation_id, data.tenant_id, commitment.valor],
         );
+        // Empenho de contrato (O3-04): devolve também o saldo reservado no contrato.
+        if (commitment.source === "contrato" && commitment.source_ref) {
+          await client.query(
+            `select id from public.procurement_contracts
+             where id = $1 and tenant_id = $2 for update`,
+            [commitment.source_ref, data.tenant_id],
+          );
+          await client.query(
+            `update public.procurement_contracts
+             set valor_empenhado = valor_empenhado - $3, updated_at = now()
+             where id = $1 and tenant_id = $2`,
+            [commitment.source_ref, data.tenant_id, commitment.valor],
+          );
+        }
         await client.query(
           `update public.budget_commitments
            set status = 'anulado', anulado_em = now(), anulado_por = $3,
