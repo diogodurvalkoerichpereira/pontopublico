@@ -318,3 +318,97 @@ export const createBudgetCommitment = createServerFn({ method: "POST" })
       return { id, numero };
     });
   });
+
+const TransitionInput = z.object({
+  tenant_id: z.string().uuid(),
+  commitment_id: z.string().uuid(),
+  action: z.enum(["liquidar", "pagar", "anular"]),
+  motivo: z.string().trim().max(500).optional(),
+});
+
+// Estágios da despesa (Lei 4.320): empenhado -> liquidado -> pago. Anular devolve
+// o saldo reservado à dotação. Molde de transitionPayrollCycle (lock + valida o
+// estado de origem + carimba o marco).
+export const transitionBudgetCommitment = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => TransitionInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "budget.manage");
+    return withTransaction(async (client) => {
+      const commitment = (
+        await client.query<{
+          status: string;
+          appropriation_id: string;
+          valor: string;
+        }>(
+          `select status, appropriation_id, valor::text
+           from public.budget_commitments
+           where id = $1 and tenant_id = $2 for update`,
+          [data.commitment_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!commitment) throw new Error("Empenho não encontrado");
+
+      if (data.action === "liquidar") {
+        if (commitment.status !== "empenhado")
+          throw new Error("Só um empenho no estágio 'empenhado' pode liquidar");
+        await client.query(
+          `update public.budget_commitments
+           set status = 'liquidado', liquidado_em = now(), liquidado_por = $3
+           where id = $1 and tenant_id = $2`,
+          [data.commitment_id, data.tenant_id, context.userId],
+        );
+      } else if (data.action === "pagar") {
+        if (commitment.status !== "liquidado")
+          throw new Error("Só um empenho liquidado pode ser pago");
+        await client.query(
+          `update public.budget_commitments
+           set status = 'pago', pago_em = now(), pago_por = $3
+           where id = $1 and tenant_id = $2`,
+          [data.commitment_id, data.tenant_id, context.userId],
+        );
+      } else {
+        // anular
+        if (commitment.status === "pago")
+          throw new Error("Empenho pago não pode ser anulado");
+        if (commitment.status === "anulado")
+          throw new Error("Empenho já está anulado");
+        // Devolve o saldo reservado à dotação (lock antes de escrever).
+        await client.query(
+          `select id from public.budget_appropriations
+           where id = $1 and tenant_id = $2 for update`,
+          [commitment.appropriation_id, data.tenant_id],
+        );
+        await client.query(
+          `update public.budget_appropriations
+           set valor_empenhado = valor_empenhado - $3, updated_at = now()
+           where id = $1 and tenant_id = $2`,
+          [commitment.appropriation_id, data.tenant_id, commitment.valor],
+        );
+        await client.query(
+          `update public.budget_commitments
+           set status = 'anulado', anulado_em = now(), anulado_por = $3,
+               anulado_motivo = $4
+           where id = $1 and tenant_id = $2`,
+          [
+            data.commitment_id,
+            data.tenant_id,
+            context.userId,
+            data.motivo ?? null,
+          ],
+        );
+      }
+
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: data.action,
+        resource: "budget_commitments",
+        recordId: data.commitment_id,
+        before: { status: commitment.status },
+        after: { action: data.action, motivo: data.motivo ?? null },
+      });
+      return { id: data.commitment_id, action: data.action };
+    });
+  });

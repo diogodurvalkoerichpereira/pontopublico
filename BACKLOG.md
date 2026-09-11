@@ -497,9 +497,18 @@ com numeração sequencial por exercício (contador travado, molde do NSR do pon
 `createBudgetCommitment`/`getBudgetCommitments`. Migration
 `20260909130000_o2_02_budget_commitments.sql`; teste
 `tests/sprint-budget-commitment.test.mjs` verificado por mutação.
-Próximo: **O2-03** — liquidação e pagamento (estágios seguintes) reusando o motor de
-estados de `payroll_cycles`; e **O2-04** — ligar a requisição de empenho da folha
-(O1-08) a este empenho, fechando folha → orçamento.
+**O2-03 — Liquidação, pagamento e anulação ✅.** Estágios da despesa (Lei 4.320
+arts. 63–64) como máquina de estados sobre `budget_commitments`:
+empenhado→liquidado→pago (`transitionBudgetCommitment`, valida o estágio de
+origem e carimba o marco), e **anular devolve o saldo** reservado à dotação
+(empenho pago não anula). Migration
+`20260909140000_o2_03_commitment_stages.sql`; teste
+`tests/sprint-budget-stages.test.mjs` verificado por mutação.
+Pendente de endurecimento: exigir MFA nas transições financeiras (molde
+`requireCriticalMfa` da folha) — registrado.
+Próximo: **O2-04** — ligar a requisição de empenho da folha (O1-08) a um empenho
+real contra dotação, fechando folha → orçamento; depois restos a pagar e a
+escrituração PCASP (partidas dobradas).
 
 ### Onda 3 — Materiais e Contratações (14-18 sem)
 
