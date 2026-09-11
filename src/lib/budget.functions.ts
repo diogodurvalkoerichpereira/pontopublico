@@ -223,99 +223,234 @@ const CommitInput = z.object({
   valor: z.number().positive().max(1_000_000_000_000),
 });
 
-// Empenha: reserva `valor` no saldo da dotação, atômico. Nunca acima do saldo
-// (orçado - empenhado). Numeração serializada por um contador do exercício
-// travado FOR UPDATE (molde do NSR do ponto).
+// Núcleo do empenho: reserva `valor` no saldo da dotação, atômico. Nunca acima do
+// saldo (orçado - empenhado). Numeração serializada por um contador do exercício
+// travado FOR UPDATE (molde do NSR do ponto). Reusado pelo empenho manual e pelo
+// empenho da folha (O2-04). A transação é do chamador.
+type ReserveParams = {
+  client: import("pg").PoolClient;
+  tenantId: string;
+  appropriationId: string;
+  dataEmpenho: string;
+  tipo: "ordinario" | "global" | "estimativo";
+  credor: string;
+  historico: string;
+  valor: number;
+  source: "manual" | "folha";
+  sourceRef?: string | null;
+  actorId: string;
+};
+
+async function reserveOnAppropriation(params: ReserveParams) {
+  const { client } = params;
+  const appropriation = (
+    await client.query<{
+      exercicio: number;
+      valor_orcado: string;
+      valor_empenhado: string;
+      status: string;
+    }>(
+      `select exercicio, valor_orcado::text, valor_empenhado::text, status
+       from public.budget_appropriations
+       where id = $1 and tenant_id = $2 for update`,
+      [params.appropriationId, params.tenantId],
+    )
+  ).rows[0];
+  if (!appropriation) throw new Error("Dotação não encontrada");
+  if (appropriation.status !== "ativa")
+    throw new Error("Dotação não está ativa para empenho");
+  const saldo =
+    Number(appropriation.valor_orcado) - Number(appropriation.valor_empenhado);
+  if (params.valor > saldo)
+    throw new Error(
+      `Valor do empenho (${params.valor.toFixed(2)}) excede o saldo da dotação (${saldo.toFixed(2)})`,
+    );
+
+  await client.query(
+    `insert into public.budget_commitment_counters (tenant_id, exercicio)
+     values ($1, $2) on conflict do nothing`,
+    [params.tenantId, appropriation.exercicio],
+  );
+  const counter = (
+    await client.query<{ last_numero: string }>(
+      `select last_numero::text from public.budget_commitment_counters
+       where tenant_id = $1 and exercicio = $2 for update`,
+      [params.tenantId, appropriation.exercicio],
+    )
+  ).rows[0];
+  const numero = Number(counter.last_numero) + 1;
+  await client.query(
+    `update public.budget_commitment_counters set last_numero = $3
+     where tenant_id = $1 and exercicio = $2`,
+    [params.tenantId, appropriation.exercicio, numero],
+  );
+
+  const id = randomUUID();
+  await client.query(
+    `insert into public.budget_commitments
+       (id, tenant_id, appropriation_id, exercicio, numero, data_empenho,
+        tipo, credor, historico, valor, status, source, source_ref, created_by)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'empenhado',$11,$12,$13)`,
+    [
+      id,
+      params.tenantId,
+      params.appropriationId,
+      appropriation.exercicio,
+      numero,
+      params.dataEmpenho,
+      params.tipo,
+      params.credor,
+      params.historico,
+      params.valor,
+      params.source,
+      params.sourceRef ?? null,
+      params.actorId,
+    ],
+  );
+  await client.query(
+    `update public.budget_appropriations
+     set valor_empenhado = valor_empenhado + $3, updated_at = now()
+     where id = $1 and tenant_id = $2`,
+    [params.appropriationId, params.tenantId, params.valor],
+  );
+  await recordAudit(client, {
+    tenantId: params.tenantId,
+    actorId: params.actorId,
+    action: "commit",
+    resource: "budget_commitments",
+    recordId: id,
+    after: {
+      appropriation_id: params.appropriationId,
+      numero,
+      valor: params.valor,
+      credor: params.credor,
+      source: params.source,
+    },
+  });
+  return { id, numero };
+}
+
 export const createBudgetCommitment = createServerFn({ method: "POST" })
   .middleware([requireAuth])
   .validator((data: unknown) => CommitInput.parse(data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "budget.manage");
+    return withTransaction((client) =>
+      reserveOnAppropriation({
+        client,
+        tenantId: data.tenant_id,
+        appropriationId: data.appropriation_id,
+        dataEmpenho: data.data_empenho,
+        tipo: data.tipo,
+        credor: data.credor,
+        historico: data.historico,
+        valor: data.valor,
+        source: "manual",
+        actorId: context.userId,
+      }),
+    );
+  });
+
+const CommitPayrollInput = z.object({
+  tenant_id: z.string().uuid(),
+  request_id: z.string().uuid(),
+  data_empenho: z.string().date(),
+  // Cada linha da requisição (por natureza) empenhada contra uma dotação.
+  allocations: z
+    .array(
+      z.object({
+        line_id: z.string().uuid(),
+        appropriation_id: z.string().uuid(),
+      }),
+    )
+    .min(1)
+    .max(200),
+});
+
+// O2-04 — folha → orçamento: transforma a requisição de empenho da folha (O1-08)
+// em empenhos reais contra dotação, um por linha (natureza), reservando saldo.
+// Exige que TODA linha seja alocada; idempotente (a requisição vira 'empenhada').
+export const commitPayrollEmpenho = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => CommitPayrollInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "budget.manage");
     return withTransaction(async (client) => {
-      const appropriation = (
+      const request = (
         await client.query<{
-          exercicio: number;
-          valor_orcado: string;
-          valor_empenhado: string;
           status: string;
+          reference_month: string;
         }>(
-          `select exercicio, valor_orcado::text, valor_empenhado::text, status
-           from public.budget_appropriations
+          `select status, reference_month::text from public.payroll_empenho_requests
            where id = $1 and tenant_id = $2 for update`,
-          [data.appropriation_id, data.tenant_id],
+          [data.request_id, data.tenant_id],
         )
       ).rows[0];
-      if (!appropriation) throw new Error("Dotação não encontrada");
-      if (appropriation.status !== "ativa")
-        throw new Error("Dotação não está ativa para empenho");
-      const saldo =
-        Number(appropriation.valor_orcado) -
-        Number(appropriation.valor_empenhado);
-      if (data.valor > saldo)
+      if (!request) throw new Error("Requisição de empenho não encontrada");
+      if (request.status === "empenhada")
+        throw new Error("Requisição já foi empenhada");
+      if (request.status !== "emitida")
+        throw new Error("Só uma requisição emitida pode ser empenhada");
+
+      const lines = (
+        await client.query<{
+          id: string;
+          natureza_despesa: string;
+          description: string;
+          amount: string;
+        }>(
+          `select id, natureza_despesa, description, amount::text
+           from public.payroll_empenho_request_lines
+           where request_id = $1 and tenant_id = $2`,
+          [data.request_id, data.tenant_id],
+        )
+      ).rows;
+      const allocByLine = new Map(
+        data.allocations.map((a) => [a.line_id, a.appropriation_id]),
+      );
+      if (
+        allocByLine.size !== data.allocations.length ||
+        lines.length !== allocByLine.size ||
+        !lines.every((line) => allocByLine.has(line.id))
+      )
         throw new Error(
-          `Valor do empenho (${data.valor.toFixed(2)}) excede o saldo da dotação (${saldo.toFixed(2)})`,
+          "Cada linha da requisição deve ser alocada a exatamente uma dotação",
         );
 
-      await client.query(
-        `insert into public.budget_commitment_counters (tenant_id, exercicio)
-         values ($1, $2) on conflict do nothing`,
-        [data.tenant_id, appropriation.exercicio],
-      );
-      const counter = (
-        await client.query<{ last_numero: string }>(
-          `select last_numero::text from public.budget_commitment_counters
-           where tenant_id = $1 and exercicio = $2 for update`,
-          [data.tenant_id, appropriation.exercicio],
-        )
-      ).rows[0];
-      const numero = Number(counter.last_numero) + 1;
-      await client.query(
-        `update public.budget_commitment_counters set last_numero = $3
-         where tenant_id = $1 and exercicio = $2`,
-        [data.tenant_id, appropriation.exercicio, numero],
-      );
+      const commitments: Array<{ id: string; numero: number }> = [];
+      for (const line of lines) {
+        const result = await reserveOnAppropriation({
+          client,
+          tenantId: data.tenant_id,
+          appropriationId: allocByLine.get(line.id)!,
+          dataEmpenho: data.data_empenho,
+          tipo: "ordinario",
+          credor: "Folha de pagamento",
+          historico: `Folha ${request.reference_month.slice(0, 7)} — ${line.description}`,
+          valor: Number(line.amount),
+          source: "folha",
+          sourceRef: data.request_id,
+          actorId: context.userId,
+        });
+        commitments.push(result);
+      }
 
-      const id = randomUUID();
       await client.query(
-        `insert into public.budget_commitments
-           (id, tenant_id, appropriation_id, exercicio, numero, data_empenho,
-            tipo, credor, historico, valor, status, source, created_by)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'empenhado','manual',$11)`,
-        [
-          id,
-          data.tenant_id,
-          data.appropriation_id,
-          appropriation.exercicio,
-          numero,
-          data.data_empenho,
-          data.tipo,
-          data.credor,
-          data.historico,
-          data.valor,
-          context.userId,
-        ],
-      );
-      await client.query(
-        `update public.budget_appropriations
-         set valor_empenhado = valor_empenhado + $3, updated_at = now()
+        `update public.payroll_empenho_requests set status = 'empenhada'
          where id = $1 and tenant_id = $2`,
-        [data.appropriation_id, data.tenant_id, data.valor],
+        [data.request_id, data.tenant_id],
       );
       await recordAudit(client, {
         tenantId: data.tenant_id,
         actorId: context.userId,
-        action: "commit",
-        resource: "budget_commitments",
-        recordId: id,
-        after: {
-          appropriation_id: data.appropriation_id,
-          numero,
-          valor: data.valor,
-          credor: data.credor,
-        },
+        action: "commit_payroll_empenho",
+        resource: "payroll_empenho_requests",
+        recordId: data.request_id,
+        after: { commitments: commitments.length },
       });
-      return { id, numero };
+      return { commitments };
     });
   });
 

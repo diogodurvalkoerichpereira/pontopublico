@@ -506,9 +506,15 @@ origem e carimba o marco), e **anular devolve o saldo** reservado à dotação
 `tests/sprint-budget-stages.test.mjs` verificado por mutação.
 Pendente de endurecimento: exigir MFA nas transições financeiras (molde
 `requireCriticalMfa` da folha) — registrado.
-Próximo: **O2-04** — ligar a requisição de empenho da folha (O1-08) a um empenho
-real contra dotação, fechando folha → orçamento; depois restos a pagar e a
-escrituração PCASP (partidas dobradas).
+**O2-04 — Folha → orçamento ✅.** `commitPayrollEmpenho` transforma a requisição
+de empenho da folha (O1-08) em empenhos reais contra dotação (O2-02), um por linha
+(natureza), reservando saldo; exige alocar toda linha e marca a requisição como
+`empenhada` (idempotente). O núcleo de reserva foi extraído em
+`reserveOnAppropriation`, reusado pelo empenho manual e pelo da folha. Migration
+`20260909150000_o2_04_payroll_empenho_committed.sql`; teste
+`tests/sprint-folha-empenho.test.mjs` verificado por mutação.
+Próximo: **O2-05** — restos a pagar (empenhos não pagos no encerramento) e a
+escrituração PCASP (partidas dobradas: VPD/VPA e as classes 5/6 de controle).
 
 ### Onda 3 — Materiais e Contratações (14-18 sem)
 
