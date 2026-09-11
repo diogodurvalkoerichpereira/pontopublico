@@ -30,6 +30,7 @@ import {
   type EmploymentLinkView,
   type PersonRegistryRow,
 } from "@/lib/people.functions";
+import { getPensionRegimes } from "@/lib/pension-regimes.functions";
 
 export const Route = createFileRoute("/rh/pessoas")({ component: Page });
 
@@ -45,6 +46,7 @@ type FormState = {
   phone: string;
   registrationNumber: string;
   unitId: string;
+  pensionRegimeId: string;
   employmentType: string;
   workRegime: string;
   jobTitle: string;
@@ -67,6 +69,7 @@ const emptyForm = (): FormState => ({
   phone: "",
   registrationNumber: "",
   unitId: "",
+  pensionRegimeId: "",
   employmentType: "",
   workRegime: "",
   jobTitle: "",
@@ -133,6 +136,15 @@ function Content() {
     enabled: Boolean(activeTenant),
     queryFn: () => listUnits({ data: { tenant_id: activeTenant!.id } }),
   });
+  const listRegimes = useServerFn(getPensionRegimes);
+  const { data: regimeData } = useQuery({
+    queryKey: ["people-pension-regimes", activeTenant?.id],
+    enabled: Boolean(activeTenant),
+    queryFn: () => listRegimes({ data: { tenant_id: activeTenant!.id } }),
+  });
+  const regimes = (regimeData?.regimes ?? []).filter(
+    (r) => r.status === "ativo",
+  );
 
   const openNew = () => {
     setForm(emptyForm());
@@ -152,6 +164,7 @@ function Content() {
       motherName: person.mother_name ?? "",
       registrationNumber: link?.registration_number ?? "",
       unitId: link?.unit_id ?? "",
+      pensionRegimeId: link?.pension_regime_id ?? "",
       employmentType: link?.employment_type ?? "",
       workRegime: link?.work_regime ?? "",
       jobTitle: link?.job_title ?? "",
@@ -187,6 +200,7 @@ function Content() {
             id: form.linkId,
             registration_number: form.registrationNumber,
             unit_id: form.unitId || null,
+            pension_regime_id: form.pensionRegimeId || null,
             employment_type: form.employmentType || null,
             work_regime: form.workRegime || null,
             job_title: form.jobTitle || null,
@@ -417,6 +431,15 @@ function Content() {
                 options={units.map((u) => ({
                   value: u.id,
                   label: `${u.codigo} · ${u.nome}`,
+                }))}
+              />
+              <SelectField
+                label="Regime previdenciário"
+                value={form.pensionRegimeId}
+                set={(pensionRegimeId) => setForm({ ...form, pensionRegimeId })}
+                options={regimes.map((r) => ({
+                  value: r.id,
+                  label: `${r.code} · ${r.name}`,
                 }))}
               />
               <Field
