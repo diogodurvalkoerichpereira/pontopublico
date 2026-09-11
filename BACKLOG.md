@@ -609,8 +609,10 @@ Entregue (base): O5-01 protocolo/processo eletrônico (numeração sequencial po
 ano + tramitação); O5-02 Portal da Transparência (relatório consolidado, LAI);
 O5-03 ouvidoria (Lei 13.460 — manifestações denúncia/reclamação/sugestão/elogio/
 informação/solicitação, numeração por ano, prazo e ciclo recebida→respondida,
-reusa `protocol.*`). Pendente: assinatura ICP-Brasil, e-SIC integrado, dados
-abertos publicáveis, controle interno.
+reusa `protocol.*`); O5-04 e-SIC (LAI Lei 12.527 — pedidos de acesso à informação,
+prazo de 20 dias prorrogável +10 uma vez, ciclo recebido→prorrogado→respondido/
+indeferido, reusa `protocol.*`). Pendente: assinatura ICP-Brasil, dados abertos
+publicáveis, controle interno.
 
 ### Onda 6 — Conformidade contínua ⚠️ (contínuo)
 
