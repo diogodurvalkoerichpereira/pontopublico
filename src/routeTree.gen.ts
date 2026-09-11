@@ -14,6 +14,7 @@ import { Route as TesourariaRouteImport } from './routes/tesouraria'
 import { Route as RhRouteImport } from './routes/rh'
 import { Route as PortalFinanceiroRouteImport } from './routes/portal-financeiro'
 import { Route as PontoRouteImport } from './routes/ponto'
+import { Route as PatrimonioRouteImport } from './routes/patrimonio'
 import { Route as OuvidoriaRouteImport } from './routes/ouvidoria'
 import { Route as OrcamentoRouteImport } from './routes/orcamento'
 import { Route as MeusDocumentosRouteImport } from './routes/meus-documentos'
@@ -73,6 +74,11 @@ const PortalFinanceiroRoute = PortalFinanceiroRouteImport.update({
 const PontoRoute = PontoRouteImport.update({
   id: '/ponto',
   path: '/ponto',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PatrimonioRoute = PatrimonioRouteImport.update({
+  id: '/patrimonio',
+  path: '/patrimonio',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OuvidoriaRoute = OuvidoriaRouteImport.update({
@@ -261,6 +267,7 @@ export interface FileRoutesByFullPath {
   '/meus-documentos': typeof MeusDocumentosRoute
   '/orcamento': typeof OrcamentoRoute
   '/ouvidoria': typeof OuvidoriaRoute
+  '/patrimonio': typeof PatrimonioRoute
   '/ponto': typeof PontoRoute
   '/portal-financeiro': typeof PortalFinanceiroRoute
   '/rh': typeof RhRouteWithChildren
@@ -303,6 +310,7 @@ export interface FileRoutesByTo {
   '/meus-documentos': typeof MeusDocumentosRoute
   '/orcamento': typeof OrcamentoRoute
   '/ouvidoria': typeof OuvidoriaRoute
+  '/patrimonio': typeof PatrimonioRoute
   '/ponto': typeof PontoRoute
   '/portal-financeiro': typeof PortalFinanceiroRoute
   '/rh': typeof RhRouteWithChildren
@@ -346,6 +354,7 @@ export interface FileRoutesById {
   '/meus-documentos': typeof MeusDocumentosRoute
   '/orcamento': typeof OrcamentoRoute
   '/ouvidoria': typeof OuvidoriaRoute
+  '/patrimonio': typeof PatrimonioRoute
   '/ponto': typeof PontoRoute
   '/portal-financeiro': typeof PortalFinanceiroRoute
   '/rh': typeof RhRouteWithChildren
@@ -390,6 +399,7 @@ export interface FileRouteTypes {
     | '/meus-documentos'
     | '/orcamento'
     | '/ouvidoria'
+    | '/patrimonio'
     | '/ponto'
     | '/portal-financeiro'
     | '/rh'
@@ -432,6 +442,7 @@ export interface FileRouteTypes {
     | '/meus-documentos'
     | '/orcamento'
     | '/ouvidoria'
+    | '/patrimonio'
     | '/ponto'
     | '/portal-financeiro'
     | '/rh'
@@ -474,6 +485,7 @@ export interface FileRouteTypes {
     | '/meus-documentos'
     | '/orcamento'
     | '/ouvidoria'
+    | '/patrimonio'
     | '/ponto'
     | '/portal-financeiro'
     | '/rh'
@@ -517,6 +529,7 @@ export interface RootRouteChildren {
   MeusDocumentosRoute: typeof MeusDocumentosRoute
   OrcamentoRoute: typeof OrcamentoRoute
   OuvidoriaRoute: typeof OuvidoriaRoute
+  PatrimonioRoute: typeof PatrimonioRoute
   PontoRoute: typeof PontoRoute
   PortalFinanceiroRoute: typeof PortalFinanceiroRoute
   RhRoute: typeof RhRouteWithChildren
@@ -567,6 +580,13 @@ declare module '@tanstack/react-router' {
       path: '/ponto'
       fullPath: '/ponto'
       preLoaderRoute: typeof PontoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/patrimonio': {
+      id: '/patrimonio'
+      path: '/patrimonio'
+      fullPath: '/patrimonio'
+      preLoaderRoute: typeof PatrimonioRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/ouvidoria': {
@@ -890,6 +910,7 @@ const rootRouteChildren: RootRouteChildren = {
   MeusDocumentosRoute: MeusDocumentosRoute,
   OrcamentoRoute: OrcamentoRoute,
   OuvidoriaRoute: OuvidoriaRoute,
+  PatrimonioRoute: PatrimonioRoute,
   PontoRoute: PontoRoute,
   PortalFinanceiroRoute: PortalFinanceiroRoute,
   RhRoute: RhRouteWithChildren,

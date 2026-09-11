@@ -41,6 +41,7 @@ import {
   PiggyBank,
   FileSignature,
   Boxes,
+  Building,
 } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
 import { SupportWidget } from "@/components/SupportWidget";
@@ -366,6 +367,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       to: "/almoxarifado",
       label: "Almoxarifado",
       icon: Boxes,
+      section: "Materiais e Patrimônio",
+    });
+  if (hasTenantPermission("assets.read"))
+    items.push({
+      to: "/patrimonio",
+      label: "Patrimônio",
+      icon: Building,
       section: "Materiais e Patrimônio",
     });
   if (hasTenantPermission("protocol.read"))
