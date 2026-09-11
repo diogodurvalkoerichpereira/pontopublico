@@ -45,6 +45,7 @@ import {
   FileStack,
   Gavel,
   Car,
+  FileSearch,
 } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
 import { SupportWidget } from "@/components/SupportWidget";
@@ -405,6 +406,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       to: "/ouvidoria",
       label: "Ouvidoria",
       icon: MessageSquareWarning,
+      section: "Controle e Transparência",
+    });
+  if (hasTenantPermission("protocol.read"))
+    items.push({
+      to: "/esic",
+      label: "e-SIC",
+      icon: FileSearch,
       section: "Controle e Transparência",
     });
   if (hasTenantPermission("manager.dashboard.read"))
