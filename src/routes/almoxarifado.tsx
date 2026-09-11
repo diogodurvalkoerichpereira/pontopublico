@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Boxes, Plus, ArrowDownUp } from "lucide-react";
+import { Boxes, Plus, ArrowDownUp, ScrollText } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,7 @@ import {
   saveMaterialItem,
   recordMaterialMovement,
   getMaterialInventory,
+  getMaterialLedger,
 } from "@/lib/materials.functions";
 
 export const Route = createFileRoute("/almoxarifado")({ component: Page });
@@ -62,6 +63,16 @@ type InventoryLine = {
   saldo_valor: number;
 };
 
+type LedgerMovement = {
+  id: string;
+  tipo: "entrada" | "saida";
+  quantidade: number;
+  valor_unitario: number;
+  data_movimento: string;
+  historico: string;
+  saldo_quantidade: number;
+};
+
 const CATEGORIA_LABEL: Record<string, string> = {
   consumo: "Consumo",
   permanente: "Permanente",
@@ -77,11 +88,16 @@ function Content() {
   const saveItem = useServerFn(saveMaterialItem);
   const move = useServerFn(recordMaterialMovement);
   const loadInventory = useServerFn(getMaterialInventory);
+  const loadLedger = useServerFn(getMaterialLedger);
   const qc = useQueryClient();
 
   const [itemOpen, setItemOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  const [ledgerOpen, setLedgerOpen] = useState(false);
+  const [ledgerItem, setLedgerItem] = useState<Item | null>(null);
+  const [ledger, setLedger] = useState<LedgerMovement[]>([]);
 
   const [codigo, setCodigo] = useState("");
   const [nome, setNome] = useState("");
@@ -143,6 +159,21 @@ function Content() {
       toast.error(error instanceof Error ? error.message : "Falha ao salvar");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const openLedger = async (item: Item) => {
+    if (!activeTenant) return;
+    setLedgerItem(item);
+    setLedger([]);
+    setLedgerOpen(true);
+    try {
+      const r = await loadLedger({
+        data: { tenant_id: activeTenant.id, item_id: item.id },
+      });
+      setLedger(r.movimentos as LedgerMovement[]);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha na razão");
     }
   };
 
@@ -241,6 +272,7 @@ function Content() {
               <th className="p-3 font-semibold text-right">Qtd</th>
               <th className="p-3 font-semibold text-right">Valor</th>
               <th className="p-3 font-semibold">Situação</th>
+              <th className="p-3 font-semibold text-right">Razão</th>
             </tr>
           </thead>
           <tbody>
@@ -267,12 +299,21 @@ function Content() {
                     {i.status}
                   </Badge>
                 </td>
+                <td className="p-3 text-right">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => openLedger(i)}
+                  >
+                    <ScrollText className="size-4" />
+                  </Button>
+                </td>
               </tr>
             ))}
             {items.length === 0 && (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={8}
                   className="p-6 text-center text-muted-foreground"
                 >
                   Nenhum item cadastrado.
@@ -405,6 +446,62 @@ function Content() {
               Registrar
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Razão (kardex) */}
+      <Dialog open={ledgerOpen} onOpenChange={setLedgerOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              Razão — {ledgerItem?.codigo} {ledgerItem?.nome}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b bg-muted/40 text-left">
+                <tr>
+                  <th className="p-2 font-semibold">Data</th>
+                  <th className="p-2 font-semibold">Histórico</th>
+                  <th className="p-2 font-semibold">Tipo</th>
+                  <th className="p-2 font-semibold text-right">Qtd</th>
+                  <th className="p-2 font-semibold text-right">Saldo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ledger.map((m) => (
+                  <tr key={m.id} className="border-b last:border-0">
+                    <td className="p-2">{m.data_movimento}</td>
+                    <td className="p-2">{m.historico}</td>
+                    <td className="p-2">
+                      <Badge
+                        variant={m.tipo === "entrada" ? "default" : "secondary"}
+                      >
+                        {m.tipo}
+                      </Badge>
+                    </td>
+                    <td className="p-2 text-right tabular-nums">
+                      {m.tipo === "saida" ? "−" : "+"}
+                      {m.quantidade}
+                    </td>
+                    <td className="p-2 text-right tabular-nums font-medium">
+                      {m.saldo_quantidade}
+                    </td>
+                  </tr>
+                ))}
+                {ledger.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      className="p-6 text-center text-muted-foreground"
+                    >
+                      Sem movimentação.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </DialogContent>
       </Dialog>
     </section>

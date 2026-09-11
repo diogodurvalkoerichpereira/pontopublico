@@ -112,6 +112,72 @@ export const saveMaterialItem = createServerFn({ method: "POST" })
     return { id };
   });
 
+const LedgerInput = z.object({
+  tenant_id: z.string().uuid(),
+  item_id: z.string().uuid(),
+});
+
+// O3-18 — Razão (kardex) do material: relê as movimentações do item em ordem
+// cronológica e recompõe o saldo em quantidade a cada linha (entrada soma, saída
+// subtrai). É a trilha de auditoria do estoque; o saldo corrente final deve bater
+// com o saldo do próprio item. Reusa materials.read.
+export const getMaterialLedger = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => LedgerInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "materials.read");
+    const item = await queryOne<{
+      codigo: string;
+      nome: string;
+      unidade: string;
+      saldo_quantidade: string;
+    }>(
+      `select codigo, nome, unidade, saldo_quantidade::text
+       from public.material_items where id=$1 and tenant_id=$2`,
+      [data.item_id, data.tenant_id],
+    );
+    if (!item) throw new Error("Material não encontrado");
+    const rows = await query<{
+      id: string;
+      tipo: "entrada" | "saida";
+      quantidade: string;
+      valor_unitario: string;
+      data_movimento: string;
+      historico: string;
+    }>(
+      `select id, tipo, quantidade::text, valor_unitario::text,
+         data_movimento::text, historico
+       from public.material_movements
+       where item_id=$1 and tenant_id=$2
+       order by data_movimento, created_at, id`,
+      [data.item_id, data.tenant_id],
+    );
+    let saldo = 0;
+    const movimentos = rows.map((m) => {
+      const qtd = Number(m.quantidade);
+      saldo = round3(saldo + (m.tipo === "entrada" ? qtd : -qtd));
+      return {
+        id: m.id,
+        tipo: m.tipo,
+        quantidade: qtd,
+        valor_unitario: Number(m.valor_unitario),
+        data_movimento: m.data_movimento,
+        historico: m.historico,
+        saldo_quantidade: saldo,
+      };
+    });
+    return {
+      item: {
+        codigo: item.codigo,
+        nome: item.nome,
+        unidade: item.unidade,
+        saldo_quantidade: Number(item.saldo_quantidade),
+      },
+      movimentos,
+    };
+  });
+
 const MovementInput = z.object({
   tenant_id: z.string().uuid(),
   item_id: z.string().uuid(),

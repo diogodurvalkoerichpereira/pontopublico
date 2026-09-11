@@ -749,6 +749,13 @@ licitação não homologada derruba).
 Próximo: ligar a baixa de estoque (O3-02) à entrada de bem em patrimônio (O3-03)
 quando o material for um bem permanente; remessa ao PNCP (externo, homologação).
 
+**O3-18 — Razão (kardex) de movimentação de material ✅.** `getMaterialLedger` relê as
+movimentações do item em ordem cronológica e recompõe o saldo em quantidade linha a linha
+(entrada soma, saída subtrai); o saldo corrente final bate com o saldo do próprio item.
+Sem migration, reusa `materials.read`; `/almoxarifado` ganha a ação Razão por item.
+Teste `tests/sprint-material-ledger.test.mjs` verificado por mutação (inverter o sinal da
+saída no saldo corrente derruba).
+
 **O3-17 — Classificação de material + inventário por categoria ✅.** Material ganha
 `categoria` (consumo/permanente): consumo baixa por VPD de consumo, permanente tende ao
 patrimônio. `getMaterialInventory` totaliza itens e saldos (quantidade/valor) por
