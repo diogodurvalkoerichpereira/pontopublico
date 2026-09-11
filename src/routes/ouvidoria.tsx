@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { MessageSquareWarning, Plus, Reply } from "lucide-react";
+import { MessageSquareWarning, Plus, Reply, Star } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,10 @@ import {
   openManifestation,
   respondManifestation,
 } from "@/lib/ombudsman.functions";
+import {
+  getOmbudsmanSatisfaction,
+  rateManifestation,
+} from "@/lib/ombudsman-satisfaction.functions";
 
 export const Route = createFileRoute("/ouvidoria")({ component: Page });
 
@@ -80,12 +84,17 @@ function Content() {
   const load = useServerFn(getManifestations);
   const open = useServerFn(openManifestation);
   const respond = useServerFn(respondManifestation);
+  const loadSatisfaction = useServerFn(getOmbudsmanSatisfaction);
+  const rate = useServerFn(rateManifestation);
   const qc = useQueryClient();
 
   const [openDialog, setOpenDialog] = useState(false);
   const [respondOpen, setRespondOpen] = useState(false);
   const [target, setTarget] = useState<Manifestation | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const [rateTarget, setRateTarget] = useState<Manifestation | null>(null);
+  const [nota, setNota] = useState("5");
 
   const [tipo, setTipo] = useState("reclamacao");
   const [canal, setCanal] = useState("web");
@@ -102,8 +111,40 @@ function Content() {
   const items = (data?.manifestations ?? []) as Manifestation[];
   const canManage = data?.canManage ?? false;
 
-  const refresh = () =>
+  const { data: satisfaction } = useQuery({
+    queryKey: ["ombudsman-satisfaction", activeTenant?.id],
+    enabled: Boolean(activeTenant),
+    queryFn: () => loadSatisfaction({ data: { tenant_id: activeTenant!.id } }),
+  });
+
+  const refresh = () => {
     qc.invalidateQueries({ queryKey: ["ombudsman", activeTenant?.id] });
+    qc.invalidateQueries({
+      queryKey: ["ombudsman-satisfaction", activeTenant?.id],
+    });
+  };
+
+  const submitRate = async () => {
+    if (!activeTenant || !rateTarget) return;
+    setBusy(true);
+    try {
+      await rate({
+        data: {
+          tenant_id: activeTenant.id,
+          manifestation_id: rateTarget.id,
+          nota: Number(nota),
+          avaliado_em: new Date().toISOString().slice(0, 10),
+        },
+      });
+      toast.success("Avaliação registrada");
+      setRateTarget(null);
+      refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao avaliar");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const openNew = () => {
     setTipo("reclamacao");
@@ -197,6 +238,22 @@ function Content() {
         )}
       </div>
 
+      <div className="rounded-xl border bg-card p-4 flex items-center gap-3">
+        <Star className="size-5 text-amber-500" />
+        <div>
+          <div className="text-sm text-muted-foreground">
+            Satisfação do cidadão (Lei 13.460)
+          </div>
+          <div className="text-xl font-bold">
+            {(satisfaction?.media ?? 0).toFixed(2)} / 5,00
+            <span className="text-sm font-normal text-muted-foreground">
+              {" "}
+              — {satisfaction?.total ?? 0} avaliações
+            </span>
+          </div>
+        </div>
+      </div>
+
       <div className="rounded-xl border bg-card overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="border-b bg-muted/40 text-left">
@@ -239,6 +296,18 @@ function Content() {
                         onClick={() => openRespond(m)}
                       >
                         <Reply className="size-4" /> Responder
+                      </Button>
+                    )}
+                    {m.status === "respondida" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setRateTarget(m);
+                          setNota("5");
+                        }}
+                      >
+                        <Star className="size-4" /> Avaliar
                       </Button>
                     )}
                   </td>
@@ -343,6 +412,42 @@ function Content() {
           <DialogFooter>
             <Button onClick={submitRespond} disabled={busy}>
               Enviar resposta
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Avaliar (Lei 13.460 art. 23) */}
+      <Dialog
+        open={Boolean(rateTarget)}
+        onOpenChange={(o) => !o && setRateTarget(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Avaliar atendimento — {rateTarget?.numero}/{rateTarget?.ano}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Nota (1 a 5)</Label>
+              <Select value={nota} onValueChange={setNota}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {["1", "2", "3", "4", "5"].map((n) => (
+                    <SelectItem key={n} value={n}>
+                      {n}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={submitRate} disabled={busy}>
+              Registrar avaliação
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -791,6 +791,15 @@ pendente e, se **provido**, reabre o pedido (status volta a `recebido`) para cum
 (não reabrir o pedido quando provido derruba). Próximo: painel de recursos (decidir 1ª/2ª
 instância na UI) e pesquisa de satisfação da ouvidoria.
 
+**O5-07 — Pesquisa de satisfação da ouvidoria (Lei 13.460 art. 23) ✅.**
+`rateManifestation` registra a nota (1-5) do cidadão só de manifestação **respondida**,
+uma por manifestação; `getOmbudsmanSatisfaction` consolida média, total e distribuição
+das notas — indicador de satisfação dos serviços. Migration
+`..._o5_07_ombudsman_satisfaction.sql`, reusa `protocol.*`; cartão de satisfação e ação
+"Avaliar" no `/ouvidoria`. Teste `tests/sprint-ombudsman-satisfaction.test.mjs` verificado
+por mutação (não dividir pela quantidade na média derruba). Próximo: carta de serviços ao
+cidadão e painel de recursos do e-SIC.
+
 ### Onda 6 — Conformidade contínua ⚠️ (contínuo)
 
 Layout do TCE estadual (um por vez; a referência de Timóteo é SICOM/MG, não
