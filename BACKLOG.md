@@ -782,6 +782,15 @@ acompanhamento aberto→em_implementacao→implementado/nao_implementado, numera
 por ano, reusa `analytics.*`). Pendente: assinatura ICP-Brasil, dados abertos
 publicáveis.
 
+**O5-06 — Recurso de e-SIC (LAI art. 15) ✅.** `fileEsicAppeal` interpõe recurso da
+negativa de acesso: 1ª instância exige pedido **indeferido**; 2ª instância exige o de
+1ª **improvido**; um recurso por pedido/instância. `decideEsicAppeal` decide o recurso
+pendente e, se **provido**, reabre o pedido (status volta a `recebido`) para cumprimento;
+`getEsicAppeals` lista. Migration `..._o5_06_esic_appeals.sql`, reusa `protocol.*`; ação
+"Recorrer" no `/esic`. Teste `tests/sprint-esic-appeals.test.mjs` verificado por mutação
+(não reabrir o pedido quando provido derruba). Próximo: painel de recursos (decidir 1ª/2ª
+instância na UI) e pesquisa de satisfação da ouvidoria.
+
 ### Onda 6 — Conformidade contínua ⚠️ (contínuo)
 
 Layout do TCE estadual (um por vez; a referência de Timóteo é SICOM/MG, não

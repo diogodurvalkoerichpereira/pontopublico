@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { FileSearch, Plus, Reply, CalendarPlus } from "lucide-react";
+import { FileSearch, Plus, Reply, CalendarPlus, Scale } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,7 @@ import {
   extendEsicRequest,
   respondEsicRequest,
 } from "@/lib/esic.functions";
+import { fileEsicAppeal } from "@/lib/esic-appeals.functions";
 
 export const Route = createFileRoute("/esic")({ component: Page });
 
@@ -74,12 +75,16 @@ function Content() {
   const open = useServerFn(openEsicRequest);
   const extend = useServerFn(extendEsicRequest);
   const respond = useServerFn(respondEsicRequest);
+  const appeal = useServerFn(fileEsicAppeal);
   const qc = useQueryClient();
 
   const [openDialog, setOpenDialog] = useState(false);
   const [respondOpen, setRespondOpen] = useState(false);
   const [target, setTarget] = useState<EsicRequest | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const [appealTarget, setAppealTarget] = useState<EsicRequest | null>(null);
+  const [appealFundamento, setAppealFundamento] = useState("");
 
   const [solicitante, setSolicitante] = useState("");
   const [anonimo, setAnonimo] = useState(false);
@@ -149,6 +154,30 @@ function Content() {
     setDesfecho("respondido");
     setResposta("");
     setRespondOpen(true);
+  };
+
+  const submitAppeal = async () => {
+    if (!activeTenant || !appealTarget) return;
+    setBusy(true);
+    try {
+      await appeal({
+        data: {
+          tenant_id: activeTenant.id,
+          request_id: appealTarget.id,
+          instancia: 1,
+          fundamento: appealFundamento.trim(),
+          data_recurso: hoje(),
+        },
+      });
+      toast.success("Recurso interposto (1ª instância)");
+      setAppealTarget(null);
+      setAppealFundamento("");
+      refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha no recurso");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const submitRespond = async () => {
@@ -249,6 +278,18 @@ function Content() {
                         </Button>
                       </div>
                     )}
+                    {r.status === "indeferido" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setAppealTarget(r);
+                          setAppealFundamento("");
+                        }}
+                      >
+                        <Scale className="size-4" /> Recorrer
+                      </Button>
+                    )}
                   </td>
                 )}
               </tr>
@@ -345,6 +386,40 @@ function Content() {
           <DialogFooter>
             <Button onClick={submitRespond} disabled={busy}>
               Enviar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Recurso (LAI art. 15) */}
+      <Dialog
+        open={Boolean(appealTarget)}
+        onOpenChange={(o) => !o && setAppealTarget(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Recurso — pedido {appealTarget?.numero}/{appealTarget?.ano}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Recurso de 1ª instância contra a negativa de acesso (LAI art. 15).
+            </p>
+            <div>
+              <Label>Fundamento</Label>
+              <Input
+                value={appealFundamento}
+                onChange={(e) => setAppealFundamento(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={submitAppeal}
+              disabled={busy || appealFundamento.trim().length < 3}
+            >
+              Interpor recurso
             </Button>
           </DialogFooter>
         </DialogContent>
