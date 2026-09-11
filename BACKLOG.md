@@ -749,6 +749,16 @@ licitação não homologada derruba).
 Próximo: ligar a baixa de estoque (O3-02) à entrada de bem em patrimônio (O3-03)
 quando o material for um bem permanente; remessa ao PNCP (externo, homologação).
 
+**O3-17 — Classificação de material + inventário por categoria ✅.** Material ganha
+`categoria` (consumo/permanente): consumo baixa por VPD de consumo, permanente tende ao
+patrimônio. `getMaterialInventory` totaliza itens e saldos (quantidade/valor) por
+categoria, com total geral, considerando só material **ativo**. Migration
+`..._o3_17_material_category.sql` (ALTER aditivo + check, default `consumo` preserva o
+acervo), reusa `materials.*`; `/almoxarifado` ganha o seletor de categoria, a coluna e os
+cartões de inventário. Teste `tests/sprint-material-inventory.test.mjs` verificado por
+mutação (somar só uma categoria no total, ou incluir o inativo, derruba).
+Próximo: ligar o material permanente adquirido à entrada de bem em patrimônio (O3-03).
+
 **O3-16 — Transição de contrato (Lei 14.133 art. 137-139) ✅.** `transitionContract` move
 o contrato pela máquina de estados: vigente ↔ suspenso, e vigente/suspenso →
 encerrado/rescindido (terminais); cada ação só vale a partir do estado de origem correto.

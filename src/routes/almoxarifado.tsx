@@ -27,6 +27,7 @@ import {
   getMaterialItems,
   saveMaterialItem,
   recordMaterialMovement,
+  getMaterialInventory,
 } from "@/lib/materials.functions";
 
 export const Route = createFileRoute("/almoxarifado")({ component: Page });
@@ -48,9 +49,22 @@ type Item = {
   codigo: string;
   nome: string;
   unidade: string;
+  categoria: "consumo" | "permanente";
   saldo_quantidade: string;
   saldo_valor: string;
   status: string;
+};
+
+type InventoryLine = {
+  categoria: "consumo" | "permanente";
+  itens: number;
+  saldo_quantidade: number;
+  saldo_valor: number;
+};
+
+const CATEGORIA_LABEL: Record<string, string> = {
+  consumo: "Consumo",
+  permanente: "Permanente",
 };
 
 const brl = (v: number | string) =>
@@ -62,6 +76,7 @@ function Content() {
   const load = useServerFn(getMaterialItems);
   const saveItem = useServerFn(saveMaterialItem);
   const move = useServerFn(recordMaterialMovement);
+  const loadInventory = useServerFn(getMaterialInventory);
   const qc = useQueryClient();
 
   const [itemOpen, setItemOpen] = useState(false);
@@ -71,6 +86,9 @@ function Content() {
   const [codigo, setCodigo] = useState("");
   const [nome, setNome] = useState("");
   const [unidade, setUnidade] = useState("un");
+  const [categoria, setCategoria] = useState<"consumo" | "permanente">(
+    "consumo",
+  );
 
   const [moveItemId, setMoveItemId] = useState("");
   const [moveTipo, setMoveTipo] = useState<"entrada" | "saida">("entrada");
@@ -87,8 +105,19 @@ function Content() {
   const canManage = data?.canManage ?? false;
   const valorTotal = items.reduce((s, i) => s + Number(i.saldo_valor), 0);
 
-  const refresh = () =>
+  const { data: inv } = useQuery({
+    queryKey: ["material-inventory", activeTenant?.id],
+    enabled: Boolean(activeTenant),
+    queryFn: () => loadInventory({ data: { tenant_id: activeTenant!.id } }),
+  });
+  const inventory = (inv?.categorias ?? []) as InventoryLine[];
+
+  const refresh = () => {
     qc.invalidateQueries({ queryKey: ["material-items", activeTenant?.id] });
+    qc.invalidateQueries({
+      queryKey: ["material-inventory", activeTenant?.id],
+    });
+  };
 
   const submitItem = async () => {
     if (!activeTenant) return;
@@ -100,6 +129,7 @@ function Content() {
           codigo: codigo.trim(),
           nome: nome.trim(),
           unidade: unidade.trim(),
+          categoria,
           status: "ativo",
         },
       });
@@ -107,6 +137,7 @@ function Content() {
       setItemOpen(false);
       setCodigo("");
       setNome("");
+      setCategoria("consumo");
       refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Falha ao salvar");
@@ -178,11 +209,25 @@ function Content() {
         )}
       </div>
 
-      <div className="rounded-xl border bg-card p-4">
-        <div className="text-sm text-muted-foreground">
-          Valor total em estoque
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-xl border bg-card p-4">
+          <div className="text-sm text-muted-foreground">
+            Valor total em estoque
+          </div>
+          <div className="text-2xl font-bold">{brl(valorTotal)}</div>
         </div>
-        <div className="text-2xl font-bold">{brl(valorTotal)}</div>
+        {inventory.map((c) => (
+          <div key={c.categoria} className="rounded-xl border bg-card p-4">
+            <div className="text-sm text-muted-foreground">
+              {CATEGORIA_LABEL[c.categoria] ?? c.categoria} — {c.itens}{" "}
+              {c.itens === 1 ? "item" : "itens"}
+            </div>
+            <div className="text-2xl font-bold">{brl(c.saldo_valor)}</div>
+            <div className="text-xs text-muted-foreground">
+              {c.saldo_quantidade} un
+            </div>
+          </div>
+        ))}
       </div>
 
       <div className="rounded-xl border bg-card overflow-x-auto">
@@ -191,6 +236,7 @@ function Content() {
             <tr>
               <th className="p-3 font-semibold">Código</th>
               <th className="p-3 font-semibold">Item</th>
+              <th className="p-3 font-semibold">Categoria</th>
               <th className="p-3 font-semibold">Un</th>
               <th className="p-3 font-semibold text-right">Qtd</th>
               <th className="p-3 font-semibold text-right">Valor</th>
@@ -202,6 +248,11 @@ function Content() {
               <tr key={i.id} className="border-b last:border-0">
                 <td className="p-3 font-medium">{i.codigo}</td>
                 <td className="p-3">{i.nome}</td>
+                <td className="p-3">
+                  <Badge variant="secondary">
+                    {CATEGORIA_LABEL[i.categoria] ?? i.categoria}
+                  </Badge>
+                </td>
                 <td className="p-3">{i.unidade}</td>
                 <td className="p-3 text-right tabular-nums">
                   {i.saldo_quantidade}
@@ -221,7 +272,7 @@ function Content() {
             {items.length === 0 && (
               <tr>
                 <td
-                  colSpan={6}
+                  colSpan={7}
                   className="p-6 text-center text-muted-foreground"
                 >
                   Nenhum item cadastrado.
@@ -256,6 +307,23 @@ function Content() {
                 value={unidade}
                 onChange={(e) => setUnidade(e.target.value)}
               />
+            </div>
+            <div>
+              <Label>Categoria</Label>
+              <Select
+                value={categoria}
+                onValueChange={(v) =>
+                  setCategoria(v as "consumo" | "permanente")
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="consumo">Consumo</SelectItem>
+                  <SelectItem value="permanente">Permanente</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter>

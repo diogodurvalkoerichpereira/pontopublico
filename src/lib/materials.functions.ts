@@ -28,11 +28,13 @@ export const getMaterialItems = createServerFn({ method: "POST" })
       codigo: string;
       nome: string;
       unidade: string;
+      categoria: "consumo" | "permanente";
       saldo_quantidade: string;
       saldo_valor: string;
       status: "ativo" | "inativo";
     }>(
-      `select id, codigo, nome, unidade, saldo_quantidade::text, saldo_valor::text, status
+      `select id, codigo, nome, unidade, categoria,
+         saldo_quantidade::text, saldo_valor::text, status
        from public.material_items where tenant_id = $1 order by codigo`,
       [data.tenant_id],
     );
@@ -48,6 +50,7 @@ const SaveItemInput = z.object({
   codigo: z.string().trim().min(1).max(40),
   nome: z.string().trim().min(2).max(200),
   unidade: z.string().trim().min(1).max(20),
+  categoria: z.enum(["consumo", "permanente"]).default("consumo"),
   status: z.enum(["ativo", "inativo"]).default("ativo"),
 });
 
@@ -69,27 +72,29 @@ export const saveMaterialItem = createServerFn({ method: "POST" })
       if (data.id) {
         await client.query(
           `update public.material_items set codigo=$3, nome=$4, unidade=$5,
-             status=$6, updated_at=now() where id=$1 and tenant_id=$2`,
+             categoria=$6, status=$7, updated_at=now() where id=$1 and tenant_id=$2`,
           [
             id,
             data.tenant_id,
             data.codigo,
             data.nome,
             data.unidade,
+            data.categoria,
             data.status,
           ],
         );
       } else {
         await client.query(
           `insert into public.material_items
-             (id, tenant_id, codigo, nome, unidade, status, created_by)
-           values ($1,$2,$3,$4,$5,$6,$7)`,
+             (id, tenant_id, codigo, nome, unidade, categoria, status, created_by)
+           values ($1,$2,$3,$4,$5,$6,$7,$8)`,
           [
             id,
             data.tenant_id,
             data.codigo,
             data.nome,
             data.unidade,
+            data.categoria,
             data.status,
             context.userId,
           ],
@@ -190,4 +195,44 @@ export const recordMaterialMovement = createServerFn({ method: "POST" })
       });
       return { id, saldo_quantidade: novaQtd, saldo_valor: novoValor };
     });
+  });
+
+// O3-17 — Inventário do almoxarifado por categoria (consumo/permanente). Totaliza
+// itens e saldos (quantidade e valor) agrupados por categoria, com um total geral.
+// Considera apenas material ativo, por ser o acervo vivo do inventário. Reusa
+// materials.read. Base para conciliar consumo (VPD) e permanente (patrimônio).
+export const getMaterialInventory = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => TenantInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "materials.read");
+    const rows = await query<{
+      categoria: "consumo" | "permanente";
+      itens: string;
+      saldo_quantidade: string;
+      saldo_valor: string;
+    }>(
+      `select categoria, count(*)::text as itens,
+         coalesce(sum(saldo_quantidade),0)::text as saldo_quantidade,
+         coalesce(sum(saldo_valor),0)::text as saldo_valor
+       from public.material_items
+       where tenant_id = $1 and status = 'ativo'
+       group by categoria order by categoria`,
+      [data.tenant_id],
+    );
+    const categorias = rows.map((r) => ({
+      categoria: r.categoria,
+      itens: Number(r.itens),
+      saldo_quantidade: round3(Number(r.saldo_quantidade)),
+      saldo_valor: round2(Number(r.saldo_valor)),
+    }));
+    const total = {
+      itens: categorias.reduce((s, c) => s + c.itens, 0),
+      saldo_quantidade: round3(
+        categorias.reduce((s, c) => s + c.saldo_quantidade, 0),
+      ),
+      saldo_valor: round2(categorias.reduce((s, c) => s + c.saldo_valor, 0)),
+    };
+    return { categorias, total };
   });
