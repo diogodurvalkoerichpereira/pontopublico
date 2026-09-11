@@ -606,6 +606,16 @@ registra o crédito com justificativa. `getSupplementaryCredits` lista. Migratio
 `tests/sprint-supplementary-credit.test.mjs` verificado por mutação (inverter o teto do
 excesso derruba). Próximo (UI): abertura de crédito suplementar no `/orcamento`.
 
+**O2-23 — Contingenciamento / limitação de empenho (LRF art. 9) ✅.**
+`contingenciarDotacao` bloqueia parte de uma dotação **ativa** sem alterar o orçado, e o
+bloqueio **nunca invade o já empenhado** (empenhado + bloqueado ≤ orçado);
+`descontingenciarDotacao` libera sem deixar o bloqueado negativo. O **saldo empenhável**
+passa a descontar o bloqueado — tanto em `getBudgetAppropriations` quanto na reserva de
+empenho (`reserveOnAppropriation`), então o contingenciamento efetivamente barra novos
+empenhos. Migration `..._o2_23_budget_contingency.sql` (ALTER + 2 checks), reusa
+`budget.*`; teste `tests/sprint-budget-contingency.test.mjs` verificado por mutação (não
+descontar o bloqueado do saldo derruba). Próximo (UI): contingenciar no `/orcamento`.
+
 **O2-14 — Execução da receita por natureza ✅.** `getRevenueExecution` consolida,
 por natureza de receita, previsto × arrecadado × a arrecadar (piso zero) no
 exercício — o espelho, do lado da receita, da execução da despesa. Read-only,

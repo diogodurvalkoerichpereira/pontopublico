@@ -38,13 +38,14 @@ export const getBudgetAppropriations = createServerFn({ method: "POST" })
       fonte_recurso: string;
       valor_orcado: string;
       valor_empenhado: string;
+      valor_bloqueado: string;
       saldo: string;
       status: "ativa" | "bloqueada" | "encerrada";
     }>(
       `select id, exercicio, unidade_orcamentaria, funcao, subfuncao, programa,
          acao, natureza_despesa, fonte_recurso,
-         valor_orcado::text, valor_empenhado::text,
-         (valor_orcado - valor_empenhado)::text as saldo, status
+         valor_orcado::text, valor_empenhado::text, valor_bloqueado::text,
+         (valor_orcado - valor_empenhado - valor_bloqueado)::text as saldo, status
        from public.budget_appropriations
        where tenant_id = $1 and ($2::int is null or exercicio = $2)
        order by exercicio desc, unidade_orcamentaria, natureza_despesa`,
@@ -311,9 +312,11 @@ async function reserveOnAppropriation(params: ReserveParams) {
       exercicio: number;
       valor_orcado: string;
       valor_empenhado: string;
+      valor_bloqueado: string;
       status: string;
     }>(
-      `select exercicio, valor_orcado::text, valor_empenhado::text, status
+      `select exercicio, valor_orcado::text, valor_empenhado::text,
+         valor_bloqueado::text, status
        from public.budget_appropriations
        where id = $1 and tenant_id = $2 for update`,
       [params.appropriationId, params.tenantId],
@@ -322,8 +325,11 @@ async function reserveOnAppropriation(params: ReserveParams) {
   if (!appropriation) throw new Error("Dotação não encontrada");
   if (appropriation.status !== "ativa")
     throw new Error("Dotação não está ativa para empenho");
+  // Saldo empenhável desconta o contingenciado (LRF art. 9).
   const saldo =
-    Number(appropriation.valor_orcado) - Number(appropriation.valor_empenhado);
+    Number(appropriation.valor_orcado) -
+    Number(appropriation.valor_empenhado) -
+    Number(appropriation.valor_bloqueado);
   if (params.valor > saldo)
     throw new Error(
       `Valor do empenho (${params.valor.toFixed(2)}) excede o saldo da dotação (${saldo.toFixed(2)})`,
