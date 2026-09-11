@@ -336,6 +336,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       icon: Wallet,
       section: "Contabilidade e Finanças",
     });
+  if (hasTenantPermission("taxes.read"))
+    items.push({
+      to: "/tributos",
+      label: "Tributos",
+      icon: Landmark,
+      section: "Contabilidade e Finanças",
+    });
   if (hasTenantPermission("manager.dashboard.read"))
     items.push({
       to: "/gestor",
