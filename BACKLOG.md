@@ -533,8 +533,15 @@ e anulado não inscrevem; cada empenho inscreve uma só vez (idempotente).
 `payRestoAPagar` quita o resto e o empenho de origem; `getRestosAPagar` lista.
 Reusa `budget.*`. Migration `20260909300000_o2_09_restos_a_pagar.sql`; teste
 `tests/sprint-restos-a-pagar.test.mjs` verificado por mutação.
-Próximo: balanços Lei 4.320/DCASP (orçamentário, financeiro, patrimonial,
-variações); depois tesouraria (OB, conciliação) e MSC-SICONFI.
+**O2-10 — Balanço orçamentário (Lei 4.320, Anexo 1) ✅.** `getBudgetBalance`
+consolida o exercício: RECEITA (prevista × arrecadada × diferença), DESPESA
+(fixada × empenhada × liquidada × paga × saldo de dotação), o resultado
+orçamentário (arrecadada − empenhada: superávit/déficit) e os restos a pagar
+inscritos por tipo. Read-only, cada total em consulta própria (sem JOIN, não
+infla por fan-out). Reusa `budget.read`, sem migration. Teste
+`tests/sprint-budget-balance.test.mjs` verificado por mutação.
+Próximo: balanço financeiro e patrimonial, demonstração das variações
+patrimoniais (DCASP); depois tesouraria (OB, conciliação) e MSC-SICONFI.
 
 ### Onda 3 — Materiais e Contratações (14-18 sem)
 
