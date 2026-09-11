@@ -704,6 +704,14 @@ excede o saldo. `getMaterialItems`/`saveMaterialItem`. Permissões
 `materials.read`/`materials.manage`. Migration
 `20260909200000_o3_02_materials.sql`; teste `tests/sprint-materials.test.mjs`
 verificado por mutação.
+**O3-03b — Resumo do patrimônio ✅.** `getPatrimonySummary` consolida os bens **ativos**:
+quantidade, valor de aquisição, depreciação acumulada e o **valor líquido contábil**
+(aquisição − depreciação) — bem baixado não entra no acervo líquido — além da contagem de
+baixados. Reusa `assets.read`, sem migration; `/patrimonio` passa a somar pelo servidor
+(cartões aquisição, depreciação, líquido e baixados), corrigindo o total que antes incluía
+baixados no cliente. Teste `tests/sprint-patrimony-summary.test.mjs` verificado por mutação
+(líquido = aquisição ignorando depreciação, ou incluir baixado nos ativos, derruba).
+
 **O3-03 — Patrimônio + depreciação linear (NBC TSP) ✅.** `patrimony_assets`: bem
 com aquisição, residual, vida útil e depreciação acumulada. `depreciateAsset`
 deprecia linear (cotas constantes); a acumulada nunca passa da base depreciável

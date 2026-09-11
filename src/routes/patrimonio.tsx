@@ -21,6 +21,7 @@ import {
   saveAsset,
   depreciateAsset,
   disposeAsset,
+  getPatrimonySummary,
 } from "@/lib/assets.functions";
 
 export const Route = createFileRoute("/patrimonio")({ component: Page });
@@ -83,16 +84,18 @@ function Content() {
   });
   const assets = (data?.assets ?? []) as Asset[];
   const canManage = data?.canManage ?? false;
-  const totals = assets.reduce(
-    (acc, a) => ({
-      aquisicao: acc.aquisicao + Number(a.valor_aquisicao),
-      liquido: acc.liquido + Number(a.valor_liquido),
-    }),
-    { aquisicao: 0, liquido: 0 },
-  );
 
-  const refresh = () =>
+  const loadSummary = useServerFn(getPatrimonySummary);
+  const { data: summary } = useQuery({
+    queryKey: ["patrimony-summary", activeTenant?.id],
+    enabled: Boolean(activeTenant),
+    queryFn: () => loadSummary({ data: { tenant_id: activeTenant!.id } }),
+  });
+
+  const refresh = () => {
     qc.invalidateQueries({ queryKey: ["assets", activeTenant?.id] });
+    qc.invalidateQueries({ queryKey: ["patrimony-summary", activeTenant?.id] });
+  };
 
   const submit = async () => {
     if (!activeTenant) return;
@@ -188,18 +191,37 @@ function Content() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="rounded-xl border bg-card p-4">
           <div className="text-sm text-muted-foreground">
             Valor de aquisição
           </div>
-          <div className="text-xl font-bold">{brl(totals.aquisicao)}</div>
+          <div className="text-xl font-bold">
+            {brl(summary?.valorAquisicao ?? 0)}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {summary?.ativos ?? 0} bens ativos
+          </div>
+        </div>
+        <div className="rounded-xl border bg-card p-4">
+          <div className="text-sm text-muted-foreground">
+            Depreciação acumulada
+          </div>
+          <div className="text-xl font-bold">
+            {brl(summary?.depreciacaoAcumulada ?? 0)}
+          </div>
         </div>
         <div className="rounded-xl border bg-card p-4">
           <div className="text-sm text-muted-foreground">
             Valor líquido contábil
           </div>
-          <div className="text-xl font-bold">{brl(totals.liquido)}</div>
+          <div className="text-xl font-bold">
+            {brl(summary?.valorLiquido ?? 0)}
+          </div>
+        </div>
+        <div className="rounded-xl border bg-card p-4">
+          <div className="text-sm text-muted-foreground">Baixados</div>
+          <div className="text-xl font-bold">{summary?.baixados ?? 0}</div>
         </div>
       </div>
 

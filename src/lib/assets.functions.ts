@@ -45,6 +45,43 @@ export const getAssets = createServerFn({ method: "POST" })
     };
   });
 
+// O3-03b — Resumo do patrimônio. Consolida os bens **ativos**: quantidade, valor de
+// aquisição, depreciação acumulada e o **valor líquido contábil** (aquisição − depreciação
+// acumulada), além da contagem de baixados. Bem baixado não entra no acervo líquido. Reusa
+// assets.read.
+export const getPatrimonySummary = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => TenantInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "assets.read");
+    const row = (
+      await query<{
+        ativos: string;
+        baixados: string;
+        valor_aquisicao: string;
+        depreciacao_acumulada: string;
+        valor_liquido: string;
+      }>(
+        `select
+           count(*) filter (where status='ativo')::text as ativos,
+           count(*) filter (where status='baixado')::text as baixados,
+           coalesce(sum(valor_aquisicao) filter (where status='ativo'),0)::text as valor_aquisicao,
+           coalesce(sum(depreciacao_acumulada) filter (where status='ativo'),0)::text as depreciacao_acumulada,
+           coalesce(sum(valor_aquisicao - depreciacao_acumulada) filter (where status='ativo'),0)::text as valor_liquido
+         from public.patrimony_assets where tenant_id = $1`,
+        [data.tenant_id],
+      )
+    )[0];
+    return {
+      ativos: Number(row.ativos),
+      baixados: Number(row.baixados),
+      valorAquisicao: round2(Number(row.valor_aquisicao)),
+      depreciacaoAcumulada: round2(Number(row.depreciacao_acumulada)),
+      valorLiquido: round2(Number(row.valor_liquido)),
+    };
+  });
+
 const SaveInput = z.object({
   id: z.string().uuid().optional(),
   tenant_id: z.string().uuid(),
