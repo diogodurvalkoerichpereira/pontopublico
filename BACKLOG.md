@@ -580,8 +580,11 @@ Entregue (base): O4-01 créditos tributários (lançamento, arrecadação, inscr
 em dívida ativa — Lei 6.830); O4-02 parcelamento de dívida ativa (REFIS: rateio
 do saldo em N parcelas mensais com soma exata, cada parcela arrecada no crédito,
 a última quita crédito e plano; um plano ativo por crédito, reusa `taxes.*`).
-Pendente (externo/homologação): NFS-e padrão nacional; certidões (CND) com
-verificação; execução fiscal integrada ao Judiciário.
+O4-03 consulta de regularidade fiscal (base da CND: aponta débitos em aberto —
+lançados ou em dívida ativa com saldo — por contribuinte; NÃO emite certidão
+oficial, código nem assinatura). Pendente (externo/homologação): NFS-e padrão
+nacional; emissão da CND com autenticação e layout do ente; execução fiscal
+integrada ao Judiciário.
 
 ### Onda 5 — Apoio, controle e transparência (10-14 sem)
 
