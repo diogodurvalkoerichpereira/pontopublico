@@ -36,6 +36,7 @@ import {
   Bot,
   ArchiveRestore,
   Landmark,
+  Wallet,
 } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
 import { SupportWidget } from "@/components/SupportWidget";
@@ -328,6 +329,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     icon: ShieldCheck,
     section: "Geral",
   });
+  if (hasTenantPermission("accounting.read"))
+    items.push({
+      to: "/tesouraria",
+      label: "Tesouraria",
+      icon: Wallet,
+      section: "Contabilidade e Finanças",
+    });
   if (hasTenantPermission("manager.dashboard.read"))
     items.push({
       to: "/gestor",

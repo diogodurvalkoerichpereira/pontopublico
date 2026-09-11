@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TesourariaRouteImport } from './routes/tesouraria'
 import { Route as RhRouteImport } from './routes/rh'
 import { Route as PortalFinanceiroRouteImport } from './routes/portal-financeiro'
 import { Route as PontoRouteImport } from './routes/ponto'
@@ -44,6 +45,11 @@ import { Route as AdminConfiguracoesRouteImport } from './routes/admin.configura
 import { Route as AdminAuditoriaRouteImport } from './routes/admin.auditoria'
 import { Route as RhFuncionariosIdRouteImport } from './routes/rh.funcionarios.$id'
 
+const TesourariaRoute = TesourariaRouteImport.update({
+  id: '/tesouraria',
+  path: '/tesouraria',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RhRoute = RhRouteImport.update({
   id: '/rh',
   path: '/rh',
@@ -224,6 +230,7 @@ export interface FileRoutesByFullPath {
   '/ponto': typeof PontoRoute
   '/portal-financeiro': typeof PortalFinanceiroRoute
   '/rh': typeof RhRouteWithChildren
+  '/tesouraria': typeof TesourariaRoute
   '/admin/auditoria': typeof AdminAuditoriaRoute
   '/admin/configuracoes': typeof AdminConfiguracoesRoute
   '/admin/data-mart': typeof AdminDataMartRoute
@@ -260,6 +267,7 @@ export interface FileRoutesByTo {
   '/ponto': typeof PontoRoute
   '/portal-financeiro': typeof PortalFinanceiroRoute
   '/rh': typeof RhRouteWithChildren
+  '/tesouraria': typeof TesourariaRoute
   '/admin/auditoria': typeof AdminAuditoriaRoute
   '/admin/configuracoes': typeof AdminConfiguracoesRoute
   '/admin/data-mart': typeof AdminDataMartRoute
@@ -297,6 +305,7 @@ export interface FileRoutesById {
   '/ponto': typeof PontoRoute
   '/portal-financeiro': typeof PortalFinanceiroRoute
   '/rh': typeof RhRouteWithChildren
+  '/tesouraria': typeof TesourariaRoute
   '/admin/auditoria': typeof AdminAuditoriaRoute
   '/admin/configuracoes': typeof AdminConfiguracoesRoute
   '/admin/data-mart': typeof AdminDataMartRoute
@@ -335,6 +344,7 @@ export interface FileRouteTypes {
     | '/ponto'
     | '/portal-financeiro'
     | '/rh'
+    | '/tesouraria'
     | '/admin/auditoria'
     | '/admin/configuracoes'
     | '/admin/data-mart'
@@ -371,6 +381,7 @@ export interface FileRouteTypes {
     | '/ponto'
     | '/portal-financeiro'
     | '/rh'
+    | '/tesouraria'
     | '/admin/auditoria'
     | '/admin/configuracoes'
     | '/admin/data-mart'
@@ -407,6 +418,7 @@ export interface FileRouteTypes {
     | '/ponto'
     | '/portal-financeiro'
     | '/rh'
+    | '/tesouraria'
     | '/admin/auditoria'
     | '/admin/configuracoes'
     | '/admin/data-mart'
@@ -444,6 +456,7 @@ export interface RootRouteChildren {
   PontoRoute: typeof PontoRoute
   PortalFinanceiroRoute: typeof PortalFinanceiroRoute
   RhRoute: typeof RhRouteWithChildren
+  TesourariaRoute: typeof TesourariaRoute
   AdminAuditoriaRoute: typeof AdminAuditoriaRoute
   AdminConfiguracoesRoute: typeof AdminConfiguracoesRoute
   AdminDataMartRoute: typeof AdminDataMartRoute
@@ -456,6 +469,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/tesouraria': {
+      id: '/tesouraria'
+      path: '/tesouraria'
+      fullPath: '/tesouraria'
+      preLoaderRoute: typeof TesourariaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/rh': {
       id: '/rh'
       path: '/rh'
@@ -769,6 +789,7 @@ const rootRouteChildren: RootRouteChildren = {
   PontoRoute: PontoRoute,
   PortalFinanceiroRoute: PortalFinanceiroRoute,
   RhRoute: RhRouteWithChildren,
+  TesourariaRoute: TesourariaRoute,
   AdminAuditoriaRoute: AdminAuditoriaRoute,
   AdminConfiguracoesRoute: AdminConfiguracoesRoute,
   AdminDataMartRoute: AdminDataMartRoute,
