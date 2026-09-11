@@ -615,9 +615,16 @@ não pode exceder o valor total do contrato** (invariante testado).
 `20260909340000_o3_08_contract_items.sql`; teste
 `tests/sprint-contract-items.test.mjs` verificado por mutação (ignorar a soma
 dos itens já lançados no teto derruba).
-Próximo: o vínculo do contrato com a licitação que o originou (dispensa/pregão);
-ligar a baixa de estoque (O3-02) à entrada de bem em patrimônio (O3-03) quando
-o material for um bem permanente.
+**O3-09 — Vínculo contrato ↔ licitação (Lei 14.133) ✅.**
+`linkContractToProcurement` liga o contrato à licitação de origem
+(`procurement_contracts.procurement_process_id` → `procurement_processes`, O3-06);
+só uma licitação **homologada**, do mesmo ente e com **modalidade coerente**, pode
+originá-lo. Reusa `contracts.*`. Migration
+`20260909350000_o3_09_contract_procurement_link.sql` (ALTER aditivo); teste
+`tests/sprint-contract-procurement.test.mjs` verificado por mutação (aceitar
+licitação não homologada derruba).
+Próximo: ligar a baixa de estoque (O3-02) à entrada de bem em patrimônio (O3-03)
+quando o material for um bem permanente; remessa ao PNCP (externo, homologação).
 
 ### Onda 4 — Tributação e Receita (14-20 sem)
 
