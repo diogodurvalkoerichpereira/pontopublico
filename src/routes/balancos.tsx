@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth-context";
 import { getBudgetBalance } from "@/lib/budget-balance.functions";
 import { getCashAvailability } from "@/lib/cash-availability.functions";
+import { getEquityStatement } from "@/lib/equity-statement.functions";
 
 export const Route = createFileRoute("/balancos")({ component: Page });
 
@@ -51,6 +52,7 @@ function Content() {
   const { activeTenant, hasTenantPermission } = useAuth();
   const loadBalance = useServerFn(getBudgetBalance);
   const loadCash = useServerFn(getCashAvailability);
+  const loadEquity = useServerFn(getEquityStatement);
   const [exercicio, setExercicio] = useState(String(new Date().getFullYear()));
   const canReadCash = hasTenantPermission("accounting.read");
 
@@ -67,8 +69,17 @@ function Content() {
     enabled: Boolean(activeTenant) && canReadCash,
     queryFn: () => loadCash({ data: { tenant_id: activeTenant!.id } }),
   });
+  const { data: equity } = useQuery({
+    queryKey: ["equity-statement", activeTenant?.id, exercicio],
+    enabled: Boolean(activeTenant) && canReadCash && /^\d{4}$/.test(exercicio),
+    queryFn: () =>
+      loadEquity({
+        data: { tenant_id: activeTenant!.id, exercicio: Number(exercicio) },
+      }),
+  });
 
   const resultado = balance?.resultado_orcamentario ?? 0;
+  const resultadoPatrimonial = equity?.resultado_patrimonial ?? 0;
 
   return (
     <section className="space-y-6">
@@ -145,6 +156,40 @@ function Content() {
         />
         <Row label="Total" value={balance?.restos_a_pagar.total ?? 0} strong />
       </div>
+
+      {canReadCash && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="rounded-xl border bg-card p-4">
+            <h2 className="font-bold mb-2">Balanço patrimonial</h2>
+            <Row label="Ativo" value={equity?.ativo ?? 0} />
+            <Row label="Passivo" value={equity?.passivo ?? 0} />
+            <Row
+              label="Patrimônio líquido"
+              value={equity?.patrimonio_liquido ?? 0}
+              strong
+            />
+          </div>
+          <div className="rounded-xl border bg-card p-4">
+            <h2 className="font-bold mb-2">Variações patrimoniais (DVP)</h2>
+            <Row label="Aumentativas (VPA)" value={equity?.vpa ?? 0} />
+            <Row label="Diminutivas (VPD)" value={equity?.vpd ?? 0} />
+            <div className="flex items-center justify-between pt-2">
+              <span className="text-muted-foreground">
+                Resultado patrimonial (VPA − VPD)
+              </span>
+              <span
+                className={`font-bold tabular-nums ${
+                  resultadoPatrimonial >= 0
+                    ? "text-emerald-600"
+                    : "text-red-600"
+                }`}
+              >
+                {brl(resultadoPatrimonial)}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {canReadCash && (
         <div className="rounded-xl border bg-card p-4">

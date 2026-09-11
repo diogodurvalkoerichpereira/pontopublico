@@ -609,6 +609,14 @@ Migration `..._o2_16_bank_orders.sql`, reusa `accounting.*`; teste
 `tests/sprint-bank-orders.test.mjs` verificado por mutação (somar em vez de subtrair o
 valor no saldo derruba). Próximo: MSC-SICONFI e a demonstração dos fluxos de caixa.
 
+**O2-18 — Balanço patrimonial + DVP (PCASP) ✅.** `getEquityStatement` classifica o
+razão (`accounting_entry_lines`) pela classe PCASP — 1 Ativo, 2 Passivo, 3 VPD, 4 VPA
+—, inverte o sinal das contas de natureza credora e apura Ativo, Passivo, Patrimônio
+Líquido (Ativo − Passivo), VPA, VPD e o resultado patrimonial (VPA − VPD). Read-only,
+reusa `accounting.read`, sem migration; cartões no `/balancos`. Teste
+`tests/sprint-equity-statement.test.mjs` verificado por mutação (inverter para VPD − VPA
+derruba). Próximo: balanço financeiro (Anexo 13) e MSC-SICONFI.
+
 ### Onda 3 — Materiais e Contratações (14-18 sem)
 
 Compras Lei 14.133 → contratos → almoxarifado → patrimônio (depreciação NBC TSP)
