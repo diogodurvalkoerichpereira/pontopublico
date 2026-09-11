@@ -589,7 +589,15 @@ reusa `budget.read`, sem migration; teste `tests/sprint-revenue-execution.test.m
 verificado por mutação (permitir a_arrecadar negativo derruba).
 Próximo: balanço financeiro completo (com receita/despesa orçamentária e
 extraorçamentária) e patrimonial, demonstração das variações patrimoniais
-(DCASP); conciliação bancária; ordem bancária (OB) e MSC-SICONFI.
+(DCASP); ordem bancária (OB) e MSC-SICONFI.
+
+**O2-15 — Conciliação bancária ✅.** `reconcileTreasuryAccount` compara o saldo
+contábil (livro) de uma conta de tesouraria com o saldo do extrato numa data e
+registra a diferença (extrato − livro), uma por conta/data; `getTreasuryReconciliations`
+lista. Trava a conta `FOR UPDATE`, dedup por conta/data, trigger de coerência de ente.
+Migration `..._o2_15_treasury_reconciliation.sql`, reusa `accounting.*`; teste
+`tests/sprint-treasury-reconciliation.test.mjs` verificado por mutação (inverter o
+sinal da diferença derruba). Próximo: ordem bancária (OB) e MSC-SICONFI.
 
 ### Onda 3 — Materiais e Contratações (14-18 sem)
 
