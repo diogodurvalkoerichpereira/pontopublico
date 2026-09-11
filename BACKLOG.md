@@ -714,6 +714,15 @@ licitação não homologada derruba).
 Próximo: ligar a baixa de estoque (O3-02) à entrada de bem em patrimônio (O3-03)
 quando o material for um bem permanente; remessa ao PNCP (externo, homologação).
 
+**O3-14 — Medição / recebimento de contrato (Lei 14.133 art. 140) ✅.**
+`recordContractMeasurement` registra a medição de um contrato **vigente**, acumulando o
+`valor_executado` e numerando por contrato; a execução acumulada **nunca passa do valor
+empenhado** (só se liquida o que foi empenhado — Lei 4.320). `getContractMeasurements`
+lista. Migration `..._o3_14_contract_measurements.sql` (ALTER aditivo + tabela), reusa
+`contracts.*`. Teste `tests/sprint-contract-measurements.test.mjs` verificado por mutação
+(usar o valor total em vez do empenhado no teto derruba). Próximo (UI): medições no
+`/contratos`.
+
 **O3-12 — Ata de Registro de Preços (SRP, Lei 14.133 art. 82-86) ✅.**
 `createPriceRegistration` forma a ata a partir de uma licitação **homologada**, com itens
 (unidade, quantidade registrada, preço) e **vigência de até 1 ano** (art. 84);
