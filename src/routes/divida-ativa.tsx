@@ -1,0 +1,320 @@
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { Scale, Gavel } from "lucide-react";
+import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useAuth } from "@/lib/auth-context";
+import { getActiveDebtCertificates } from "@/lib/active-debt-certificate.functions";
+import {
+  getFiscalExecutions,
+  fileFiscalExecution,
+  updateFiscalExecutionStatus,
+} from "@/lib/fiscal-execution.functions";
+
+export const Route = createFileRoute("/divida-ativa")({ component: Page });
+
+function Page() {
+  const { session, loading, hasTenantPermission } = useAuth();
+  const nav = useNavigate();
+  useEffect(() => {
+    if (loading) return;
+    if (!session) nav({ to: "/login" });
+    else if (!hasTenantPermission("taxes.read")) nav({ to: "/app" });
+  }, [session, loading, hasTenantPermission, nav]);
+  if (!session) return null;
+  return <Content />;
+}
+
+type Cda = {
+  id: string;
+  exercicio: number;
+  numero: string;
+  valor_inscrito: string;
+  data_inscricao: string;
+  fundamento_legal: string;
+  status: string;
+};
+type Execution = {
+  id: string;
+  cda_numero: string;
+  numero_processo: string;
+  data_ajuizamento: string;
+  valor_ajuizado: string;
+  status: string;
+};
+
+const brl = (v: number | string) =>
+  Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const hoje = () => new Date().toISOString().slice(0, 10);
+
+function Content() {
+  const { activeTenant } = useAuth();
+  const loadCdas = useServerFn(getActiveDebtCertificates);
+  const loadExecs = useServerFn(getFiscalExecutions);
+  const file = useServerFn(fileFiscalExecution);
+  const updateStatus = useServerFn(updateFiscalExecutionStatus);
+  const qc = useQueryClient();
+
+  const [target, setTarget] = useState<Cda | null>(null);
+  const [processo, setProcesso] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const { data: cdaData } = useQuery({
+    queryKey: ["cdas", activeTenant?.id],
+    enabled: Boolean(activeTenant),
+    queryFn: () => loadCdas({ data: { tenant_id: activeTenant!.id } }),
+  });
+  const { data: execData } = useQuery({
+    queryKey: ["fiscal-executions", activeTenant?.id],
+    enabled: Boolean(activeTenant),
+    queryFn: () => loadExecs({ data: { tenant_id: activeTenant!.id } }),
+  });
+
+  const cdas = (cdaData?.certificates ?? []) as Cda[];
+  const executions = useMemo(
+    () => (execData?.executions ?? []) as Execution[],
+    [execData],
+  );
+  const canManage = cdaData?.canManage ?? false;
+  // CDAs já ajuizadas não podem ser ajuizadas de novo.
+  const ajuizadas = useMemo(
+    () => new Set(executions.map((e) => e.cda_numero)),
+    [executions],
+  );
+
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ["cdas", activeTenant?.id] });
+    qc.invalidateQueries({ queryKey: ["fiscal-executions", activeTenant?.id] });
+  };
+
+  const submitFile = async () => {
+    if (!activeTenant || !target) return;
+    setBusy(true);
+    try {
+      const r = await file({
+        data: {
+          tenant_id: activeTenant.id,
+          cda_id: target.id,
+          numero_processo: processo.trim(),
+          data_ajuizamento: hoje(),
+        },
+      });
+      toast.success(`Execução ajuizada — ${brl(r.valor_ajuizado)}`);
+      setTarget(null);
+      setProcesso("");
+      refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao ajuizar");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const changeStatus = async (e: Execution, status: string) => {
+    if (!activeTenant) return;
+    try {
+      await updateStatus({
+        data: {
+          tenant_id: activeTenant.id,
+          execution_id: e.id,
+          status: status as "suspensa" | "extinta" | "quitada" | "ajuizada",
+        },
+      });
+      toast.success("Andamento atualizado");
+      refresh();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Falha ao atualizar",
+      );
+    }
+  };
+
+  return (
+    <section className="space-y-6">
+      <div className="flex items-center gap-3">
+        <Scale className="size-6 text-primary" />
+        <div>
+          <h1 className="text-2xl font-extrabold tracking-tight">
+            Dívida ativa
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Certidões de dívida ativa (CDA) e execuções fiscais (Lei 6.830)
+          </p>
+        </div>
+      </div>
+
+      <div className="rounded-xl border bg-card overflow-x-auto">
+        <h2 className="font-bold p-3">Certidões (CDA)</h2>
+        <table className="w-full text-sm">
+          <thead className="border-b bg-muted/40 text-left">
+            <tr>
+              <th className="p-3 font-semibold">Nº</th>
+              <th className="p-3 font-semibold">Exercício</th>
+              <th className="p-3 font-semibold">Inscrição</th>
+              <th className="p-3 font-semibold text-right">Valor inscrito</th>
+              <th className="p-3 font-semibold">Situação</th>
+              {canManage && <th className="p-3 font-semibold">Ações</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {cdas.map((c) => (
+              <tr key={c.id} className="border-b last:border-0">
+                <td className="p-3 font-medium tabular-nums">{c.numero}</td>
+                <td className="p-3">{c.exercicio}</td>
+                <td className="p-3">{c.data_inscricao}</td>
+                <td className="p-3 text-right tabular-nums">
+                  {brl(c.valor_inscrito)}
+                </td>
+                <td className="p-3">
+                  <Badge
+                    variant={c.status === "ativa" ? "destructive" : "secondary"}
+                  >
+                    {c.status}
+                  </Badge>
+                </td>
+                {canManage && (
+                  <td className="p-3">
+                    {c.status === "ativa" && !ajuizadas.has(c.numero) && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setTarget(c);
+                          setProcesso("");
+                        }}
+                      >
+                        <Gavel className="size-4" /> Ajuizar
+                      </Button>
+                    )}
+                  </td>
+                )}
+              </tr>
+            ))}
+            {cdas.length === 0 && (
+              <tr>
+                <td
+                  colSpan={canManage ? 6 : 5}
+                  className="p-6 text-center text-muted-foreground"
+                >
+                  Nenhuma CDA emitida.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="rounded-xl border bg-card overflow-x-auto">
+        <h2 className="font-bold p-3">Execuções fiscais</h2>
+        <table className="w-full text-sm">
+          <thead className="border-b bg-muted/40 text-left">
+            <tr>
+              <th className="p-3 font-semibold">CDA</th>
+              <th className="p-3 font-semibold">Processo</th>
+              <th className="p-3 font-semibold">Ajuizamento</th>
+              <th className="p-3 font-semibold text-right">Valor</th>
+              <th className="p-3 font-semibold">Andamento</th>
+              {canManage && <th className="p-3 font-semibold">Ações</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {executions.map((e) => (
+              <tr key={e.id} className="border-b last:border-0">
+                <td className="p-3 tabular-nums">{e.cda_numero}</td>
+                <td className="p-3 font-medium">{e.numero_processo}</td>
+                <td className="p-3">{e.data_ajuizamento}</td>
+                <td className="p-3 text-right tabular-nums">
+                  {brl(e.valor_ajuizado)}
+                </td>
+                <td className="p-3">
+                  <Badge variant="secondary">{e.status}</Badge>
+                </td>
+                {canManage && (
+                  <td className="p-3">
+                    {e.status !== "extinta" && e.status !== "quitada" && (
+                      <div className="flex gap-2 flex-wrap">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => changeStatus(e, "suspensa")}
+                        >
+                          Suspender
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => changeStatus(e, "quitada")}
+                        >
+                          Quitar
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => changeStatus(e, "extinta")}
+                        >
+                          Extinguir
+                        </Button>
+                      </div>
+                    )}
+                  </td>
+                )}
+              </tr>
+            ))}
+            {executions.length === 0 && (
+              <tr>
+                <td
+                  colSpan={canManage ? 6 : 5}
+                  className="p-6 text-center text-muted-foreground"
+                >
+                  Nenhuma execução ajuizada.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <Dialog
+        open={Boolean(target)}
+        onOpenChange={(o) => !o && setTarget(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Ajuizar execução — CDA nº {target?.numero}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Valor inscrito: {brl(target?.valor_inscrito ?? 0)}.
+            </p>
+            <div>
+              <Label>Número do processo</Label>
+              <Input
+                value={processo}
+                onChange={(e) => setProcesso(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={submitFile} disabled={busy || !processo.trim()}>
+              Ajuizar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </section>
+  );
+}

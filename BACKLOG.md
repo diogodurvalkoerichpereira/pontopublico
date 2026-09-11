@@ -755,7 +755,15 @@ trava execuções encerradas; `getFiscalExecutions` lista. É o **registro** int
 peticiona nem integra ao Judiciário (integração externa). Migration
 `..._o4_09_fiscal_execution.sql`, reusa `taxes.*`. Teste
 `tests/sprint-fiscal-execution.test.mjs` verificado por mutação (aceitar CDA não ativa
-derruba). Próximo (UI): painel de dívida ativa (CDA + execução) no `/tributos`.
+derruba).
+
+**O4-10 — Painel de Dívida Ativa (UI) ✅.** Rota `/divida-ativa` dá cara ao O4-08/O4-09:
+lista as CDAs (nº, exercício, valor inscrito, situação) com ação "Ajuizar", e as
+execuções fiscais (CDA, processo, valor, andamento) com transições suspender/quitar/
+extinguir. Reusa `getActiveDebtCertificates`, `getFiscalExecutions`,
+`fileFiscalExecution`, `updateFiscalExecutionStatus`; item de menu em Contabilidade e
+Finanças. Sem novo backend/migration. Próximo: painel de dívida ativa por contribuinte e
+consolidação da receita de dívida ativa nos balanços.
 
 ### Onda 5 — Apoio, controle e transparência (10-14 sem)
 

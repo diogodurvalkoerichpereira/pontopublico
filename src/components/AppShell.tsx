@@ -376,6 +376,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       icon: Landmark,
       section: "Contabilidade e Finanças",
     });
+  if (hasTenantPermission("taxes.read"))
+    items.push({
+      to: "/divida-ativa",
+      label: "Dívida ativa",
+      icon: Scale,
+      section: "Contabilidade e Finanças",
+    });
   if (hasTenantPermission("contracts.read"))
     items.push({
       to: "/licitacoes",

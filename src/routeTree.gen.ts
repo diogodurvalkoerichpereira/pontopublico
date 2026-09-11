@@ -25,6 +25,7 @@ import { Route as LicitacoesRouteImport } from './routes/licitacoes'
 import { Route as GestorRouteImport } from './routes/gestor'
 import { Route as FrotasRouteImport } from './routes/frotas'
 import { Route as EsicRouteImport } from './routes/esic'
+import { Route as DividaAtivaRouteImport } from './routes/divida-ativa'
 import { Route as ControleInternoRouteImport } from './routes/controle-interno'
 import { Route as ContratosRouteImport } from './routes/contratos'
 import { Route as BalancosRouteImport } from './routes/balancos'
@@ -136,6 +137,11 @@ const FrotasRoute = FrotasRouteImport.update({
 const EsicRoute = EsicRouteImport.update({
   id: '/esic',
   path: '/esic',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DividaAtivaRoute = DividaAtivaRouteImport.update({
+  id: '/divida-ativa',
+  path: '/divida-ativa',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ControleInternoRoute = ControleInternoRouteImport.update({
@@ -306,6 +312,7 @@ export interface FileRoutesByFullPath {
   '/balancos': typeof BalancosRoute
   '/contratos': typeof ContratosRoute
   '/controle-interno': typeof ControleInternoRoute
+  '/divida-ativa': typeof DividaAtivaRoute
   '/esic': typeof EsicRoute
   '/frotas': typeof FrotasRoute
   '/gestor': typeof GestorRouteWithChildren
@@ -356,6 +363,7 @@ export interface FileRoutesByTo {
   '/balancos': typeof BalancosRoute
   '/contratos': typeof ContratosRoute
   '/controle-interno': typeof ControleInternoRoute
+  '/divida-ativa': typeof DividaAtivaRoute
   '/esic': typeof EsicRoute
   '/frotas': typeof FrotasRoute
   '/gestor': typeof GestorRouteWithChildren
@@ -407,6 +415,7 @@ export interface FileRoutesById {
   '/balancos': typeof BalancosRoute
   '/contratos': typeof ContratosRoute
   '/controle-interno': typeof ControleInternoRoute
+  '/divida-ativa': typeof DividaAtivaRoute
   '/esic': typeof EsicRoute
   '/frotas': typeof FrotasRoute
   '/gestor': typeof GestorRouteWithChildren
@@ -459,6 +468,7 @@ export interface FileRouteTypes {
     | '/balancos'
     | '/contratos'
     | '/controle-interno'
+    | '/divida-ativa'
     | '/esic'
     | '/frotas'
     | '/gestor'
@@ -509,6 +519,7 @@ export interface FileRouteTypes {
     | '/balancos'
     | '/contratos'
     | '/controle-interno'
+    | '/divida-ativa'
     | '/esic'
     | '/frotas'
     | '/gestor'
@@ -559,6 +570,7 @@ export interface FileRouteTypes {
     | '/balancos'
     | '/contratos'
     | '/controle-interno'
+    | '/divida-ativa'
     | '/esic'
     | '/frotas'
     | '/gestor'
@@ -610,6 +622,7 @@ export interface RootRouteChildren {
   BalancosRoute: typeof BalancosRoute
   ContratosRoute: typeof ContratosRoute
   ControleInternoRoute: typeof ControleInternoRoute
+  DividaAtivaRoute: typeof DividaAtivaRoute
   EsicRoute: typeof EsicRoute
   FrotasRoute: typeof FrotasRoute
   GestorRoute: typeof GestorRouteWithChildren
@@ -748,6 +761,13 @@ declare module '@tanstack/react-router' {
       path: '/esic'
       fullPath: '/esic'
       preLoaderRoute: typeof EsicRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/divida-ativa': {
+      id: '/divida-ativa'
+      path: '/divida-ativa'
+      fullPath: '/divida-ativa'
+      preLoaderRoute: typeof DividaAtivaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/controle-interno': {
@@ -1047,6 +1067,7 @@ const rootRouteChildren: RootRouteChildren = {
   BalancosRoute: BalancosRoute,
   ContratosRoute: ContratosRoute,
   ControleInternoRoute: ControleInternoRoute,
+  DividaAtivaRoute: DividaAtivaRoute,
   EsicRoute: EsicRoute,
   FrotasRoute: FrotasRoute,
   GestorRoute: GestorRouteWithChildren,
