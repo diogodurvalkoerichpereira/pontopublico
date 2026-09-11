@@ -21,6 +21,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as GestorRouteImport } from './routes/gestor'
 import { Route as ContratosRouteImport } from './routes/contratos'
 import { Route as AppRouteImport } from './routes/app'
+import { Route as AlmoxarifadoRouteImport } from './routes/almoxarifado'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as RhVtVaRouteImport } from './routes/rh.vt-va'
 import { Route as RhTabelasFiscaisRouteImport } from './routes/rh.tabelas-fiscais'
@@ -107,6 +108,11 @@ const ContratosRoute = ContratosRouteImport.update({
 const AppRoute = AppRouteImport.update({
   id: '/app',
   path: '/app',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AlmoxarifadoRoute = AlmoxarifadoRouteImport.update({
+  id: '/almoxarifado',
+  path: '/almoxarifado',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -247,6 +253,7 @@ const RhFuncionariosIdRoute = RhFuncionariosIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/almoxarifado': typeof AlmoxarifadoRoute
   '/app': typeof AppRoute
   '/contratos': typeof ContratosRoute
   '/gestor': typeof GestorRouteWithChildren
@@ -288,6 +295,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/almoxarifado': typeof AlmoxarifadoRoute
   '/app': typeof AppRoute
   '/contratos': typeof ContratosRoute
   '/gestor': typeof GestorRouteWithChildren
@@ -330,6 +338,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/almoxarifado': typeof AlmoxarifadoRoute
   '/app': typeof AppRoute
   '/contratos': typeof ContratosRoute
   '/gestor': typeof GestorRouteWithChildren
@@ -373,6 +382,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/almoxarifado'
     | '/app'
     | '/contratos'
     | '/gestor'
@@ -414,6 +424,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/almoxarifado'
     | '/app'
     | '/contratos'
     | '/gestor'
@@ -455,6 +466,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/almoxarifado'
     | '/app'
     | '/contratos'
     | '/gestor'
@@ -497,6 +509,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AlmoxarifadoRoute: typeof AlmoxarifadoRoute
   AppRoute: typeof AppRoute
   ContratosRoute: typeof ContratosRoute
   GestorRoute: typeof GestorRouteWithChildren
@@ -603,6 +616,13 @@ declare module '@tanstack/react-router' {
       path: '/app'
       fullPath: '/app'
       preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/almoxarifado': {
+      id: '/almoxarifado'
+      path: '/almoxarifado'
+      fullPath: '/almoxarifado'
+      preLoaderRoute: typeof AlmoxarifadoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -862,6 +882,7 @@ const RhRouteWithChildren = RhRoute._addFileChildren(RhRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AlmoxarifadoRoute: AlmoxarifadoRoute,
   AppRoute: AppRoute,
   ContratosRoute: ContratosRoute,
   GestorRoute: GestorRouteWithChildren,
