@@ -596,6 +596,16 @@ têm de estar ativas. `budget_credit_movements` guarda a trilha com justificativ
 `20260909390000_o2_13_budget_credit_transfer.sql`; teste
 `tests/sprint-budget-credit.test.mjs` verificado por mutação (ignorar o piso do
 empenhado derruba).
+
+**O2-22 — Crédito adicional por excesso de arrecadação (Lei 4.320 art. 43, II) ✅.**
+`openSupplementaryCredit` suplementa uma dotação **ativa** lastreado no **excesso de
+arrecadação** da fonte (arrecadado − previsto), nunca acima do excesso ainda não
+utilizado por créditos anteriores da mesma fonte no exercício; suplementa o destino e
+registra o crédito com justificativa. `getSupplementaryCredits` lista. Migration
+`..._o2_22_supplementary_credit.sql`, reusa `budget.*`; teste
+`tests/sprint-supplementary-credit.test.mjs` verificado por mutação (inverter o teto do
+excesso derruba). Próximo (UI): abertura de crédito suplementar no `/orcamento`.
+
 **O2-14 — Execução da receita por natureza ✅.** `getRevenueExecution` consolida,
 por natureza de receita, previsto × arrecadado × a arrecadar (piso zero) no
 exercício — o espelho, do lado da receita, da execução da despesa. Read-only,
