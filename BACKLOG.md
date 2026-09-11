@@ -617,6 +617,14 @@ reusa `accounting.read`, sem migration; cartões no `/balancos`. Teste
 `tests/sprint-equity-statement.test.mjs` verificado por mutação (inverter para VPD − VPA
 derruba). Próximo: balanço financeiro (Anexo 13) e MSC-SICONFI.
 
+**O2-19 — Cronograma de desembolso ✅.** `saveDisbursementQuota` programa cotas mensais
+de desembolso por fonte (upsert por ente/exercício/mês/fonte); `getDisbursementSchedule`
+confronta, mês a mês, o programado com o realizado (despesa paga no mês) e apura o saldo
+da cota (negativo = estouro) — programação financeira da Lei 4.320 art. 47-50. Migration
+`..._o2_19_disbursement_schedule.sql`, reusa `budget.*`; cronograma no `/orcamento`. Teste
+`tests/sprint-disbursement-schedule.test.mjs` verificado por mutação (somar em vez de
+subtrair no saldo derruba). Próximo: balanço financeiro (Anexo 13) e MSC-SICONFI.
+
 ### Onda 3 — Materiais e Contratações (14-18 sem)
 
 Compras Lei 14.133 → contratos → almoxarifado → patrimônio (depreciação NBC TSP)

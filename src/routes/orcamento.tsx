@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { PiggyBank, Plus } from "lucide-react";
+import { PiggyBank, Plus, CalendarClock } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,25 @@ import {
   getBudgetAppropriations,
   saveBudgetAppropriation,
 } from "@/lib/budget.functions";
+import {
+  getDisbursementSchedule,
+  saveDisbursementQuota,
+} from "@/lib/disbursement-schedule.functions";
+
+const MESES = [
+  "Jan",
+  "Fev",
+  "Mar",
+  "Abr",
+  "Mai",
+  "Jun",
+  "Jul",
+  "Ago",
+  "Set",
+  "Out",
+  "Nov",
+  "Dez",
+];
 
 export const Route = createFileRoute("/orcamento")({ component: Page });
 
@@ -58,10 +77,21 @@ function Content() {
   const { activeTenant } = useAuth();
   const load = useServerFn(getBudgetAppropriations);
   const save = useServerFn(saveBudgetAppropriation);
+  const loadSchedule = useServerFn(getDisbursementSchedule);
+  const saveQuota = useServerFn(saveDisbursementQuota);
   const qc = useQueryClient();
 
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [scheduleYear, setScheduleYear] = useState(
+    String(new Date().getFullYear()),
+  );
+  const [quotaOpen, setQuotaOpen] = useState(false);
+  const [quota, setQuota] = useState({
+    mes: "1",
+    fonte_recurso: "",
+    valor: "",
+  });
   const [form, setForm] = useState({
     exercicio: String(new Date().getFullYear()),
     unidade_orcamentaria: "",
@@ -83,6 +113,46 @@ function Content() {
   });
   const items = (data?.appropriations ?? []) as Appropriation[];
   const canManage = data?.canManage ?? false;
+
+  const { data: schedule } = useQuery({
+    queryKey: ["disbursement-schedule", activeTenant?.id, scheduleYear],
+    enabled: Boolean(activeTenant) && /^\d{4}$/.test(scheduleYear),
+    queryFn: () =>
+      loadSchedule({
+        data: { tenant_id: activeTenant!.id, exercicio: Number(scheduleYear) },
+      }),
+  });
+
+  const refreshSchedule = () =>
+    qc.invalidateQueries({
+      queryKey: ["disbursement-schedule", activeTenant?.id, scheduleYear],
+    });
+
+  const submitQuota = async () => {
+    if (!activeTenant) return;
+    setBusy(true);
+    try {
+      await saveQuota({
+        data: {
+          tenant_id: activeTenant.id,
+          exercicio: Number(scheduleYear),
+          mes: Number(quota.mes),
+          fonte_recurso: quota.fonte_recurso.trim(),
+          valor_programado: Number(quota.valor),
+        },
+      });
+      toast.success("Cota programada");
+      setQuotaOpen(false);
+      setQuota({ mes: "1", fonte_recurso: "", valor: "" });
+      refreshSchedule();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Falha ao programar",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const totals = items.reduce(
     (acc, a) => ({
@@ -227,6 +297,125 @@ function Content() {
           </tbody>
         </table>
       </div>
+
+      <div className="rounded-xl border bg-card p-4 space-y-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <CalendarClock className="size-5 text-primary" />
+            <h2 className="font-bold">
+              Cronograma de desembolso (Lei 4.320, art. 47-50)
+            </h2>
+          </div>
+          <div className="flex items-end gap-2">
+            <div className="w-28">
+              <Label>Exercício</Label>
+              <Input
+                type="number"
+                value={scheduleYear}
+                onChange={(e) => setScheduleYear(e.target.value)}
+              />
+            </div>
+            {canManage && (
+              <Button variant="outline" onClick={() => setQuotaOpen(true)}>
+                <Plus className="size-4" /> Programar cota
+              </Button>
+            )}
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b bg-muted/40 text-left">
+              <tr>
+                <th className="p-2 font-semibold">Mês</th>
+                <th className="p-2 font-semibold text-right">Programado</th>
+                <th className="p-2 font-semibold text-right">Realizado</th>
+                <th className="p-2 font-semibold text-right">Saldo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(schedule?.meses ?? []).map((m) => (
+                <tr key={m.mes} className="border-b last:border-0">
+                  <td className="p-2">{MESES[m.mes - 1]}</td>
+                  <td className="p-2 text-right tabular-nums">
+                    {brl(m.programado)}
+                  </td>
+                  <td className="p-2 text-right tabular-nums">
+                    {brl(m.realizado)}
+                  </td>
+                  <td
+                    className={`p-2 text-right tabular-nums ${
+                      m.saldo < 0 ? "text-red-600" : ""
+                    }`}
+                  >
+                    {brl(m.saldo)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t font-bold">
+                <td className="p-2">Total</td>
+                <td className="p-2 text-right tabular-nums">
+                  {brl(schedule?.totais.programado ?? 0)}
+                </td>
+                <td className="p-2 text-right tabular-nums">
+                  {brl(schedule?.totais.realizado ?? 0)}
+                </td>
+                <td className="p-2 text-right tabular-nums">
+                  {brl(schedule?.totais.saldo ?? 0)}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      <Dialog open={quotaOpen} onOpenChange={setQuotaOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Programar cota de desembolso</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Mês</Label>
+              <Input
+                type="number"
+                min={1}
+                max={12}
+                value={quota.mes}
+                onChange={(e) =>
+                  setQuota((q) => ({ ...q, mes: e.target.value }))
+                }
+              />
+            </div>
+            <div>
+              <Label>Fonte de recurso</Label>
+              <Input
+                value={quota.fonte_recurso}
+                onChange={(e) =>
+                  setQuota((q) => ({ ...q, fonte_recurso: e.target.value }))
+                }
+              />
+            </div>
+            <div className="col-span-2">
+              <Label>Valor programado</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={quota.valor}
+                onChange={(e) =>
+                  setQuota((q) => ({ ...q, valor: e.target.value }))
+                }
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={submitQuota} disabled={busy}>
+              Programar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
