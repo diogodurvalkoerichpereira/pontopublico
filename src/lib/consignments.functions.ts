@@ -162,6 +162,91 @@ export const registerConsignment = createServerFn({ method: "POST" })
     });
   });
 
+const DepositInput = z.object({
+  tenant_id: z.string().uuid(),
+  employment_link_id: z.string().uuid(),
+  reference_month: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/, "reference_month deve ser AAAA-MM"),
+  // Rubrica de desconto na qual o total consignado do mês é lançado.
+  rubric_id: z.string().uuid(),
+});
+
+// Deposita o total das parcelas consignadas ativas do vínculo como um desconto na
+// folha da competência (idempotente: re-depositar substitui). Não amortiza as
+// parcelas — o avanço de parcelas_pagas/quitação ocorre no fechamento do ciclo.
+export const depositConsignmentsToPayroll = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => DepositInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "people.manage");
+    const rubric = (
+      await query<{ id: string; nature: string }>(
+        `select id, nature from public.payroll_rubrics
+         where id=$1 and tenant_id=$2`,
+        [data.rubric_id, data.tenant_id],
+      )
+    )[0];
+    if (!rubric) throw new Error("Rubrica inválida para esta entidade");
+    if (rubric.nature !== "desconto")
+      throw new Error("A rubrica de consignação deve ser de desconto");
+    const referenceDate = `${data.reference_month}-01`;
+    return withTransaction(async (client) => {
+      // Soma as parcelas ativas ainda devidas (parcelas_pagas < parcelas_total).
+      const total = Number(
+        (
+          await client.query<{ soma: string }>(
+            `select coalesce(sum(valor_parcela),0)::text as soma
+             from public.payroll_consignments
+             where tenant_id=$1 and employment_link_id=$2 and status='ativa'
+               and parcelas_pagas < parcelas_total`,
+            [data.tenant_id, data.employment_link_id],
+          )
+        ).rows[0].soma,
+      );
+      // Re-depositar substitui a competência (apaga-e-insere; source_batch_id nulo).
+      await client.query(
+        `delete from public.payroll_monthly_variables
+         where tenant_id=$1 and employment_link_id=$2 and rubric_id=$3
+           and reference_month=$4 and source_batch_id is null`,
+        [
+          data.tenant_id,
+          data.employment_link_id,
+          data.rubric_id,
+          referenceDate,
+        ],
+      );
+      if (total > 0)
+        await client.query(
+          `insert into public.payroll_monthly_variables
+             (tenant_id, employment_link_id, rubric_id, reference_month, amount,
+              installment_number, installments_total)
+           values ($1,$2,$3,$4,$5,1,1)`,
+          [
+            data.tenant_id,
+            data.employment_link_id,
+            data.rubric_id,
+            referenceDate,
+            total,
+          ],
+        );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "deposit",
+        resource: "payroll_monthly_variables",
+        recordId: data.employment_link_id,
+        after: {
+          reference_month: referenceDate,
+          total,
+          rubric_id: data.rubric_id,
+        },
+      });
+      return { reference_month: referenceDate, total };
+    });
+  });
+
 const CancelInput = z.object({
   tenant_id: z.string().uuid(),
   consignment_id: z.string().uuid(),

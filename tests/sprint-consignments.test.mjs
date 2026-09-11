@@ -171,6 +171,87 @@ test("margem de 35%: acumula até o teto e recusa acima", async () => {
   assert.equal(margin.consignments.length, 2);
 });
 
+test("deposita o total consignado ativo na folha da competência", async () => {
+  const link = await seedLink(2000, "M-3"); // margem 700
+  await registra(link, 300);
+  await registra(link, 150);
+  // Uma consignação já quitada (parcelas_pagas == total) não entra no depósito.
+  await db.query(
+    `insert into public.payroll_consignments
+       (id, tenant_id, employment_link_id, tipo, consignatario, valor_parcela,
+        parcelas_total, parcelas_pagas, status, inicio)
+     values ($1,$2,$3,'outro','X',100,12,12,'ativa','2026-01-01')`,
+    [randomUUID(), tenantId, link],
+  );
+  const rubricId = randomUUID();
+  await db.query(
+    `insert into public.payroll_rubrics (id, tenant_id, code, name, nature, unit)
+     values ($1,$2,'CONS','Consignacoes','desconto','valor')`,
+    [rubricId, tenantId],
+  );
+  const r = await fn.depositConsignmentsToPayroll({
+    data: {
+      tenant_id: tenantId,
+      employment_link_id: link,
+      reference_month: "2026-03",
+      rubric_id: rubricId,
+    },
+    context: ctx(),
+  });
+  assert.equal(r.total, 450); // 300 + 150 (quitada de 100 fora)
+  const mv = (
+    await db.query(
+      `select amount::text from public.payroll_monthly_variables
+       where employment_link_id=$1 and rubric_id=$2 and reference_month='2026-03-01'`,
+      [link, rubricId],
+    )
+  ).rows;
+  assert.equal(mv.length, 1);
+  assert.equal(mv[0].amount, "450.00");
+
+  // Re-depositar substitui, não duplica.
+  await fn.depositConsignmentsToPayroll({
+    data: {
+      tenant_id: tenantId,
+      employment_link_id: link,
+      reference_month: "2026-03",
+      rubric_id: rubricId,
+    },
+    context: ctx(),
+  });
+  const again = (
+    await db.query(
+      `select count(*)::int as n from public.payroll_monthly_variables
+       where employment_link_id=$1 and rubric_id=$2 and reference_month='2026-03-01'`,
+      [link, rubricId],
+    )
+  ).rows[0].n;
+  assert.equal(again, 1);
+});
+
+test("rubrica de provento é recusada no depósito de consignação", async () => {
+  const link = await seedLink(2000, "M-4");
+  await registra(link, 100);
+  const rubricId = randomUUID();
+  await db.query(
+    `insert into public.payroll_rubrics (id, tenant_id, code, name, nature, unit)
+     values ($1,$2,'PROV','Provento','provento','valor')`,
+    [rubricId, tenantId],
+  );
+  await assert.rejects(
+    fn.depositConsignmentsToPayroll({
+      data: {
+        tenant_id: tenantId,
+        employment_link_id: link,
+        reference_month: "2026-03",
+        rubric_id: rubricId,
+      },
+      context: ctx(),
+    }),
+    /desconto/,
+  );
+});
+
 test("cancelar libera a margem", async () => {
   const link = await seedLink(1000, "M-2");
   const r = await registra(link, 300);

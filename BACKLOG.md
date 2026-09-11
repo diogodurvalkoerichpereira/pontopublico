@@ -478,8 +478,12 @@ percentual configurável) é conferido na inclusão sobre a soma das parcelas at
 `cancelConsignment` libera a margem. Reusa `people.read`/`people.manage`. Migration
 `20260909330000_o1_09_payroll_consignments.sql`; teste
 `tests/sprint-consignments.test.mjs` verificado por mutação (comparar a parcela ao
-teto cheio, ignorando o já comprometido, derruba). **Pendente:** amortização
-automática das parcelas por competência via ciclo de folha.
+teto cheio, ignorando o já comprometido, derruba). **O1-09b ✅:**
+`depositConsignmentsToPayroll` deposita o total das parcelas ativas ainda devidas
+(parcelas_pagas < parcelas_total) como desconto na folha da competência (rubrica
+de natureza `desconto`, idempotente — re-depósito substitui), pela mesma via de
+`payroll_monthly_variables` das férias/ponto. **Pendente:** avanço automático de
+`parcelas_pagas` e quitação no fechamento do ciclo.
 
 ---
 
