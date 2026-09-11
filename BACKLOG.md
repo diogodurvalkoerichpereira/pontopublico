@@ -582,6 +582,11 @@ têm de estar ativas. `budget_credit_movements` guarda a trilha com justificativ
 `20260909390000_o2_13_budget_credit_transfer.sql`; teste
 `tests/sprint-budget-credit.test.mjs` verificado por mutação (ignorar o piso do
 empenhado derruba).
+**O2-14 — Execução da receita por natureza ✅.** `getRevenueExecution` consolida,
+por natureza de receita, previsto × arrecadado × a arrecadar (piso zero) no
+exercício — o espelho, do lado da receita, da execução da despesa. Read-only,
+reusa `budget.read`, sem migration; teste `tests/sprint-revenue-execution.test.mjs`
+verificado por mutação (permitir a_arrecadar negativo derruba).
 Próximo: balanço financeiro completo (com receita/despesa orçamentária e
 extraorçamentária) e patrimonial, demonstração das variações patrimoniais
 (DCASP); conciliação bancária; ordem bancária (OB) e MSC-SICONFI.
