@@ -67,6 +67,40 @@ export const getTaxCreditsSummary = createServerFn({ method: "POST" })
     };
   });
 
+// O4-01c — Arrecadação por tributo. Agrupa os créditos não cancelados por tipo de tributo
+// (IPTU/ISS/ITBI/TAXA/COSIP): quantidade, lançado e **arrecadado** (soma dos pagamentos).
+// Ordena do mais arrecadado ao menos. Reusa taxes.read.
+export const getTaxCreditsByTributo = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => SummaryInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "taxes.read");
+    const rows = await query<{
+      tributo: string;
+      quantidade: string;
+      lancado: string;
+      arrecadado: string;
+    }>(
+      `select tributo, count(*)::text as quantidade,
+         coalesce(sum(valor_lancado),0)::text as lancado,
+         coalesce(sum(valor_pago),0)::text as arrecadado
+       from public.tax_credits
+       where tenant_id = $1 and status <> 'cancelado'
+       group by tributo
+       order by sum(valor_pago) desc, tributo`,
+      [data.tenant_id],
+    );
+    return {
+      tributos: rows.map((r) => ({
+        tributo: r.tributo,
+        quantidade: Number(r.quantidade),
+        lancado: Number(r.lancado),
+        arrecadado: Number(r.arrecadado),
+      })),
+    };
+  });
+
 export const getTaxCredits = createServerFn({ method: "POST" })
   .middleware([requireAuth])
   .validator((data: unknown) => GetInput.parse(data))

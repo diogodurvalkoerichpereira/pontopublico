@@ -873,6 +873,13 @@ VPD/VPA de alienação (evento contábil dedicado) e remessa ao PNCP (externo).
 Cadastros imobiliário/mobiliário · IPTU, ISS, ITBI · dívida ativa (CDA, execução
 fiscal) · NFS-e padrão nacional · certidões.
 
+**O4-01c — Arrecadação por tributo ✅.** `getTaxCreditsByTributo` agrupa os créditos não
+cancelados por tipo (IPTU/ISS/ITBI/TAXA/COSIP): quantidade, lançado e **arrecadado** (soma
+dos pagamentos), ordenado do mais arrecadado ao menos. Reusa `taxes.read`, sem migration;
+`/tributos` ganha a tabela de arrecadação por tributo. Teste
+`tests/sprint-tax-by-tributo.test.mjs` verificado por mutação (arrecadado pelo lançado, ou
+incluir cancelado, derruba).
+
 **O4-01b — Resumo da arrecadação tributária ✅.** `getTaxCreditsSummary` consolida os
 créditos por situação (lancado/divida_ativa/quitado/cancelado), o total **lançado**, o
 **arrecadado** (soma dos pagamentos dos não cancelados) e o **a receber** (saldo dos

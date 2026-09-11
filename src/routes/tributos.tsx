@@ -38,6 +38,7 @@ import {
   getUpdatedTaxDebt,
   cancelTaxCredit,
   getTaxCreditsSummary,
+  getTaxCreditsByTributo,
 } from "@/lib/taxes.functions";
 import { emitActiveDebtCertificate } from "@/lib/active-debt-certificate.functions";
 import { getProperties, launchIptu } from "@/lib/real-estate.functions";
@@ -164,10 +165,23 @@ function Content() {
     enabled: Boolean(activeTenant),
     queryFn: () => loadSummary({ data: { tenant_id: activeTenant!.id } }),
   });
+  const loadByTributo = useServerFn(getTaxCreditsByTributo);
+  const { data: byTributo } = useQuery({
+    queryKey: ["tax-by-tributo", activeTenant?.id],
+    enabled: Boolean(activeTenant),
+    queryFn: () => loadByTributo({ data: { tenant_id: activeTenant!.id } }),
+  });
+  const tributos = (byTributo?.tributos ?? []) as Array<{
+    tributo: string;
+    quantidade: number;
+    lancado: number;
+    arrecadado: number;
+  }>;
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["tax-credits", activeTenant?.id] });
     qc.invalidateQueries({ queryKey: ["tax-summary", activeTenant?.id] });
+    qc.invalidateQueries({ queryKey: ["tax-by-tributo", activeTenant?.id] });
   };
 
   const openPay = (c: Credit) => {
@@ -419,6 +433,38 @@ function Content() {
               {summary.porStatus.divida_ativa}
             </div>
           </div>
+        </div>
+      )}
+
+      {tributos.length > 0 && (
+        <div className="rounded-xl border bg-card overflow-x-auto">
+          <h2 className="font-bold p-3">Arrecadação por tributo</h2>
+          <table className="w-full text-sm">
+            <thead className="border-b bg-muted/40 text-left">
+              <tr>
+                <th className="p-3 font-semibold">Tributo</th>
+                <th className="p-3 font-semibold text-right">Créditos</th>
+                <th className="p-3 font-semibold text-right">Lançado</th>
+                <th className="p-3 font-semibold text-right">Arrecadado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tributos.map((t) => (
+                <tr key={t.tributo} className="border-b last:border-0">
+                  <td className="p-3 font-medium">{t.tributo}</td>
+                  <td className="p-3 text-right tabular-nums">
+                    {t.quantidade}
+                  </td>
+                  <td className="p-3 text-right tabular-nums">
+                    {brl(t.lancado)}
+                  </td>
+                  <td className="p-3 text-right tabular-nums font-medium">
+                    {brl(t.arrecadado)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
