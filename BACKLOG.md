@@ -666,9 +666,12 @@ oficial, código nem assinatura); O4-04 cadastro imobiliário + IPTU
 (`real_estate_properties` com inscrição/proprietário/valor venal/áreas;
 `launchIptu` gera o crédito tributário = valor venal × alíquota em `tax_credits`,
 um por imóvel/exercício, ligando o cadastro à arrecadação — reusa `taxes.*`).
-Pendente (externo/homologação): cadastro mobiliário e cálculo de ISS; NFS-e
-padrão nacional; emissão da CND com autenticação e layout do ente; execução
-fiscal integrada ao Judiciário.
+O4-05 cadastro mobiliário + ISS (`service_taxpayers` com inscrição municipal,
+atividade e alíquota; `launchIss` gera o crédito ISS = base × alíquota por
+competência em `tax_credits`, inscrição "inscricao/competencia", um por
+competência — reusa `taxes.*`). Pendente (externo/homologação): NFS-e padrão
+nacional; emissão da CND com autenticação e layout do ente; execução fiscal
+integrada ao Judiciário.
 
 ### Onda 5 — Apoio, controle e transparência (10-14 sem)
 
