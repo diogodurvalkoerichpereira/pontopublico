@@ -558,7 +558,13 @@ empenho de origem a `anulado` (obrigação extinta), sem devolver saldo à dota�
 exercício de origem está encerrado); resto pago/cancelado não cancela. Reusa
 `budget.manage`, sem migration (o status `cancelado` já existia). Teste
 `tests/sprint-restos-cancel.test.mjs` verificado por mutação (aceitar resto não inscrito
-derruba). Próximo (UI): gestão de restos a pagar (inscrever/pagar/cancelar).
+derruba).
+
+**O2-21 — Painel de Restos a Pagar (UI) ✅.** Rota `/restos-a-pagar` dá cara ao
+O2-09/O2-20: lista os restos inscritos (empenho, exercício, credor, tipo, valor, situação)
+com ações "Pagar" e "Cancelar" por resto inscrito e "Inscrever exercício" (snapshot dos
+empenhos não pagos). Reusa `getRestosAPagar`, `inscribeRestosAPagar`, `payRestoAPagar`,
+`cancelRestoAPagar`; item de menu em Contabilidade e Finanças. Sem novo backend.
 **O2-10 — Balanço orçamentário (Lei 4.320, Anexo 1) ✅.** `getBudgetBalance`
 consolida o exercício: RECEITA (prevista × arrecadada × diferença), DESPESA
 (fixada × empenhada × liquidada × paga × saldo de dotação), o resultado

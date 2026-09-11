@@ -372,6 +372,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       icon: BarChart3,
       section: "Contabilidade e Finanças",
     });
+  if (hasTenantPermission("budget.read"))
+    items.push({
+      to: "/restos-a-pagar",
+      label: "Restos a Pagar",
+      icon: FileStack,
+      section: "Contabilidade e Finanças",
+    });
   if (hasTenantPermission("taxes.read"))
     items.push({
       to: "/tributos",
