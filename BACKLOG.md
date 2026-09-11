@@ -800,6 +800,13 @@ das notas — indicador de satisfação dos serviços. Migration
 por mutação (não dividir pela quantidade na média derruba). Próximo: carta de serviços ao
 cidadão e painel de recursos do e-SIC.
 
+**O5-08 — Indicador de tempestividade das respostas ✅.** `getResponseTimeliness`
+consolida, na ouvidoria e no e-SIC, quantas respostas saíram **no prazo legal** (data da
+resposta ≤ prazo) e o percentual — transparência ativa do desempenho (Lei 13.460/LAI).
+Read-only, reusa `protocol.read`, sem migration; cartões no `/ouvidoria`. Teste
+`tests/sprint-response-timeliness.test.mjs` verificado por mutação (inverter a comparação
+de prazo derruba). Próximo: carta de serviços ao cidadão (Lei 13.460 art. 7º).
+
 ### Onda 6 — Conformidade contínua ⚠️ (contínuo)
 
 Layout do TCE estadual (um por vez; a referência de Timóteo é SICOM/MG, não

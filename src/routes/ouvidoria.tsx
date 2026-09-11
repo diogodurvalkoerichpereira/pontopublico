@@ -33,6 +33,7 @@ import {
   getOmbudsmanSatisfaction,
   rateManifestation,
 } from "@/lib/ombudsman-satisfaction.functions";
+import { getResponseTimeliness } from "@/lib/response-timeliness.functions";
 
 export const Route = createFileRoute("/ouvidoria")({ component: Page });
 
@@ -115,6 +116,12 @@ function Content() {
     queryKey: ["ombudsman-satisfaction", activeTenant?.id],
     enabled: Boolean(activeTenant),
     queryFn: () => loadSatisfaction({ data: { tenant_id: activeTenant!.id } }),
+  });
+  const loadTimeliness = useServerFn(getResponseTimeliness);
+  const { data: timeliness } = useQuery({
+    queryKey: ["response-timeliness", activeTenant?.id],
+    enabled: Boolean(activeTenant),
+    queryFn: () => loadTimeliness({ data: { tenant_id: activeTenant!.id } }),
   });
 
   const refresh = () => {
@@ -249,6 +256,35 @@ function Content() {
             <span className="text-sm font-normal text-muted-foreground">
               {" "}
               — {satisfaction?.total ?? 0} avaliações
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="rounded-xl border bg-card p-4">
+          <div className="text-sm text-muted-foreground">
+            Ouvidoria — respostas no prazo (Lei 13.460)
+          </div>
+          <div className="text-xl font-bold">
+            {(timeliness?.ouvidoria.percentual ?? 0).toFixed(2)}%
+            <span className="text-sm font-normal text-muted-foreground">
+              {" "}
+              — {timeliness?.ouvidoria.no_prazo ?? 0}/
+              {timeliness?.ouvidoria.respondidas ?? 0}
+            </span>
+          </div>
+        </div>
+        <div className="rounded-xl border bg-card p-4">
+          <div className="text-sm text-muted-foreground">
+            e-SIC — respostas no prazo (LAI)
+          </div>
+          <div className="text-xl font-bold">
+            {(timeliness?.esic.percentual ?? 0).toFixed(2)}%
+            <span className="text-sm font-normal text-muted-foreground">
+              {" "}
+              — {timeliness?.esic.no_prazo ?? 0}/
+              {timeliness?.esic.respondidas ?? 0}
             </span>
           </div>
         </div>
