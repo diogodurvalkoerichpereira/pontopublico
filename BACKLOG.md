@@ -567,8 +567,15 @@ ingresso no destino, **atômico**, contas travadas em ordem estável),
 conciliação. Reusa `accounting.*`. Migration `20260909360000_o2_11_treasury.sql`;
 teste `tests/sprint-treasury.test.mjs` verificado por mutação (permitir saldo
 negativo derruba).
-Próximo: balanço financeiro e patrimonial, demonstração das variações
-patrimoniais (DCASP); conciliação bancária; ordem bancária (OB) e MSC-SICONFI.
+**O2-12 — Disponibilidade de caixa (base do balanço financeiro) ✅.**
+`getCashAvailability` consolida o saldo das contas ativas de tesouraria e o fluxo
+do período: ingressos, saídas, fluxo líquido (ingressos − saídas) e as
+transferências internas à parte (que se anulam entre contas). Read-only, reusa
+`accounting.read`, sem migration. Teste `tests/sprint-cash-availability.test.mjs`
+verificado por mutação (contar saída como ingresso derruba).
+Próximo: balanço financeiro completo (com receita/despesa orçamentária e
+extraorçamentária) e patrimonial, demonstração das variações patrimoniais
+(DCASP); conciliação bancária; ordem bancária (OB) e MSC-SICONFI.
 
 ### Onda 3 — Materiais e Contratações (14-18 sem)
 
