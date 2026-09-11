@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as TributosRouteImport } from './routes/tributos'
 import { Route as TesourariaRouteImport } from './routes/tesouraria'
 import { Route as RhRouteImport } from './routes/rh'
+import { Route as ProtocoloRouteImport } from './routes/protocolo'
 import { Route as PortalFinanceiroRouteImport } from './routes/portal-financeiro'
 import { Route as PontoRouteImport } from './routes/ponto'
 import { Route as PatrimonioRouteImport } from './routes/patrimonio'
@@ -64,6 +65,11 @@ const TesourariaRoute = TesourariaRouteImport.update({
 const RhRoute = RhRouteImport.update({
   id: '/rh',
   path: '/rh',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProtocoloRoute = ProtocoloRouteImport.update({
+  id: '/protocolo',
+  path: '/protocolo',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PortalFinanceiroRoute = PortalFinanceiroRouteImport.update({
@@ -270,6 +276,7 @@ export interface FileRoutesByFullPath {
   '/patrimonio': typeof PatrimonioRoute
   '/ponto': typeof PontoRoute
   '/portal-financeiro': typeof PortalFinanceiroRoute
+  '/protocolo': typeof ProtocoloRoute
   '/rh': typeof RhRouteWithChildren
   '/tesouraria': typeof TesourariaRoute
   '/tributos': typeof TributosRoute
@@ -313,6 +320,7 @@ export interface FileRoutesByTo {
   '/patrimonio': typeof PatrimonioRoute
   '/ponto': typeof PontoRoute
   '/portal-financeiro': typeof PortalFinanceiroRoute
+  '/protocolo': typeof ProtocoloRoute
   '/rh': typeof RhRouteWithChildren
   '/tesouraria': typeof TesourariaRoute
   '/tributos': typeof TributosRoute
@@ -357,6 +365,7 @@ export interface FileRoutesById {
   '/patrimonio': typeof PatrimonioRoute
   '/ponto': typeof PontoRoute
   '/portal-financeiro': typeof PortalFinanceiroRoute
+  '/protocolo': typeof ProtocoloRoute
   '/rh': typeof RhRouteWithChildren
   '/tesouraria': typeof TesourariaRoute
   '/tributos': typeof TributosRoute
@@ -402,6 +411,7 @@ export interface FileRouteTypes {
     | '/patrimonio'
     | '/ponto'
     | '/portal-financeiro'
+    | '/protocolo'
     | '/rh'
     | '/tesouraria'
     | '/tributos'
@@ -445,6 +455,7 @@ export interface FileRouteTypes {
     | '/patrimonio'
     | '/ponto'
     | '/portal-financeiro'
+    | '/protocolo'
     | '/rh'
     | '/tesouraria'
     | '/tributos'
@@ -488,6 +499,7 @@ export interface FileRouteTypes {
     | '/patrimonio'
     | '/ponto'
     | '/portal-financeiro'
+    | '/protocolo'
     | '/rh'
     | '/tesouraria'
     | '/tributos'
@@ -532,6 +544,7 @@ export interface RootRouteChildren {
   PatrimonioRoute: typeof PatrimonioRoute
   PontoRoute: typeof PontoRoute
   PortalFinanceiroRoute: typeof PortalFinanceiroRoute
+  ProtocoloRoute: typeof ProtocoloRoute
   RhRoute: typeof RhRouteWithChildren
   TesourariaRoute: typeof TesourariaRoute
   TributosRoute: typeof TributosRoute
@@ -566,6 +579,13 @@ declare module '@tanstack/react-router' {
       path: '/rh'
       fullPath: '/rh'
       preLoaderRoute: typeof RhRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/protocolo': {
+      id: '/protocolo'
+      path: '/protocolo'
+      fullPath: '/protocolo'
+      preLoaderRoute: typeof ProtocoloRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/portal-financeiro': {
@@ -913,6 +933,7 @@ const rootRouteChildren: RootRouteChildren = {
   PatrimonioRoute: PatrimonioRoute,
   PontoRoute: PontoRoute,
   PortalFinanceiroRoute: PortalFinanceiroRoute,
+  ProtocoloRoute: ProtocoloRoute,
   RhRoute: RhRouteWithChildren,
   TesourariaRoute: TesourariaRoute,
   TributosRoute: TributosRoute,

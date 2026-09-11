@@ -42,6 +42,7 @@ import {
   FileSignature,
   Boxes,
   Building,
+  FileStack,
 } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
 import { SupportWidget } from "@/components/SupportWidget";
@@ -375,6 +376,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       label: "Patrimônio",
       icon: Building,
       section: "Materiais e Patrimônio",
+    });
+  if (hasTenantPermission("protocol.read"))
+    items.push({
+      to: "/protocolo",
+      label: "Protocolo",
+      icon: FileStack,
+      section: "Controle e Transparência",
     });
   if (hasTenantPermission("protocol.read"))
     items.push({
