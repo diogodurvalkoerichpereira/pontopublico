@@ -124,6 +124,132 @@ export const saveAsset = createServerFn({ method: "POST" })
     return { id };
   });
 
+const IncorporateInput = z.object({
+  tenant_id: z.string().uuid(),
+  item_id: z.string().uuid(),
+  quantidade: z.number().positive().max(1_000_000),
+  tombamento: z.string().trim().min(1).max(40),
+  descricao: z.string().trim().min(2).max(300).optional(),
+  vida_util_meses: z.number().int().positive().max(1200),
+  valor_residual: z.number().min(0).max(1_000_000_000_000).default(0),
+  data_aquisicao: z.string().date(),
+});
+
+// O3-19 — Incorporação de material permanente ao patrimônio (liga O3-02 ↔ O3-03). Dá
+// baixa da quantidade no almoxarifado (a custo médio do saldo) e cria o bem patrimonial
+// correspondente com valor de aquisição = custo médio × quantidade. Só material
+// 'permanente' e com saldo suficiente incorpora; o tombamento não se repete. Exige
+// materials.manage (baixa o estoque) e assets.manage (cria o bem).
+export const incorporateMaterialAsset = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => IncorporateInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "materials.manage");
+    requireTenantPermission(access, "assets.manage");
+    if (data.valor_residual < 0)
+      throw new Error("Valor residual não pode ser negativo");
+    return withTransaction(async (client) => {
+      const item = (
+        await client.query<{
+          categoria: string;
+          saldo_quantidade: string;
+          saldo_valor: string;
+        }>(
+          `select categoria, saldo_quantidade::text, saldo_valor::text
+           from public.material_items where id=$1 and tenant_id=$2 for update`,
+          [data.item_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!item) throw new Error("Material não encontrado");
+      if (item.categoria !== "permanente")
+        throw new Error("Só material permanente vira bem patrimonial");
+      const saldoQtd = Number(item.saldo_quantidade);
+      const saldoValor = Number(item.saldo_valor);
+      if (data.quantidade > saldoQtd)
+        throw new Error(
+          `Quantidade (${data.quantidade}) excede o saldo em estoque (${saldoQtd})`,
+        );
+      const custoMedio = saldoQtd > 0 ? saldoValor / saldoQtd : 0;
+      const valorAquisicao = round2(custoMedio * data.quantidade);
+      if (data.valor_residual > valorAquisicao)
+        throw new Error("Valor residual não pode exceder o de aquisição");
+
+      const dupTomb = await client.query(
+        `select id from public.patrimony_assets
+         where tenant_id=$1 and lower(tombamento)=lower($2)`,
+        [data.tenant_id, data.tombamento],
+      );
+      if (dupTomb.rows.length) throw new Error("Tombamento já utilizado");
+
+      // Baixa do estoque (saída a custo médio).
+      const novaQtd = Number((saldoQtd - data.quantidade).toFixed(3));
+      const novoValor = round2(saldoValor - custoMedio * data.quantidade);
+      const movId = randomUUID();
+      await client.query(
+        `insert into public.material_movements
+           (id, tenant_id, item_id, tipo, quantidade, valor_unitario,
+            data_movimento, historico, created_by)
+         values ($1,$2,$3,'saida',$4,$5,$6,$7,$8)`,
+        [
+          movId,
+          data.tenant_id,
+          data.item_id,
+          data.quantidade,
+          round2(custoMedio),
+          data.data_aquisicao,
+          `Incorporacao ao patrimonio (tombamento ${data.tombamento})`,
+          context.userId,
+        ],
+      );
+      await client.query(
+        `update public.material_items
+         set saldo_quantidade=$3, saldo_valor=$4, updated_at=now()
+         where id=$1 and tenant_id=$2`,
+        [data.item_id, data.tenant_id, novaQtd, novoValor],
+      );
+
+      // Cria o bem patrimonial.
+      const assetId = randomUUID();
+      const descricao = data.descricao ?? `Bem incorporado do material`;
+      await client.query(
+        `insert into public.patrimony_assets
+           (id, tenant_id, tombamento, descricao, valor_aquisicao,
+            valor_residual, vida_util_meses, data_aquisicao, status, created_by)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,'ativo',$9)`,
+        [
+          assetId,
+          data.tenant_id,
+          data.tombamento,
+          descricao,
+          valorAquisicao,
+          data.valor_residual,
+          data.vida_util_meses,
+          data.data_aquisicao,
+          context.userId,
+        ],
+      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "incorporate",
+        resource: "patrimony_assets",
+        recordId: assetId,
+        after: {
+          item_id: data.item_id,
+          quantidade: data.quantidade,
+          valor_aquisicao: valorAquisicao,
+          tombamento: data.tombamento,
+        },
+      });
+      return {
+        asset_id: assetId,
+        valor_aquisicao: valorAquisicao,
+        saldo_quantidade: novaQtd,
+      };
+    });
+  });
+
 const DepreciateInput = z.object({
   tenant_id: z.string().uuid(),
   asset_id: z.string().uuid(),

@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Boxes, Plus, ArrowDownUp, ScrollText } from "lucide-react";
+import { Boxes, Plus, ArrowDownUp, ScrollText, Landmark } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,7 @@ import {
   getMaterialInventory,
   getMaterialLedger,
 } from "@/lib/materials.functions";
+import { incorporateMaterialAsset } from "@/lib/assets.functions";
 
 export const Route = createFileRoute("/almoxarifado")({ component: Page });
 
@@ -89,6 +90,7 @@ function Content() {
   const move = useServerFn(recordMaterialMovement);
   const loadInventory = useServerFn(getMaterialInventory);
   const loadLedger = useServerFn(getMaterialLedger);
+  const incorporate = useServerFn(incorporateMaterialAsset);
   const qc = useQueryClient();
 
   const [itemOpen, setItemOpen] = useState(false);
@@ -98,6 +100,18 @@ function Content() {
   const [ledgerOpen, setLedgerOpen] = useState(false);
   const [ledgerItem, setLedgerItem] = useState<Item | null>(null);
   const [ledger, setLedger] = useState<LedgerMovement[]>([]);
+
+  const [incOpen, setIncOpen] = useState(false);
+  const [incItem, setIncItem] = useState<Item | null>(null);
+  const [incForm, setIncForm] = useState({
+    quantidade: "",
+    tombamento: "",
+    descricao: "",
+    vida_util_meses: "60",
+    valor_residual: "0",
+  });
+  const setInc = (k: keyof typeof incForm, v: string) =>
+    setIncForm((f) => ({ ...f, [k]: v }));
 
   const [codigo, setCodigo] = useState("");
   const [nome, setNome] = useState("");
@@ -174,6 +188,46 @@ function Content() {
       setLedger(r.movimentos as LedgerMovement[]);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Falha na razão");
+    }
+  };
+
+  const openIncorporate = (item: Item) => {
+    setIncItem(item);
+    setIncForm({
+      quantidade: "",
+      tombamento: "",
+      descricao: item.nome,
+      vida_util_meses: "60",
+      valor_residual: "0",
+    });
+    setIncOpen(true);
+  };
+
+  const submitIncorporate = async () => {
+    if (!activeTenant || !incItem) return;
+    setBusy(true);
+    try {
+      const r = await incorporate({
+        data: {
+          tenant_id: activeTenant.id,
+          item_id: incItem.id,
+          quantidade: Number(incForm.quantidade),
+          tombamento: incForm.tombamento.trim(),
+          descricao: incForm.descricao.trim() || undefined,
+          vida_util_meses: Number(incForm.vida_util_meses),
+          valor_residual: Number(incForm.valor_residual || 0),
+          data_aquisicao: hoje(),
+        },
+      });
+      toast.success(`Bem incorporado — ${brl(r.valor_aquisicao)}`);
+      setIncOpen(false);
+      refresh();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Falha ao incorporar",
+      );
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -300,13 +354,27 @@ function Content() {
                   </Badge>
                 </td>
                 <td className="p-3 text-right">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => openLedger(i)}
-                  >
-                    <ScrollText className="size-4" />
-                  </Button>
+                  <div className="flex justify-end gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => openLedger(i)}
+                    >
+                      <ScrollText className="size-4" />
+                    </Button>
+                    {canManage &&
+                      i.categoria === "permanente" &&
+                      Number(i.saldo_quantidade) > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          title="Incorporar ao patrimônio"
+                          onClick={() => openIncorporate(i)}
+                        >
+                          <Landmark className="size-4" />
+                        </Button>
+                      )}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -444,6 +512,72 @@ function Content() {
           <DialogFooter>
             <Button onClick={submitMove} disabled={busy}>
               Registrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Incorporar ao patrimônio */}
+      <Dialog open={incOpen} onOpenChange={setIncOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Incorporar ao patrimônio — {incItem?.codigo} {incItem?.nome}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Quantidade</Label>
+              <Input
+                type="number"
+                step="0.001"
+                value={incForm.quantidade}
+                onChange={(e) => setInc("quantidade", e.target.value)}
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Saldo: {incItem?.saldo_quantidade} un
+              </p>
+            </div>
+            <div>
+              <Label>Tombamento</Label>
+              <Input
+                value={incForm.tombamento}
+                onChange={(e) => setInc("tombamento", e.target.value)}
+              />
+            </div>
+            <div className="col-span-2">
+              <Label>Descrição do bem</Label>
+              <Input
+                value={incForm.descricao}
+                onChange={(e) => setInc("descricao", e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Vida útil (meses)</Label>
+              <Input
+                type="number"
+                value={incForm.vida_util_meses}
+                onChange={(e) => setInc("vida_util_meses", e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Valor residual</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={incForm.valor_residual}
+                onChange={(e) => setInc("valor_residual", e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={submitIncorporate}
+              disabled={
+                busy || !incForm.quantidade || !incForm.tombamento.trim()
+              }
+            >
+              Incorporar
             </Button>
           </DialogFooter>
         </DialogContent>

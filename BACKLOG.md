@@ -767,8 +767,17 @@ originá-lo. Reusa `contracts.*`. Migration
 `20260909350000_o3_09_contract_procurement_link.sql` (ALTER aditivo); teste
 `tests/sprint-contract-procurement.test.mjs` verificado por mutação (aceitar
 licitação não homologada derruba).
-Próximo: ligar a baixa de estoque (O3-02) à entrada de bem em patrimônio (O3-03)
-quando o material for um bem permanente; remessa ao PNCP (externo, homologação).
+Remessa ao PNCP (externo, homologação).
+
+**O3-19 — Incorporação de material permanente ao patrimônio (liga O3-02 ↔ O3-03) ✅.**
+`incorporateMaterialAsset` dá baixa da quantidade no almoxarifado **a custo médio** do
+saldo e cria o bem patrimonial com `valor_aquisicao` = custo médio × quantidade. Só
+material **permanente** com saldo suficiente incorpora; o tombamento não se repete. Exige
+`materials.manage` (baixa o estoque) **e** `assets.manage` (cria o bem), numa única
+transação. Sem migration (usa as tabelas existentes); `/almoxarifado` ganha a ação
+Incorporar nos itens permanentes. Teste `tests/sprint-material-asset-incorporation.test.mjs`
+verificado por mutação (usar o saldo total em vez de custo médio × quantidade, ou
+incorporar material de consumo, derruba).
 
 **O3-18 — Razão (kardex) de movimentação de material ✅.** `getMaterialLedger` relê as
 movimentações do item em ordem cronológica e recompõe o saldo em quantidade linha a linha
