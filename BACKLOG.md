@@ -439,10 +439,16 @@ da Receita, com recibo. **Ver ADR — pode ser declarado não atendido.**
 
 ### O1-07 — CNAB 240 real (um banco) + parser de retorno
 
-P0 · 6-8 dias. `src/lib/cnab/` com descritores de campo declarativos e writer
-**puro** (testável sem banco); um banco (BB ou Caixa); parser de retorno (insumo
-da Tesouraria na Onda 2). Aceite: arquivo aceito pelo banco; posições conferidas
-contra o manual.
+P0 · 6-8 dias. **Base feita:** motor de largura fixa posicional (`src/lib/fixed-width.ts`,
+`formatField`/`writeRecord` — num à direita com zeros, alfa à esquerda com espaços,
+contiguidade e comprimento exato validados), puro e testado por mutação
+(`tests/fixed-width.test.mjs`). É a fundação declarativa do CNAB 240 e também do
+AFD/AEJ (O1-03b), ambos posicionais. **Pendente (não iniciado de propósito):** os
+descritores de campo de um banco (BB/Caixa) exigem conferência **posição a posição
+contra o manual FEBRABAN** — não se escreve de memória (viraria conformidade não
+verificada). O writer do layout, o parser de retorno e a **homologação** (arquivo
+aceito pelo banco) vêm quando o manual estiver à mão; até lá a conformidade CNAB 240
+segue 🔴. Ver `src/lib/bank-remittance.functions.ts` (rascunho honesto, não-CNAB240).
 
 ### O1-08 — Interface de empenho da folha ✅
 
