@@ -47,6 +47,7 @@ import {
   Car,
   FileSearch,
   ShieldAlert,
+  BarChart3,
 } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
 import { SupportWidget } from "@/components/SupportWidget";
@@ -351,6 +352,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       to: "/tesouraria",
       label: "Tesouraria",
       icon: Wallet,
+      section: "Contabilidade e Finanças",
+    });
+  if (hasTenantPermission("budget.read"))
+    items.push({
+      to: "/balancos",
+      label: "Balanços",
+      icon: BarChart3,
       section: "Contabilidade e Finanças",
     });
   if (hasTenantPermission("taxes.read"))
