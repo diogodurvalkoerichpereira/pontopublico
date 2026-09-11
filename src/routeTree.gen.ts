@@ -24,6 +24,7 @@ import { Route as LicitacoesRouteImport } from './routes/licitacoes'
 import { Route as GestorRouteImport } from './routes/gestor'
 import { Route as FrotasRouteImport } from './routes/frotas'
 import { Route as EsicRouteImport } from './routes/esic'
+import { Route as ControleInternoRouteImport } from './routes/controle-interno'
 import { Route as ContratosRouteImport } from './routes/contratos'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as AlmoxarifadoRouteImport } from './routes/almoxarifado'
@@ -128,6 +129,11 @@ const FrotasRoute = FrotasRouteImport.update({
 const EsicRoute = EsicRouteImport.update({
   id: '/esic',
   path: '/esic',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ControleInternoRoute = ControleInternoRouteImport.update({
+  id: '/controle-interno',
+  path: '/controle-interno',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ContratosRoute = ContratosRouteImport.update({
@@ -286,6 +292,7 @@ export interface FileRoutesByFullPath {
   '/almoxarifado': typeof AlmoxarifadoRoute
   '/app': typeof AppRoute
   '/contratos': typeof ContratosRoute
+  '/controle-interno': typeof ControleInternoRoute
   '/esic': typeof EsicRoute
   '/frotas': typeof FrotasRoute
   '/gestor': typeof GestorRouteWithChildren
@@ -333,6 +340,7 @@ export interface FileRoutesByTo {
   '/almoxarifado': typeof AlmoxarifadoRoute
   '/app': typeof AppRoute
   '/contratos': typeof ContratosRoute
+  '/controle-interno': typeof ControleInternoRoute
   '/esic': typeof EsicRoute
   '/frotas': typeof FrotasRoute
   '/gestor': typeof GestorRouteWithChildren
@@ -381,6 +389,7 @@ export interface FileRoutesById {
   '/almoxarifado': typeof AlmoxarifadoRoute
   '/app': typeof AppRoute
   '/contratos': typeof ContratosRoute
+  '/controle-interno': typeof ControleInternoRoute
   '/esic': typeof EsicRoute
   '/frotas': typeof FrotasRoute
   '/gestor': typeof GestorRouteWithChildren
@@ -430,6 +439,7 @@ export interface FileRouteTypes {
     | '/almoxarifado'
     | '/app'
     | '/contratos'
+    | '/controle-interno'
     | '/esic'
     | '/frotas'
     | '/gestor'
@@ -477,6 +487,7 @@ export interface FileRouteTypes {
     | '/almoxarifado'
     | '/app'
     | '/contratos'
+    | '/controle-interno'
     | '/esic'
     | '/frotas'
     | '/gestor'
@@ -524,6 +535,7 @@ export interface FileRouteTypes {
     | '/almoxarifado'
     | '/app'
     | '/contratos'
+    | '/controle-interno'
     | '/esic'
     | '/frotas'
     | '/gestor'
@@ -572,6 +584,7 @@ export interface RootRouteChildren {
   AlmoxarifadoRoute: typeof AlmoxarifadoRoute
   AppRoute: typeof AppRoute
   ContratosRoute: typeof ContratosRoute
+  ControleInternoRoute: typeof ControleInternoRoute
   EsicRoute: typeof EsicRoute
   FrotasRoute: typeof FrotasRoute
   GestorRoute: typeof GestorRouteWithChildren
@@ -702,6 +715,13 @@ declare module '@tanstack/react-router' {
       path: '/esic'
       fullPath: '/esic'
       preLoaderRoute: typeof EsicRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/controle-interno': {
+      id: '/controle-interno'
+      path: '/controle-interno'
+      fullPath: '/controle-interno'
+      preLoaderRoute: typeof ControleInternoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/contratos': {
@@ -985,6 +1005,7 @@ const rootRouteChildren: RootRouteChildren = {
   AlmoxarifadoRoute: AlmoxarifadoRoute,
   AppRoute: AppRoute,
   ContratosRoute: ContratosRoute,
+  ControleInternoRoute: ControleInternoRoute,
   EsicRoute: EsicRoute,
   FrotasRoute: FrotasRoute,
   GestorRoute: GestorRouteWithChildren,

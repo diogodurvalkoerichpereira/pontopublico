@@ -46,6 +46,7 @@ import {
   Gavel,
   Car,
   FileSearch,
+  ShieldAlert,
 } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
 import { SupportWidget } from "@/components/SupportWidget";
@@ -413,6 +414,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       to: "/esic",
       label: "e-SIC",
       icon: FileSearch,
+      section: "Controle e Transparência",
+    });
+  if (hasTenantPermission("analytics.read"))
+    items.push({
+      to: "/controle-interno",
+      label: "Controle interno",
+      icon: ShieldAlert,
       section: "Controle e Transparência",
     });
   if (hasTenantPermission("manager.dashboard.read"))
