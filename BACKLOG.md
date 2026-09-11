@@ -481,6 +481,18 @@ liquidação → pagamento, restos a pagar, encerramento) · tesouraria (OB,
 conciliação) · balanços Lei 4.320, DCASP, MSC para o SICONFI. Reusa o workflow de
 `payroll_cycles` como motor de documentos contábeis; RLS de verdade nasce aqui.
 
+**O2-01 — Dotação orçamentária (LOA) ✅.** Base do orçamento: `budget_appropriations`
+por classificação completa (unidade orçamentária + função/subfunção + programa +
+ação + natureza da despesa + fonte), com `valor_orcado`/`valor_empenhado`/saldo e a
+invariante `empenhado ≤ orçado` no banco. Permissões `budget.read`/`budget.manage`.
+Server functions `getBudgetAppropriations`/`saveBudgetAppropriation` (dedup pela chave
+orçamentária; não se orça abaixo do já empenhado). Migration
+`20260909120000_o2_01_budget_appropriations.sql`; teste
+`tests/sprint-budget-appropriations.test.mjs` verificado por mutação. É a âncora que
+a requisição de empenho da folha (O1-08) e o empenho PCASP passarão a reservar.
+Próximo: **O2-02** — reserva de saldo pelo empenho (liga O1-08 → dotação) e a
+máquina empenho→liquidação→pagamento reusando o motor de `payroll_cycles`.
+
 ### Onda 3 — Materiais e Contratações (14-18 sem)
 
 Compras Lei 14.133 → contratos → almoxarifado → patrimônio (depreciação NBC TSP)

@@ -45,7 +45,7 @@ Legenda: 🟢 atende · 🟡 atende parcialmente · 🔴 não atende.
 
 | Área | Situação |
 |---|---|
-| Orçamento (PPA/LDO/LOA) | 🔴 |
+| Orçamento (PPA/LDO/LOA) | 🟡 — dotação orçamentária (LOA) em `budget_appropriations` por classificação, com orçado/empenhado/saldo e permissões `budget.*` (O2-01). Falta PPA/LDO, créditos adicionais e a reserva pelo empenho |
 | Contabilidade PCASP (empenho→liquidação→pagamento) | 🔴 |
 | Tesouraria | 🔴 |
 | Tributação e receita (IPTU/ISS/ITBI, dívida ativa, NFS-e) | 🔴 |
