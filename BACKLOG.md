@@ -646,9 +646,13 @@ do saldo em N parcelas mensais com soma exata, cada parcela arrecada no crédito
 a última quita crédito e plano; um plano ativo por crédito, reusa `taxes.*`).
 O4-03 consulta de regularidade fiscal (base da CND: aponta débitos em aberto —
 lançados ou em dívida ativa com saldo — por contribuinte; NÃO emite certidão
-oficial, código nem assinatura). Pendente (externo/homologação): NFS-e padrão
-nacional; emissão da CND com autenticação e layout do ente; execução fiscal
-integrada ao Judiciário.
+oficial, código nem assinatura); O4-04 cadastro imobiliário + IPTU
+(`real_estate_properties` com inscrição/proprietário/valor venal/áreas;
+`launchIptu` gera o crédito tributário = valor venal × alíquota em `tax_credits`,
+um por imóvel/exercício, ligando o cadastro à arrecadação — reusa `taxes.*`).
+Pendente (externo/homologação): cadastro mobiliário e cálculo de ISS; NFS-e
+padrão nacional; emissão da CND com autenticação e layout do ente; execução
+fiscal integrada ao Judiciário.
 
 ### Onda 5 — Apoio, controle e transparência (10-14 sem)
 
