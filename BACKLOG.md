@@ -672,8 +672,11 @@ O5-03 ouvidoria (Lei 13.460 — manifestações denúncia/reclamação/sugestão
 informação/solicitação, numeração por ano, prazo e ciclo recebida→respondida,
 reusa `protocol.*`); O5-04 e-SIC (LAI Lei 12.527 — pedidos de acesso à informação,
 prazo de 20 dias prorrogável +10 uma vez, ciclo recebido→prorrogado→respondido/
-indeferido, reusa `protocol.*`). Pendente: assinatura ICP-Brasil, dados abertos
-publicáveis, controle interno.
+indeferido, reusa `protocol.*`); O5-05 controle interno (CF art. 74, LRF —
+apontamentos de auditoria interna com recomendação/responsável/prazo e
+acompanhamento aberto→em_implementacao→implementado/nao_implementado, numeração
+por ano, reusa `analytics.*`). Pendente: assinatura ICP-Brasil, dados abertos
+publicáveis.
 
 ### Onda 6 — Conformidade contínua ⚠️ (contínuo)
 
