@@ -14,6 +14,7 @@ import { Route as TesourariaRouteImport } from './routes/tesouraria'
 import { Route as RhRouteImport } from './routes/rh'
 import { Route as PortalFinanceiroRouteImport } from './routes/portal-financeiro'
 import { Route as PontoRouteImport } from './routes/ponto'
+import { Route as OuvidoriaRouteImport } from './routes/ouvidoria'
 import { Route as MeusDocumentosRouteImport } from './routes/meus-documentos'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as GestorRouteImport } from './routes/gestor'
@@ -69,6 +70,11 @@ const PortalFinanceiroRoute = PortalFinanceiroRouteImport.update({
 const PontoRoute = PontoRouteImport.update({
   id: '/ponto',
   path: '/ponto',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OuvidoriaRoute = OuvidoriaRouteImport.update({
+  id: '/ouvidoria',
+  path: '/ouvidoria',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MeusDocumentosRoute = MeusDocumentosRouteImport.update({
@@ -233,6 +239,7 @@ export interface FileRoutesByFullPath {
   '/gestor': typeof GestorRouteWithChildren
   '/login': typeof LoginRoute
   '/meus-documentos': typeof MeusDocumentosRoute
+  '/ouvidoria': typeof OuvidoriaRoute
   '/ponto': typeof PontoRoute
   '/portal-financeiro': typeof PortalFinanceiroRoute
   '/rh': typeof RhRouteWithChildren
@@ -271,6 +278,7 @@ export interface FileRoutesByTo {
   '/gestor': typeof GestorRouteWithChildren
   '/login': typeof LoginRoute
   '/meus-documentos': typeof MeusDocumentosRoute
+  '/ouvidoria': typeof OuvidoriaRoute
   '/ponto': typeof PontoRoute
   '/portal-financeiro': typeof PortalFinanceiroRoute
   '/rh': typeof RhRouteWithChildren
@@ -310,6 +318,7 @@ export interface FileRoutesById {
   '/gestor': typeof GestorRouteWithChildren
   '/login': typeof LoginRoute
   '/meus-documentos': typeof MeusDocumentosRoute
+  '/ouvidoria': typeof OuvidoriaRoute
   '/ponto': typeof PontoRoute
   '/portal-financeiro': typeof PortalFinanceiroRoute
   '/rh': typeof RhRouteWithChildren
@@ -350,6 +359,7 @@ export interface FileRouteTypes {
     | '/gestor'
     | '/login'
     | '/meus-documentos'
+    | '/ouvidoria'
     | '/ponto'
     | '/portal-financeiro'
     | '/rh'
@@ -388,6 +398,7 @@ export interface FileRouteTypes {
     | '/gestor'
     | '/login'
     | '/meus-documentos'
+    | '/ouvidoria'
     | '/ponto'
     | '/portal-financeiro'
     | '/rh'
@@ -426,6 +437,7 @@ export interface FileRouteTypes {
     | '/gestor'
     | '/login'
     | '/meus-documentos'
+    | '/ouvidoria'
     | '/ponto'
     | '/portal-financeiro'
     | '/rh'
@@ -465,6 +477,7 @@ export interface RootRouteChildren {
   GestorRoute: typeof GestorRouteWithChildren
   LoginRoute: typeof LoginRoute
   MeusDocumentosRoute: typeof MeusDocumentosRoute
+  OuvidoriaRoute: typeof OuvidoriaRoute
   PontoRoute: typeof PontoRoute
   PortalFinanceiroRoute: typeof PortalFinanceiroRoute
   RhRoute: typeof RhRouteWithChildren
@@ -515,6 +528,13 @@ declare module '@tanstack/react-router' {
       path: '/ponto'
       fullPath: '/ponto'
       preLoaderRoute: typeof PontoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ouvidoria': {
+      id: '/ouvidoria'
+      path: '/ouvidoria'
+      fullPath: '/ouvidoria'
+      preLoaderRoute: typeof OuvidoriaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/meus-documentos': {
@@ -806,6 +826,7 @@ const rootRouteChildren: RootRouteChildren = {
   GestorRoute: GestorRouteWithChildren,
   LoginRoute: LoginRoute,
   MeusDocumentosRoute: MeusDocumentosRoute,
+  OuvidoriaRoute: OuvidoriaRoute,
   PontoRoute: PontoRoute,
   PortalFinanceiroRoute: PortalFinanceiroRoute,
   RhRoute: RhRouteWithChildren,
