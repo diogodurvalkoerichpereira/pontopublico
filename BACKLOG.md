@@ -736,6 +736,17 @@ migration; ação "Atualizar" no `/tributos`. Teste `tests/sprint-tax-mora.test.
 verificado por mutação (ignorar os meses de mora nos juros derruba). Próximo: CDA
 numerada e execução fiscal (Lei 6.830).
 
+**O4-08 — Certidão de Dívida Ativa (CDA) numerada ✅.** `emitActiveDebtCertificate`
+registra a CDA (Lei 6.830 art. 2º) de um crédito já inscrito em dívida ativa: numera por
+ente/exercício (linha-contador travada) e fixa o **saldo inscrito** (lançado − pago),
+formando o título executivo. Só um crédito em `divida_ativa` com saldo; uma CDA por
+crédito (`unique (tenant, credit)` + guarda de estado). É o **registro** da CDA — não
+emite documento autenticado, código de validação nem assinatura (isso depende de
+homologação/ferramenta do ente). Migration `..._o4_08_active_debt_certificate.sql`, reusa
+`taxes.*`; ação "Emitir CDA" no `/tributos`. Teste
+`tests/sprint-active-debt-certificate.test.mjs` verificado por mutação (usar o valor
+lançado em vez do saldo derruba). Próximo: execução fiscal (ajuizamento) sobre a CDA.
+
 ### Onda 5 — Apoio, controle e transparência (10-14 sem)
 
 Protocolo e processo eletrônico com ICP-Brasil · e-SIC/LAI · controle interno ·

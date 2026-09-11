@@ -37,6 +37,7 @@ import {
   inscribeDividaAtiva,
   getUpdatedTaxDebt,
 } from "@/lib/taxes.functions";
+import { emitActiveDebtCertificate } from "@/lib/active-debt-certificate.functions";
 import { getProperties, launchIptu } from "@/lib/real-estate.functions";
 import { getServiceTaxpayers, launchIss } from "@/lib/service-tax.functions";
 import { launchItbi } from "@/lib/itbi.functions";
@@ -103,6 +104,7 @@ function Content() {
   const pay = useServerFn(recordTaxPayment);
   const inscribe = useServerFn(inscribeDividaAtiva);
   const updatedDebt = useServerFn(getUpdatedTaxDebt);
+  const emitCda = useServerFn(emitActiveDebtCertificate);
   const launch = useServerFn(launchIptu);
   const doLaunchIss = useServerFn(launchIss);
   const doLaunchItbi = useServerFn(launchItbi);
@@ -202,6 +204,24 @@ function Content() {
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Falha ao inscrever",
+      );
+    }
+  };
+
+  const doEmitCda = async (c: Credit) => {
+    if (!activeTenant) return;
+    try {
+      const r = await emitCda({
+        data: {
+          tenant_id: activeTenant.id,
+          credit_id: c.id,
+          data_inscricao: hoje(),
+        },
+      });
+      toast.success(`CDA nº ${r.numero} emitida — ${brl(r.valor_inscrito)}`);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Falha ao emitir CDA",
       );
     }
   };
@@ -404,6 +424,15 @@ function Content() {
                           onClick={() => doUpdatedDebt(c)}
                         >
                           <Calculator className="size-4" /> Atualizar
+                        </Button>
+                      )}
+                      {c.status === "divida_ativa" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => doEmitCda(c)}
+                        >
+                          <FileWarning className="size-4" /> Emitir CDA
                         </Button>
                       )}
                     </div>
