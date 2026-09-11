@@ -482,8 +482,13 @@ teto cheio, ignorando o já comprometido, derruba). **O1-09b ✅:**
 `depositConsignmentsToPayroll` deposita o total das parcelas ativas ainda devidas
 (parcelas_pagas < parcelas_total) como desconto na folha da competência (rubrica
 de natureza `desconto`, idempotente — re-depósito substitui), pela mesma via de
-`payroll_monthly_variables` das férias/ponto. **Pendente:** avanço automático de
-`parcelas_pagas` e quitação no fechamento do ciclo.
+`payroll_monthly_variables` das férias/ponto. **O1-09c ✅:** `amortizeConsignment`
+avança `parcelas_pagas` de uma consignação **ativa** sem passar do total e a **quita** ao
+alcançá-lo (liberando a margem, pois só as ativas comprometem); consignação
+quitada/cancelada não amortiza. Reusa `people.manage`, sem migration; teste
+`tests/sprint-consignment-amortize.test.mjs` verificado por mutação (não quitar ao
+alcançar o total derruba). **Pendente:** amortização automática no fechamento do ciclo e
+UI de consignações (margem/registro/amortização).
 
 ---
 

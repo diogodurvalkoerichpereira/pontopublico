@@ -286,3 +286,64 @@ export const cancelConsignment = createServerFn({ method: "POST" })
       return { id: data.consignment_id, status: "cancelada" };
     });
   });
+
+const AmortizeInput = z.object({
+  tenant_id: z.string().uuid(),
+  consignment_id: z.string().uuid(),
+  parcelas: z.number().int().min(1).max(600).default(1),
+});
+
+// O1-09c — Amortiza parcelas de uma consignação ativa. Avança `parcelas_pagas` sem passar
+// do total; quando alcança o total, a consignação é quitada (libera a margem, pois só as
+// ativas comprometem). Não amortiza consignação já quitada/cancelada.
+export const amortizeConsignment = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => AmortizeInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "people.manage");
+    return withTransaction(async (client) => {
+      const c = (
+        await client.query<{
+          parcelas_total: number;
+          parcelas_pagas: number;
+          status: string;
+        }>(
+          `select parcelas_total, parcelas_pagas, status
+           from public.payroll_consignments
+           where id=$1 and tenant_id=$2 for update`,
+          [data.consignment_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!c) throw new Error("Consignação não encontrada");
+      if (c.status !== "ativa")
+        throw new Error("Só uma consignação ativa pode ser amortizada");
+      const novasPagas = c.parcelas_pagas + data.parcelas;
+      if (novasPagas > c.parcelas_total)
+        throw new Error(
+          `Amortização (${data.parcelas}) excede as parcelas restantes (${c.parcelas_total - c.parcelas_pagas})`,
+        );
+      const quitada = novasPagas >= c.parcelas_total;
+      await client.query(
+        `update public.payroll_consignments
+         set parcelas_pagas=$3,
+             status=case when $4 then 'quitada' else status end,
+             updated_at=now()
+         where id=$1 and tenant_id=$2`,
+        [data.consignment_id, data.tenant_id, novasPagas, quitada],
+      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "amortizar",
+        resource: "payroll_consignments",
+        recordId: data.consignment_id,
+        after: { parcelas_pagas: novasPagas, quitada },
+      });
+      return {
+        id: data.consignment_id,
+        parcelas_pagas: novasPagas,
+        quitada,
+      };
+    });
+  });
