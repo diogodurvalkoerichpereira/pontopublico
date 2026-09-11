@@ -36,6 +36,7 @@ import {
   recordTaxPayment,
   inscribeDividaAtiva,
   getUpdatedTaxDebt,
+  cancelTaxCredit,
 } from "@/lib/taxes.functions";
 import { emitActiveDebtCertificate } from "@/lib/active-debt-certificate.functions";
 import { getProperties, launchIptu } from "@/lib/real-estate.functions";
@@ -105,6 +106,7 @@ function Content() {
   const inscribe = useServerFn(inscribeDividaAtiva);
   const updatedDebt = useServerFn(getUpdatedTaxDebt);
   const emitCda = useServerFn(emitActiveDebtCertificate);
+  const cancelCredit = useServerFn(cancelTaxCredit);
   const launch = useServerFn(launchIptu);
   const doLaunchIss = useServerFn(launchIss);
   const doLaunchItbi = useServerFn(launchItbi);
@@ -205,6 +207,24 @@ function Content() {
       toast.error(
         error instanceof Error ? error.message : "Falha ao inscrever",
       );
+    }
+  };
+
+  const doCancelCredit = async (c: Credit) => {
+    if (!activeTenant) return;
+    try {
+      await cancelCredit({
+        data: {
+          tenant_id: activeTenant.id,
+          credit_id: c.id,
+          motivo: "Isenção / anistia / remissão",
+          data_cancelamento: hoje(),
+        },
+      });
+      toast.success("Crédito cancelado");
+      refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao cancelar");
     }
   };
 
@@ -433,6 +453,15 @@ function Content() {
                           onClick={() => doEmitCda(c)}
                         >
                           <FileWarning className="size-4" /> Emitir CDA
+                        </Button>
+                      )}
+                      {c.status !== "quitado" && c.status !== "cancelado" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => doCancelCredit(c)}
+                        >
+                          <ArrowLeftRight className="size-4" /> Cancelar
                         </Button>
                       )}
                     </div>

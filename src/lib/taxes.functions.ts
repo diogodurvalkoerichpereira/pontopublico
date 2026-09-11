@@ -297,3 +297,61 @@ export const getUpdatedTaxDebt = createServerFn({ method: "POST" })
       valor_atualizado: n2(saldo + multa + juros),
     };
   });
+
+const CancelInput = z.object({
+  tenant_id: z.string().uuid(),
+  credit_id: z.string().uuid(),
+  motivo: z.string().trim().min(3).max(500),
+  data_cancelamento: z.string().date(),
+});
+
+// O4-13 — Cancela o crédito tributário (isenção, anistia, remissão, decisão). Um crédito
+// já quitado ou cancelado não cancela; um crédito com parcelamento ativo tem de ter o
+// plano rescindido antes (evita cancelar dívida em cobrança amigável). Reusa taxes.manage.
+export const cancelTaxCredit = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => CancelInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "taxes.manage");
+    return withTransaction(async (client) => {
+      const credit = (
+        await client.query<{ status: string }>(
+          `select status from public.tax_credits
+           where id=$1 and tenant_id=$2 for update`,
+          [data.credit_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!credit) throw new Error("Crédito tributário não encontrado");
+      if (credit.status === "quitado")
+        throw new Error("Crédito quitado não pode ser cancelado");
+      if (credit.status === "cancelado")
+        throw new Error("Crédito já está cancelado");
+      const planoAtivo = await client.query(
+        `select id from public.tax_installment_plans
+         where tenant_id=$1 and credit_id=$2 and status='ativo'`,
+        [data.tenant_id, data.credit_id],
+      );
+      if (planoAtivo.rows.length)
+        throw new Error(
+          "Rescinda o parcelamento ativo antes de cancelar o crédito",
+        );
+      await client.query(
+        `update public.tax_credits set status='cancelado', updated_at=now()
+         where id=$1 and tenant_id=$2`,
+        [data.credit_id, data.tenant_id],
+      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "cancelar_credito",
+        resource: "tax_credits",
+        recordId: data.credit_id,
+        after: {
+          motivo: data.motivo,
+          data_cancelamento: data.data_cancelamento,
+        },
+      });
+      return { id: data.credit_id, status: "cancelado" };
+    });
+  });

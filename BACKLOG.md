@@ -814,6 +814,13 @@ migration; ação "Atualizar" no `/tributos`. Teste `tests/sprint-tax-mora.test.
 verificado por mutação (ignorar os meses de mora nos juros derruba). Próximo: CDA
 numerada e execução fiscal (Lei 6.830).
 
+**O4-13 — Cancelamento de crédito tributário (isenção/anistia/remissão) ✅.**
+`cancelTaxCredit` cancela um crédito que **não** esteja quitado nem já cancelado; recusa se
+houver **parcelamento ativo** (deve ser rescindido antes, evitando cancelar dívida em
+cobrança amigável). Reusa `taxes.manage`, sem migration (o status `cancelado` já existia);
+ação "Cancelar" no `/tributos`. Teste `tests/sprint-tax-cancel.test.mjs` verificado por
+mutação (aceitar cancelar crédito quitado derruba).
+
 **O4-08 — Certidão de Dívida Ativa (CDA) numerada ✅.** `emitActiveDebtCertificate`
 registra a CDA (Lei 6.830 art. 2º) de um crédito já inscrito em dívida ativa: numera por
 ente/exercício (linha-contador travada) e fixa o **saldo inscrito** (lançado − pago),
