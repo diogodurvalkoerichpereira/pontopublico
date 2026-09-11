@@ -46,7 +46,7 @@ Legenda: 🟢 atende · 🟡 atende parcialmente · 🔴 não atende.
 | Área | Situação |
 |---|---|
 | Orçamento (PPA/LDO/LOA) | 🟡 — dotação orçamentária (LOA) em `budget_appropriations` por classificação, com orçado/empenhado/saldo e permissões `budget.*` (O2-01). Falta PPA/LDO, créditos adicionais e a reserva pelo empenho |
-| Contabilidade PCASP (empenho→liquidação→pagamento) | 🟡 — empenho→liquidação→pagamento como máquina de estados sobre `budget_commitments`, com reserva atômica de saldo, numeração por exercício e anulação que devolve o saldo (O2-02/O2-03). Faltam restos a pagar, encerramento e a escrituração PCASP (partidas dobradas) |
+| Contabilidade PCASP (empenho→liquidação→pagamento) | 🟡 — despesa empenho→liquidação→pagamento sobre `budget_commitments` com reserva/devolução de saldo (O2-02/O2-03); folha→empenho (O2-04); razão contábil em **partidas dobradas** com balancete que fecha em zero (O2-05). Faltam os roteiros de contabilização automática por fato, restos a pagar, encerramento e os balanços |
 | Tesouraria | 🔴 |
 | Tributação e receita (IPTU/ISS/ITBI, dívida ativa, NFS-e) | 🔴 |
 | Materiais (compras 14.133, contratos, patrimônio, frotas, PNCP) | 🔴 |

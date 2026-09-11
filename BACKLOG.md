@@ -513,8 +513,15 @@ de empenho da folha (O1-08) em empenhos reais contra dotação (O2-02), um por l
 `reserveOnAppropriation`, reusado pelo empenho manual e pelo da folha. Migration
 `20260909150000_o2_04_payroll_empenho_committed.sql`; teste
 `tests/sprint-folha-empenho.test.mjs` verificado por mutação.
-Próximo: **O2-05** — restos a pagar (empenhos não pagos no encerramento) e a
-escrituração PCASP (partidas dobradas: VPD/VPA e as classes 5/6 de controle).
+**O2-05 — Razão contábil (partidas dobradas) ✅.** `accounting_entries`/`_lines`:
+todo lançamento tem débito e crédito que se igualam — `postAccountingEntry` recusa
+desbalanceado; `getBalancete` devolve saldo por conta e o balancete fecha em zero.
+O helper `postEntry(client, …)` é reusado pelos roteiros automáticos. Permissões
+`accounting.*`. Migration `20260909160000_o2_05_accounting_ledger.sql`; teste
+`tests/sprint-accounting-ledger.test.mjs` verificado por mutação.
+Próximo: **O2-06** — roteiros de contabilização automática (empenho/liquidação/
+pagamento lançam no razão dentro da mesma transação do fato); depois restos a pagar,
+balanços Lei 4.320/DCASP e MSC-SICONFI, e a tesouraria (OB).
 
 ### Onda 3 — Materiais e Contratações (14-18 sem)
 
