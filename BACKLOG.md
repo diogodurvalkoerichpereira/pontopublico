@@ -905,8 +905,12 @@ negativa de acesso: 1ª instância exige pedido **indeferido**; 2ª instância e
 pendente e, se **provido**, reabre o pedido (status volta a `recebido`) para cumprimento;
 `getEsicAppeals` lista. Migration `..._o5_06_esic_appeals.sql`, reusa `protocol.*`; ação
 "Recorrer" no `/esic`. Teste `tests/sprint-esic-appeals.test.mjs` verificado por mutação
-(não reabrir o pedido quando provido derruba). Próximo: painel de recursos (decidir 1ª/2ª
-instância na UI) e pesquisa de satisfação da ouvidoria.
+(não reabrir o pedido quando provido derruba).
+
+**O5-06b — Painel de recursos e-SIC (UI) ✅.** O `/esic` ganha a seção **Recursos**: lista
+os recursos (pedido, instância, situação, decisão) com ações **Prover/Improver** por
+recurso pendente e **2ª instância** quando o de 1ª foi improvido, reusando
+`getEsicAppeals`, `decideEsicAppeal` e `fileEsicAppeal`. Sem novo backend.
 
 **O5-07 — Pesquisa de satisfação da ouvidoria (Lei 13.460 art. 23) ✅.**
 `rateManifestation` registra a nota (1-5) do cidadão só de manifestação **respondida**,

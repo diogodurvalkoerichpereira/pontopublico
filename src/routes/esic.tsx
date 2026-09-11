@@ -30,7 +30,11 @@ import {
   extendEsicRequest,
   respondEsicRequest,
 } from "@/lib/esic.functions";
-import { fileEsicAppeal } from "@/lib/esic-appeals.functions";
+import {
+  fileEsicAppeal,
+  getEsicAppeals,
+  decideEsicAppeal,
+} from "@/lib/esic-appeals.functions";
 
 export const Route = createFileRoute("/esic")({ component: Page });
 
@@ -76,6 +80,8 @@ function Content() {
   const extend = useServerFn(extendEsicRequest);
   const respond = useServerFn(respondEsicRequest);
   const appeal = useServerFn(fileEsicAppeal);
+  const loadAppeals = useServerFn(getEsicAppeals);
+  const decideAppeal = useServerFn(decideEsicAppeal);
   const qc = useQueryClient();
 
   const [openDialog, setOpenDialog] = useState(false);
@@ -103,8 +109,68 @@ function Content() {
   const items = (data?.requests ?? []) as EsicRequest[];
   const canManage = data?.canManage ?? false;
 
-  const refresh = () =>
+  const { data: appealsData } = useQuery({
+    queryKey: ["esic-appeals", activeTenant?.id],
+    enabled: Boolean(activeTenant),
+    queryFn: () => loadAppeals({ data: { tenant_id: activeTenant!.id } }),
+  });
+  const appeals = (appealsData?.appeals ?? []) as Array<{
+    id: string;
+    request_id: string;
+    instancia: number;
+    status: string;
+    decisao: string | null;
+  }>;
+  const numeroDoPedido = (requestId: string) => {
+    const r = items.find((i) => i.id === requestId);
+    return r ? `${r.numero}/${r.ano}` : "—";
+  };
+
+  const refresh = () => {
     qc.invalidateQueries({ queryKey: ["esic", activeTenant?.id] });
+    qc.invalidateQueries({ queryKey: ["esic-appeals", activeTenant?.id] });
+  };
+
+  const doDecide = async (
+    appealId: string,
+    decisao: "provido" | "improvido",
+  ) => {
+    if (!activeTenant) return;
+    try {
+      await decideAppeal({
+        data: {
+          tenant_id: activeTenant.id,
+          appeal_id: appealId,
+          decisao,
+          justificativa: "Análise do recurso pela autoridade superior",
+          data_decisao: hoje(),
+        },
+      });
+      toast.success(`Recurso ${decisao}`);
+      refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao decidir");
+    }
+  };
+
+  const doSecondInstance = async (requestId: string) => {
+    if (!activeTenant) return;
+    try {
+      await appeal({
+        data: {
+          tenant_id: activeTenant.id,
+          request_id: requestId,
+          instancia: 2,
+          fundamento: "Recurso de 2ª instância (LAI art. 16)",
+          data_recurso: hoje(),
+        },
+      });
+      toast.success("Recurso de 2ª instância interposto");
+      refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha no recurso");
+    }
+  };
 
   const submitNew = async () => {
     if (!activeTenant) return;
@@ -307,6 +373,89 @@ function Content() {
           </tbody>
         </table>
       </div>
+
+      {appeals.length > 0 && (
+        <div className="rounded-xl border bg-card overflow-x-auto">
+          <h2 className="font-bold p-3">Recursos (LAI art. 15-16)</h2>
+          <table className="w-full text-sm">
+            <thead className="border-b bg-muted/40 text-left">
+              <tr>
+                <th className="p-3 font-semibold">Pedido</th>
+                <th className="p-3 font-semibold">Instância</th>
+                <th className="p-3 font-semibold">Situação</th>
+                <th className="p-3 font-semibold">Decisão</th>
+                {canManage && <th className="p-3 font-semibold">Ações</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {appeals.map((a) => {
+                const temSegunda = appeals.some(
+                  (x) => x.request_id === a.request_id && x.instancia === 2,
+                );
+                return (
+                  <tr key={a.id} className="border-b last:border-0">
+                    <td className="p-3 tabular-nums">
+                      {numeroDoPedido(a.request_id)}
+                    </td>
+                    <td className="p-3">{a.instancia}ª</td>
+                    <td className="p-3">
+                      <Badge
+                        variant={
+                          a.status === "provido"
+                            ? "default"
+                            : a.status === "improvido"
+                              ? "destructive"
+                              : "secondary"
+                        }
+                      >
+                        {a.status}
+                      </Badge>
+                    </td>
+                    <td className="p-3 text-muted-foreground">
+                      {a.decisao ?? "—"}
+                    </td>
+                    {canManage && (
+                      <td className="p-3">
+                        <div className="flex gap-2 flex-wrap">
+                          {a.status === "pendente" && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => doDecide(a.id, "provido")}
+                              >
+                                Prover
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => doDecide(a.id, "improvido")}
+                              >
+                                Improver
+                              </Button>
+                            </>
+                          )}
+                          {a.instancia === 1 &&
+                            a.status === "improvido" &&
+                            !temSegunda && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => doSecondInstance(a.request_id)}
+                              >
+                                2ª instância
+                              </Button>
+                            )}
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Novo pedido */}
       <Dialog open={openDialog} onOpenChange={setOpenDialog}>
