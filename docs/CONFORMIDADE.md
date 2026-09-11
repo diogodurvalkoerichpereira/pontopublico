@@ -15,9 +15,9 @@ Legenda: 🟢 atende · 🟡 atende parcialmente · 🔴 não atende.
 | Requisito | Situação | Evidência / pendência |
 |---|---|---|
 | Multi-tenant com perfis e permissões | 🟢 | RBAC com escopo por unidade |
-| Menor privilégio | 🟡 | Modelo correto, mas autorização fail-open por omissão (O0-08) |
-| Trilha de auditoria (autor, data, antes/depois) | 🟡 | `audit_events` em 9 de 24 módulos (O0-11) |
-| Autenticação forte / MFA | 🔴 | Sem MFA (O0-09) |
+| Menor privilégio | 🟡 | RBAC com escopo por unidade; rede por AST (`authorization-coverage`) barra no CI handler de tenant sem guard (O0-08). RLS inerte por decisão (ADR 0002) — a autorização é 100% aplicacional |
+| Trilha de auditoria (autor, data, antes/depois) | 🟡 | `recordAudit` compartilhado (O0-11), em 19 de 34 módulos `*.functions.ts`; falta cobrir o restante |
+| Autenticação forte / MFA | 🟡 | TOTP entregue (`mfa.server.ts`), cifrado em repouso (`MFA_ENC_KEY`), exigido em operações críticas via `requireCriticalMfa` (O0-09); ainda não universal |
 | Criptografia em trânsito e repouso, hospedagem nacional | 🟡 | Depende de provedor + documentação |
 | Relatórios exportáveis (PDF/CSV/XLSX) | 🟡 | Existe para folha; motor não generalizado |
 | Web responsiva / PWA | 🟢 | — |
