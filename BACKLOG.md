@@ -738,6 +738,17 @@ não pode exceder o valor total do contrato** (invariante testado).
 `20260909340000_o3_08_contract_items.sql`; teste
 `tests/sprint-contract-items.test.mjs` verificado por mutação (ignorar a soma
 dos itens já lançados no teto derruba).
+**O3-08b — Propostas e julgamento por menor preço (Lei 14.133 art. 33-34) ✅.**
+`recordProcurementProposal` registra propostas de fornecedores numa licitação **aberta**
+(uma por fornecedor/licitação; pode entrar desclassificada com motivo);
+`getProcurementJudgment` ordena por menor valor, classifica só as válidas (1, 2, 3…) e a
+menor **válida** vence — proposta desclassificada, ainda que a mais barata, não classifica
+nem vence. Migration `..._o3_08b_procurement_proposals.sql` (tabela + coerência de ente),
+reusa `contracts.*`; `/licitacoes` ganha a ação Propostas (ranking + vencedor + adicionar).
+Teste `tests/sprint-procurement-judgment.test.mjs` verificado por mutação (deixar a
+desclassificada vencer derruba). Próximo: adjudicação/homologação amarrando o vencedor ao
+contrato; PNCP (externo, homologação).
+
 **O3-09 — Vínculo contrato ↔ licitação (Lei 14.133) ✅.**
 `linkContractToProcurement` liga o contrato à licitação de origem
 (`procurement_contracts.procurement_process_id` → `procurement_processes`, O3-06);

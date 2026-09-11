@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Gavel, Plus, Flag } from "lucide-react";
+import { Gavel, Plus, Flag, ListOrdered } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,8 @@ import {
   getProcurementProcesses,
   openProcurementProcess,
   transitionProcurementProcess,
+  recordProcurementProposal,
+  getProcurementJudgment,
 } from "@/lib/procurement.functions";
 
 export const Route = createFileRoute("/licitacoes")({ component: Page });
@@ -53,6 +55,16 @@ type Process = {
   status: string;
   abertura: string;
   homologado_em: string | null;
+};
+
+type Proposal = {
+  id: string;
+  fornecedor: string;
+  fornecedor_documento: string;
+  valor_proposto: number;
+  desclassificada: boolean;
+  motivo_desclassificacao: string | null;
+  classificacao: number | null;
 };
 
 const brl = (v: number | string) =>
@@ -85,6 +97,8 @@ function Content() {
   const load = useServerFn(getProcurementProcesses);
   const openProc = useServerFn(openProcurementProcess);
   const transition = useServerFn(transitionProcurementProcess);
+  const propose = useServerFn(recordProcurementProposal);
+  const loadJudgment = useServerFn(getProcurementJudgment);
   const qc = useQueryClient();
 
   const [openDialog, setOpenDialog] = useState(false);
@@ -93,6 +107,17 @@ function Content() {
   const [desfecho, setDesfecho] =
     useState<(typeof desfechos)[number]>("homologada");
   const [busy, setBusy] = useState(false);
+
+  const [judgeOpen, setJudgeOpen] = useState(false);
+  const [judgeProc, setJudgeProc] = useState<Process | null>(null);
+  const [proposals, setProposals] = useState<Proposal[]>([]);
+  const [propForm, setPropForm] = useState({
+    fornecedor: "",
+    fornecedor_documento: "",
+    valor_proposto: "",
+  });
+  const setProp = (k: keyof typeof propForm, v: string) =>
+    setPropForm((f) => ({ ...f, [k]: v }));
 
   const [form, setForm] = useState({
     numero: "",
@@ -136,6 +161,63 @@ function Content() {
       refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Falha ao abrir");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openJudgment = async (p: Process) => {
+    if (!activeTenant) return;
+    setJudgeProc(p);
+    setProposals([]);
+    setPropForm({
+      fornecedor: "",
+      fornecedor_documento: "",
+      valor_proposto: "",
+    });
+    setJudgeOpen(true);
+    try {
+      const r = await loadJudgment({
+        data: { tenant_id: activeTenant.id, process_id: p.id },
+      });
+      setProposals(r.proposals as Proposal[]);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Falha no julgamento",
+      );
+    }
+  };
+
+  const refreshJudgment = async () => {
+    if (!activeTenant || !judgeProc) return;
+    const r = await loadJudgment({
+      data: { tenant_id: activeTenant.id, process_id: judgeProc.id },
+    });
+    setProposals(r.proposals as Proposal[]);
+  };
+
+  const submitProposal = async () => {
+    if (!activeTenant || !judgeProc) return;
+    setBusy(true);
+    try {
+      await propose({
+        data: {
+          tenant_id: activeTenant.id,
+          process_id: judgeProc.id,
+          fornecedor: propForm.fornecedor.trim(),
+          fornecedor_documento: propForm.fornecedor_documento.trim(),
+          valor_proposto: Number(propForm.valor_proposto),
+        },
+      });
+      toast.success("Proposta registrada");
+      setPropForm({
+        fornecedor: "",
+        fornecedor_documento: "",
+        valor_proposto: "",
+      });
+      await refreshJudgment();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha na proposta");
     } finally {
       setBusy(false);
     }
@@ -199,7 +281,7 @@ function Content() {
               <th className="p-3 font-semibold">Objeto</th>
               <th className="p-3 font-semibold text-right">Estimado</th>
               <th className="p-3 font-semibold">Situação</th>
-              {canManage && <th className="p-3 font-semibold">Ações</th>}
+              <th className="p-3 font-semibold">Ações</th>
             </tr>
           </thead>
           <tbody>
@@ -220,9 +302,16 @@ function Content() {
                     {p.status}
                   </Badge>
                 </td>
-                {canManage && (
-                  <td className="p-3">
-                    {p.status === "aberta" && (
+                <td className="p-3">
+                  <div className="flex gap-2 flex-wrap">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => openJudgment(p)}
+                    >
+                      <ListOrdered className="size-4" /> Propostas
+                    </Button>
+                    {canManage && p.status === "aberta" && (
                       <Button
                         size="sm"
                         variant="outline"
@@ -231,14 +320,14 @@ function Content() {
                         <Flag className="size-4" /> Encerrar
                       </Button>
                     )}
-                  </td>
-                )}
+                  </div>
+                </td>
               </tr>
             ))}
             {items.length === 0 && (
               <tr>
                 <td
-                  colSpan={canManage ? 6 : 5}
+                  colSpan={6}
                   className="p-6 text-center text-muted-foreground"
                 >
                   Nenhuma licitação registrada.
@@ -359,6 +448,107 @@ function Content() {
               Confirmar
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Propostas / julgamento */}
+      <Dialog open={judgeOpen} onOpenChange={setJudgeOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              Propostas — {judgeProc?.numero}/{judgeProc?.ano} (menor preço)
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b bg-muted/40 text-left">
+                <tr>
+                  <th className="p-2 font-semibold">Class.</th>
+                  <th className="p-2 font-semibold">Fornecedor</th>
+                  <th className="p-2 font-semibold text-right">Valor</th>
+                  <th className="p-2 font-semibold">Situação</th>
+                </tr>
+              </thead>
+              <tbody>
+                {proposals.map((p) => (
+                  <tr key={p.id} className="border-b last:border-0">
+                    <td className="p-2 tabular-nums">
+                      {p.classificacao === 1 ? (
+                        <Badge>1º</Badge>
+                      ) : (
+                        (p.classificacao ?? "—")
+                      )}
+                    </td>
+                    <td className="p-2">{p.fornecedor}</td>
+                    <td className="p-2 text-right tabular-nums">
+                      {brl(p.valor_proposto)}
+                    </td>
+                    <td className="p-2">
+                      {p.desclassificada ? (
+                        <Badge variant="destructive">desclassificada</Badge>
+                      ) : (
+                        <Badge variant="secondary">classificada</Badge>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {proposals.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={4}
+                      className="p-4 text-center text-muted-foreground"
+                    >
+                      Sem propostas.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {canManage && judgeProc?.status === "aberta" && (
+            <div className="grid grid-cols-2 gap-2 border-t pt-3">
+              <div className="col-span-2">
+                <Label>Fornecedor</Label>
+                <Input
+                  value={propForm.fornecedor}
+                  onChange={(e) => setProp("fornecedor", e.target.value)}
+                />
+              </div>
+              <div>
+                <Label>Documento</Label>
+                <Input
+                  value={propForm.fornecedor_documento}
+                  onChange={(e) =>
+                    setProp("fornecedor_documento", e.target.value)
+                  }
+                />
+              </div>
+              <div>
+                <Label>Valor proposto</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={propForm.valor_proposto}
+                  onChange={(e) => setProp("valor_proposto", e.target.value)}
+                />
+              </div>
+              <div className="col-span-2">
+                <Button
+                  onClick={submitProposal}
+                  disabled={
+                    busy ||
+                    !propForm.fornecedor.trim() ||
+                    !propForm.fornecedor_documento.trim() ||
+                    !propForm.valor_proposto
+                  }
+                >
+                  <Plus className="size-4" /> Adicionar proposta
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </section>

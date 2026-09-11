@@ -154,3 +154,125 @@ export const transitionProcurementProcess = createServerFn({ method: "POST" })
       return { id: data.process_id, status: data.desfecho };
     });
   });
+
+const ProposalInput = z.object({
+  tenant_id: z.string().uuid(),
+  process_id: z.string().uuid(),
+  fornecedor: z.string().trim().min(2).max(200),
+  fornecedor_documento: z.string().trim().min(3).max(20),
+  valor_proposto: z.number().positive().max(1_000_000_000_000),
+  desclassificada: z.boolean().default(false),
+  motivo_desclassificacao: z.string().trim().min(3).max(500).optional(),
+});
+
+// O3-08b — Registra a proposta de um fornecedor numa licitação **aberta** (só se recebe
+// proposta enquanto o certame não encerrou). Uma proposta por fornecedor/licitação. Pode
+// já entrar desclassificada, com motivo. Reusa contracts.manage.
+export const recordProcurementProposal = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => ProposalInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "contracts.manage");
+    if (data.desclassificada && !data.motivo_desclassificacao)
+      throw new Error("Desclassificação exige motivo");
+    return withTransaction(async (client) => {
+      const process = (
+        await client.query<{ status: string }>(
+          `select status from public.procurement_processes
+           where id=$1 and tenant_id=$2 for update`,
+          [data.process_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!process) throw new Error("Licitação não encontrada");
+      if (process.status !== "aberta")
+        throw new Error("Só uma licitação aberta recebe propostas");
+      const dup = await client.query(
+        `select id from public.procurement_proposals
+         where process_id=$1 and lower(fornecedor_documento)=lower($2)`,
+        [data.process_id, data.fornecedor_documento],
+      );
+      if (dup.rows.length)
+        throw new Error("Fornecedor já tem proposta nesta licitação");
+      const id = randomUUID();
+      await client.query(
+        `insert into public.procurement_proposals
+           (id, tenant_id, process_id, fornecedor, fornecedor_documento,
+            valor_proposto, desclassificada, motivo_desclassificacao, created_by)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        [
+          id,
+          data.tenant_id,
+          data.process_id,
+          data.fornecedor,
+          data.fornecedor_documento,
+          data.valor_proposto,
+          data.desclassificada,
+          data.motivo_desclassificacao ?? null,
+          context.userId,
+        ],
+      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "proposal",
+        resource: "procurement_proposals",
+        recordId: id,
+        after: {
+          fornecedor: data.fornecedor,
+          valor_proposto: data.valor_proposto,
+          desclassificada: data.desclassificada,
+        },
+      });
+      return { id };
+    });
+  });
+
+const JudgmentInput = z.object({
+  tenant_id: z.string().uuid(),
+  process_id: z.string().uuid(),
+});
+
+// O3-08b — Julgamento por menor preço (Lei 14.133 art. 33-34). Ordena as propostas do
+// menor para o maior valor; as **classificadas** (não desclassificadas) recebem a
+// classificação 1, 2, 3…; a de menor valor entre as classificadas é a vencedora. Proposta
+// desclassificada aparece na lista mas não recebe classificação nem vence. Reusa
+// contracts.read.
+export const getProcurementJudgment = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => JudgmentInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "contracts.read");
+    const rows = await query<{
+      id: string;
+      fornecedor: string;
+      fornecedor_documento: string;
+      valor_proposto: string;
+      desclassificada: boolean;
+      motivo_desclassificacao: string | null;
+    }>(
+      `select id, fornecedor, fornecedor_documento, valor_proposto::text,
+         desclassificada, motivo_desclassificacao
+       from public.procurement_proposals
+       where process_id = $1 and tenant_id = $2
+       order by valor_proposto asc, fornecedor`,
+      [data.process_id, data.tenant_id],
+    );
+    let rank = 0;
+    const proposals = rows.map((p) => {
+      const classificada = !p.desclassificada;
+      const classificacao = classificada ? (rank += 1) : null;
+      return {
+        id: p.id,
+        fornecedor: p.fornecedor,
+        fornecedor_documento: p.fornecedor_documento,
+        valor_proposto: Number(p.valor_proposto),
+        desclassificada: p.desclassificada,
+        motivo_desclassificacao: p.motivo_desclassificacao,
+        classificacao,
+      };
+    });
+    const vencedor = proposals.find((p) => p.classificacao === 1) ?? null;
+    return { proposals, vencedor };
+  });
