@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Gavel, Plus, Flag, ListOrdered } from "lucide-react";
+import { Gavel, Plus, Flag, ListOrdered, Trophy } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ import {
   transitionProcurementProcess,
   recordProcurementProposal,
   getProcurementJudgment,
+  adjudicateProcurementWinner,
 } from "@/lib/procurement.functions";
 
 export const Route = createFileRoute("/licitacoes")({ component: Page });
@@ -55,6 +56,8 @@ type Process = {
   status: string;
   abertura: string;
   homologado_em: string | null;
+  valor_homologado: string | null;
+  vencedor: string | null;
 };
 
 type Proposal = {
@@ -99,6 +102,7 @@ function Content() {
   const transition = useServerFn(transitionProcurementProcess);
   const propose = useServerFn(recordProcurementProposal);
   const loadJudgment = useServerFn(getProcurementJudgment);
+  const adjudicate = useServerFn(adjudicateProcurementWinner);
   const qc = useQueryClient();
 
   const [openDialog, setOpenDialog] = useState(false);
@@ -223,6 +227,21 @@ function Content() {
     }
   };
 
+  const doAdjudicate = async (p: Process) => {
+    if (!activeTenant) return;
+    try {
+      const r = await adjudicate({
+        data: { tenant_id: activeTenant.id, process_id: p.id },
+      });
+      toast.success(`Adjudicado — ${brl(r.valor_homologado)}`);
+      refresh();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Falha ao adjudicar",
+      );
+    }
+  };
+
   const openTransition = (p: Process) => {
     setTarget(p);
     setDesfecho("homologada");
@@ -301,6 +320,11 @@ function Content() {
                   <Badge variant={statusVariant[p.status] ?? "secondary"}>
                     {p.status}
                   </Badge>
+                  {p.vencedor && (
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      🏆 {p.vencedor} — {brl(p.valor_homologado ?? 0)}
+                    </div>
+                  )}
                 </td>
                 <td className="p-3">
                   <div className="flex gap-2 flex-wrap">
@@ -318,6 +342,15 @@ function Content() {
                         onClick={() => openTransition(p)}
                       >
                         <Flag className="size-4" /> Encerrar
+                      </Button>
+                    )}
+                    {canManage && p.status === "homologada" && !p.vencedor && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => doAdjudicate(p)}
+                      >
+                        <Trophy className="size-4" /> Adjudicar
                       </Button>
                     )}
                   </div>

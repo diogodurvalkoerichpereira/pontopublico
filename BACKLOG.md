@@ -749,6 +749,16 @@ Teste `tests/sprint-procurement-judgment.test.mjs` verificado por mutação (dei
 desclassificada vencer derruba). Próximo: adjudicação/homologação amarrando o vencedor ao
 contrato; PNCP (externo, homologação).
 
+**O3-08c — Adjudicação do vencedor (Lei 14.133 art. 71) ✅.** `adjudicateProcurementWinner`
+fixa, numa licitação **homologada**, a proposta de menor valor entre as classificadas e o
+`valor_homologado` — exige homologação e ao menos uma proposta classificada; a
+desclassificada mais barata não é adjudicada. `getProcurementProcesses` passa a devolver o
+vencedor e o valor homologado. Migration `..._o3_08c_procurement_award.sql` (ALTER aditivo
++ FK vencedor), reusa `contracts.*`; `/licitacoes` ganha a ação Adjudicar e o vencedor na
+tabela. Teste `tests/sprint-procurement-award.test.mjs` verificado por mutação (adjudicar a
+desclassificada, ou adjudicar licitação aberta, derruba). Próximo: amarrar o vencedor
+adjudicado ao contrato (O3-09) e à ata de preços; PNCP (externo, homologação).
+
 **O3-09 — Vínculo contrato ↔ licitação (Lei 14.133) ✅.**
 `linkContractToProcurement` liga o contrato à licitação de origem
 (`procurement_contracts.procurement_process_id` → `procurement_processes`, O3-06);

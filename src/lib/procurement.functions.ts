@@ -33,12 +33,16 @@ export const getProcurementProcesses = createServerFn({ method: "POST" })
       status: string;
       abertura: string;
       homologado_em: string | null;
+      valor_homologado: string | null;
+      vencedor: string | null;
     }>(
-      `select id, numero, ano, modalidade, objeto, valor_estimado::text, status,
-         abertura::text, homologado_em::text
-       from public.procurement_processes
-       where tenant_id = $1 and ($2::int is null or ano = $2)
-       order by ano desc, numero`,
+      `select p.id, p.numero, p.ano, p.modalidade, p.objeto,
+         p.valor_estimado::text, p.status, p.abertura::text, p.homologado_em::text,
+         p.valor_homologado::text, v.fornecedor as vencedor
+       from public.procurement_processes p
+       left join public.procurement_proposals v on v.id = p.vencedor_proposal_id
+       where p.tenant_id = $1 and ($2::int is null or p.ano = $2)
+       order by p.ano desc, p.numero`,
       [data.tenant_id, data.ano ?? null],
     );
     return {
@@ -275,4 +279,68 @@ export const getProcurementJudgment = createServerFn({ method: "POST" })
     });
     const vencedor = proposals.find((p) => p.classificacao === 1) ?? null;
     return { proposals, vencedor };
+  });
+
+const AwardInput = z.object({
+  tenant_id: z.string().uuid(),
+  process_id: z.string().uuid(),
+});
+
+// O3-08c — Adjudicação do vencedor (Lei 14.133 art. 71). Numa licitação **homologada**,
+// fixa a proposta vencedora — a de menor valor entre as **classificadas** (não
+// desclassificadas) — e o valor homologado. Exige ao menos uma proposta classificada.
+// Reusa contracts.manage.
+export const adjudicateProcurementWinner = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => AwardInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "contracts.manage");
+    return withTransaction(async (client) => {
+      const process = (
+        await client.query<{ status: string }>(
+          `select status from public.procurement_processes
+           where id=$1 and tenant_id=$2 for update`,
+          [data.process_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!process) throw new Error("Licitação não encontrada");
+      if (process.status !== "homologada")
+        throw new Error("Só uma licitação homologada adjudica o vencedor");
+      // Menor valor entre as classificadas (não desclassificadas).
+      const winner = (
+        await client.query<{ id: string; valor_proposto: string }>(
+          `select id, valor_proposto::text
+           from public.procurement_proposals
+           where process_id=$1 and tenant_id=$2 and desclassificada = false
+           order by valor_proposto asc, fornecedor
+           limit 1`,
+          [data.process_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!winner)
+        throw new Error("Não há proposta classificada para adjudicar");
+      await client.query(
+        `update public.procurement_processes
+         set vencedor_proposal_id=$3, valor_homologado=$4, updated_at=now()
+         where id=$1 and tenant_id=$2`,
+        [data.process_id, data.tenant_id, winner.id, winner.valor_proposto],
+      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "adjudicate",
+        resource: "procurement_processes",
+        recordId: data.process_id,
+        after: {
+          vencedor_proposal_id: winner.id,
+          valor_homologado: Number(winner.valor_proposto),
+        },
+      });
+      return {
+        id: data.process_id,
+        vencedor_proposal_id: winner.id,
+        valor_homologado: Number(winner.valor_proposto),
+      };
+    });
   });
