@@ -39,6 +39,7 @@ import {
   Wallet,
   MessageSquareWarning,
   PiggyBank,
+  Banknote,
   FileSignature,
   Boxes,
   Building,
@@ -352,6 +353,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       to: "/tesouraria",
       label: "Tesouraria",
       icon: Wallet,
+      section: "Contabilidade e Finanças",
+    });
+  if (hasTenantPermission("accounting.read"))
+    items.push({
+      to: "/ordens-bancarias",
+      label: "Ordens bancárias",
+      icon: Banknote,
       section: "Contabilidade e Finanças",
     });
   if (hasTenantPermission("budget.read"))

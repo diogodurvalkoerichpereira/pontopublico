@@ -599,6 +599,16 @@ Migration `..._o2_15_treasury_reconciliation.sql`, reusa `accounting.*`; teste
 `tests/sprint-treasury-reconciliation.test.mjs` verificado por mutação (inverter o
 sinal da diferença derruba). Próximo: ordem bancária (OB) e MSC-SICONFI.
 
+**O2-16 — Ordem bancária (OB) ✅.** `emitBankOrder` liga a execução da despesa à
+tesouraria: paga um empenho **liquidado** (Lei 4.320 — só o liquidado paga) por uma
+conta, numerando a OB por ente/exercício (linha-contador travada), gerando a saída
+bancária (saldo nunca negativo), levando o empenho a `pago` e contabilizando o evento
+de pagamento — tudo na mesma transação. Um empenho paga uma só vez (guarda de estágio
++ `unique (tenant, commitment)`). `getBankOrders` lista; UI em `/ordens-bancarias`.
+Migration `..._o2_16_bank_orders.sql`, reusa `accounting.*`; teste
+`tests/sprint-bank-orders.test.mjs` verificado por mutação (somar em vez de subtrair o
+valor no saldo derruba). Próximo: MSC-SICONFI e a demonstração dos fluxos de caixa.
+
 ### Onda 3 — Materiais e Contratações (14-18 sem)
 
 Compras Lei 14.133 → contratos → almoxarifado → patrimônio (depreciação NBC TSP)

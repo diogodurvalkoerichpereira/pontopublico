@@ -17,6 +17,7 @@ import { Route as PortalFinanceiroRouteImport } from './routes/portal-financeiro
 import { Route as PontoRouteImport } from './routes/ponto'
 import { Route as PatrimonioRouteImport } from './routes/patrimonio'
 import { Route as OuvidoriaRouteImport } from './routes/ouvidoria'
+import { Route as OrdensBancariasRouteImport } from './routes/ordens-bancarias'
 import { Route as OrcamentoRouteImport } from './routes/orcamento'
 import { Route as MeusDocumentosRouteImport } from './routes/meus-documentos'
 import { Route as LoginRouteImport } from './routes/login'
@@ -95,6 +96,11 @@ const PatrimonioRoute = PatrimonioRouteImport.update({
 const OuvidoriaRoute = OuvidoriaRouteImport.update({
   id: '/ouvidoria',
   path: '/ouvidoria',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OrdensBancariasRoute = OrdensBancariasRouteImport.update({
+  id: '/ordens-bancarias',
+  path: '/ordens-bancarias',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OrcamentoRoute = OrcamentoRouteImport.update({
@@ -307,6 +313,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/meus-documentos': typeof MeusDocumentosRoute
   '/orcamento': typeof OrcamentoRoute
+  '/ordens-bancarias': typeof OrdensBancariasRoute
   '/ouvidoria': typeof OuvidoriaRoute
   '/patrimonio': typeof PatrimonioRoute
   '/ponto': typeof PontoRoute
@@ -356,6 +363,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/meus-documentos': typeof MeusDocumentosRoute
   '/orcamento': typeof OrcamentoRoute
+  '/ordens-bancarias': typeof OrdensBancariasRoute
   '/ouvidoria': typeof OuvidoriaRoute
   '/patrimonio': typeof PatrimonioRoute
   '/ponto': typeof PontoRoute
@@ -406,6 +414,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/meus-documentos': typeof MeusDocumentosRoute
   '/orcamento': typeof OrcamentoRoute
+  '/ordens-bancarias': typeof OrdensBancariasRoute
   '/ouvidoria': typeof OuvidoriaRoute
   '/patrimonio': typeof PatrimonioRoute
   '/ponto': typeof PontoRoute
@@ -457,6 +466,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/meus-documentos'
     | '/orcamento'
+    | '/ordens-bancarias'
     | '/ouvidoria'
     | '/patrimonio'
     | '/ponto'
@@ -506,6 +516,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/meus-documentos'
     | '/orcamento'
+    | '/ordens-bancarias'
     | '/ouvidoria'
     | '/patrimonio'
     | '/ponto'
@@ -555,6 +566,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/meus-documentos'
     | '/orcamento'
+    | '/ordens-bancarias'
     | '/ouvidoria'
     | '/patrimonio'
     | '/ponto'
@@ -605,6 +617,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   MeusDocumentosRoute: typeof MeusDocumentosRoute
   OrcamentoRoute: typeof OrcamentoRoute
+  OrdensBancariasRoute: typeof OrdensBancariasRoute
   OuvidoriaRoute: typeof OuvidoriaRoute
   PatrimonioRoute: typeof PatrimonioRoute
   PontoRoute: typeof PontoRoute
@@ -679,6 +692,13 @@ declare module '@tanstack/react-router' {
       path: '/ouvidoria'
       fullPath: '/ouvidoria'
       preLoaderRoute: typeof OuvidoriaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ordens-bancarias': {
+      id: '/ordens-bancarias'
+      path: '/ordens-bancarias'
+      fullPath: '/ordens-bancarias'
+      preLoaderRoute: typeof OrdensBancariasRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/orcamento': {
@@ -1034,6 +1054,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   MeusDocumentosRoute: MeusDocumentosRoute,
   OrcamentoRoute: OrcamentoRoute,
+  OrdensBancariasRoute: OrdensBancariasRoute,
   OuvidoriaRoute: OuvidoriaRoute,
   PatrimonioRoute: PatrimonioRoute,
   PontoRoute: PontoRoute,
