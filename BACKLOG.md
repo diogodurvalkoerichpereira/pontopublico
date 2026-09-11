@@ -519,9 +519,15 @@ desbalanceado; `getBalancete` devolve saldo por conta e o balancete fecha em zer
 O helper `postEntry(client, …)` é reusado pelos roteiros automáticos. Permissões
 `accounting.*`. Migration `20260909160000_o2_05_accounting_ledger.sql`; teste
 `tests/sprint-accounting-ledger.test.mjs` verificado por mutação.
-Próximo: **O2-06** — roteiros de contabilização automática (empenho/liquidação/
-pagamento lançam no razão dentro da mesma transação do fato); depois restos a pagar,
-balanços Lei 4.320/DCASP e MSC-SICONFI, e a tesouraria (OB).
+**O2-06 — Contabilização automática por fato ✅.** Empenho, anulação, liquidação e
+pagamento geram lançamento contábil balanceado no razão (O2-05) na MESMA transação
+do fato. Como os códigos PCASP dependem do plano do ente, o roteiro é **configurável**
+(`accounting_event_accounts`: conta débito/crédito por evento) — não se fixa código
+de memória; sem mapeamento, o fato não contabiliza. `saveAccountingEventAccount` +
+`contabilizarEvento`. Migration `20260909170000_o2_06_accounting_event_accounts.sql`;
+teste `tests/sprint-accounting-routing.test.mjs` verificado por mutação.
+Próximo: **O2-07** — restos a pagar (empenhos não pagos no encerramento) e os
+balanços Lei 4.320/DCASP; depois tesouraria (OB, conciliação) e MSC-SICONFI.
 
 ### Onda 3 — Materiais e Contratações (14-18 sem)
 

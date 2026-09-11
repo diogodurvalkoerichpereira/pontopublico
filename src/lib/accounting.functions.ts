@@ -83,6 +83,103 @@ export async function postEntry(input: PostEntryInput) {
   return { id, valor: totalD };
 }
 
+// O2-06 — contabilização automática dirigida por configuração. Lê o mapeamento
+// conta débito/crédito do evento (`accounting_event_accounts`) e, se existir,
+// escritura o lançamento balanceado do fato na MESMA transação. Sem mapeamento, o
+// fato não contabiliza (devolve null) — o ente decide o roteiro. Reusado pelas
+// funções de empenho/liquidação/pagamento (budget.functions).
+export async function contabilizarEvento(params: {
+  client: import("pg").PoolClient;
+  tenantId: string;
+  exercicio: number;
+  dataLancamento: string;
+  eventCode: "empenho" | "empenho_anulacao" | "liquidacao" | "pagamento";
+  valor: number;
+  historico: string;
+  sourceRef?: string | null;
+  actorId: string;
+}) {
+  if (params.valor <= 0) return null;
+  const mapping = (
+    await params.client.query<{
+      debit_account: string;
+      credit_account: string;
+    }>(
+      `select debit_account, credit_account
+       from public.accounting_event_accounts
+       where tenant_id = $1 and event_code = $2`,
+      [params.tenantId, params.eventCode],
+    )
+  ).rows[0];
+  if (!mapping) return null;
+  return postEntry({
+    client: params.client,
+    tenantId: params.tenantId,
+    exercicio: params.exercicio,
+    dataLancamento: params.dataLancamento,
+    historico: params.historico,
+    lines: [
+      { conta: mapping.debit_account, lado: "D", valor: params.valor },
+      { conta: mapping.credit_account, lado: "C", valor: params.valor },
+    ],
+    source: `evento:${params.eventCode}`,
+    sourceRef: params.sourceRef ?? null,
+    actorId: params.actorId,
+  });
+}
+
+const SaveEventInput = z.object({
+  tenant_id: z.string().uuid(),
+  event_code: z.enum([
+    "empenho",
+    "empenho_anulacao",
+    "liquidacao",
+    "pagamento",
+  ]),
+  debit_account: z
+    .string()
+    .trim()
+    .regex(/^[0-9.]{1,30}$/),
+  credit_account: z
+    .string()
+    .trim()
+    .regex(/^[0-9.]{1,30}$/),
+});
+
+export const saveAccountingEventAccount = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => SaveEventInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "accounting.manage");
+    await withTransaction(async (client) => {
+      await client.query(
+        `insert into public.accounting_event_accounts
+           (tenant_id, event_code, debit_account, credit_account, created_by)
+         values ($1,$2,$3,$4,$5)
+         on conflict (tenant_id, event_code) do update
+           set debit_account = excluded.debit_account,
+               credit_account = excluded.credit_account`,
+        [
+          data.tenant_id,
+          data.event_code,
+          data.debit_account,
+          data.credit_account,
+          context.userId,
+        ],
+      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "update",
+        resource: "accounting_event_accounts",
+        recordId: data.event_code,
+        after: data,
+      });
+    });
+    return { ok: true };
+  });
+
 const PostInput = z.object({
   tenant_id: z.string().uuid(),
   exercicio: z.number().int().min(2000).max(2200),

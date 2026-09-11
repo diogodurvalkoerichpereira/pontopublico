@@ -13,6 +13,7 @@ import {
   loadTenantAccess,
   requireTenantPermission,
 } from "./tenant-access.server";
+import { contabilizarEvento } from "./accounting.functions";
 
 const GetInput = z.object({
   tenant_id: z.string().uuid(),
@@ -313,6 +314,18 @@ async function reserveOnAppropriation(params: ReserveParams) {
      where id = $1 and tenant_id = $2`,
     [params.appropriationId, params.tenantId, params.valor],
   );
+  // Contabilização automática do empenho (se o ente configurou o roteiro).
+  await contabilizarEvento({
+    client,
+    tenantId: params.tenantId,
+    exercicio: appropriation.exercicio,
+    dataLancamento: params.dataEmpenho,
+    eventCode: "empenho",
+    valor: params.valor,
+    historico: `Empenho nº ${numero} — ${params.credor}`,
+    sourceRef: id,
+    actorId: params.actorId,
+  });
   await recordAudit(client, {
     tenantId: params.tenantId,
     actorId: params.actorId,
@@ -476,14 +489,16 @@ export const transitionBudgetCommitment = createServerFn({ method: "POST" })
           status: string;
           appropriation_id: string;
           valor: string;
+          exercicio: number;
         }>(
-          `select status, appropriation_id, valor::text
+          `select status, appropriation_id, valor::text, exercicio
            from public.budget_commitments
            where id = $1 and tenant_id = $2 for update`,
           [data.commitment_id, data.tenant_id],
         )
       ).rows[0];
       if (!commitment) throw new Error("Empenho não encontrado");
+      const hoje = new Date().toISOString().slice(0, 10);
 
       if (data.action === "liquidar") {
         if (commitment.status !== "empenhado")
@@ -494,6 +509,17 @@ export const transitionBudgetCommitment = createServerFn({ method: "POST" })
            where id = $1 and tenant_id = $2`,
           [data.commitment_id, data.tenant_id, context.userId],
         );
+        await contabilizarEvento({
+          client,
+          tenantId: data.tenant_id,
+          exercicio: commitment.exercicio,
+          dataLancamento: hoje,
+          eventCode: "liquidacao",
+          valor: Number(commitment.valor),
+          historico: "Liquidação de empenho",
+          sourceRef: data.commitment_id,
+          actorId: context.userId,
+        });
       } else if (data.action === "pagar") {
         if (commitment.status !== "liquidado")
           throw new Error("Só um empenho liquidado pode ser pago");
@@ -503,6 +529,17 @@ export const transitionBudgetCommitment = createServerFn({ method: "POST" })
            where id = $1 and tenant_id = $2`,
           [data.commitment_id, data.tenant_id, context.userId],
         );
+        await contabilizarEvento({
+          client,
+          tenantId: data.tenant_id,
+          exercicio: commitment.exercicio,
+          dataLancamento: hoje,
+          eventCode: "pagamento",
+          valor: Number(commitment.valor),
+          historico: "Pagamento de empenho",
+          sourceRef: data.commitment_id,
+          actorId: context.userId,
+        });
       } else {
         // anular
         if (commitment.status === "pago")
@@ -533,6 +570,17 @@ export const transitionBudgetCommitment = createServerFn({ method: "POST" })
             data.motivo ?? null,
           ],
         );
+        await contabilizarEvento({
+          client,
+          tenantId: data.tenant_id,
+          exercicio: commitment.exercicio,
+          dataLancamento: hoje,
+          eventCode: "empenho_anulacao",
+          valor: Number(commitment.valor),
+          historico: "Anulação de empenho",
+          sourceRef: data.commitment_id,
+          actorId: context.userId,
+        });
       }
 
       await recordAudit(client, {
