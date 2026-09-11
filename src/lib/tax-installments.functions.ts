@@ -263,3 +263,68 @@ export const payInstallment = createServerFn({ method: "POST" })
       return { paga: true, plano_quitado: quitado };
     });
   });
+
+const RescindInput = z.object({
+  tenant_id: z.string().uuid(),
+  plan_id: z.string().uuid(),
+  data_referencia: z.string().date(),
+  limite_atraso: z.number().int().min(1).max(24).default(3),
+});
+
+// O4-11 — Rescinde o parcelamento por inadimplência: com pelo menos `limite_atraso`
+// parcelas vencidas e não pagas na data de referência, o plano é rescindido e o crédito
+// permanece em dívida ativa com o saldo remanescente (as parcelas pagas já arrecadaram).
+export const rescindInstallmentPlan = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => RescindInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "taxes.manage");
+    return withTransaction(async (client) => {
+      const plan = (
+        await client.query<{ status: string }>(
+          `select status from public.tax_installment_plans
+           where id=$1 and tenant_id=$2 for update`,
+          [data.plan_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!plan) throw new Error("Parcelamento não encontrado");
+      if (plan.status !== "ativo")
+        throw new Error("Só um parcelamento ativo pode ser rescindido");
+
+      // Parcelas vencidas e ainda abertas na data de referência.
+      const vencidas = Number(
+        (
+          await client.query<{ n: string }>(
+            `select count(*)::text as n from public.tax_installments
+             where plan_id=$1 and status='aberta' and vencimento < $2::date`,
+            [data.plan_id, data.data_referencia],
+          )
+        ).rows[0].n,
+      );
+      if (vencidas < data.limite_atraso)
+        throw new Error(
+          `Inadimplência insuficiente para rescisão (${vencidas} de ${data.limite_atraso} parcelas vencidas)`,
+        );
+
+      await client.query(
+        `update public.tax_installment_plans
+         set status='rescindido', updated_at=now()
+         where id=$1 and tenant_id=$2`,
+        [data.plan_id, data.tenant_id],
+      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "rescindir_parcelamento",
+        resource: "tax_installment_plans",
+        recordId: data.plan_id,
+        after: { parcelas_vencidas: vencidas },
+      });
+      return {
+        id: data.plan_id,
+        status: "rescindido",
+        parcelas_vencidas: vencidas,
+      };
+    });
+  });

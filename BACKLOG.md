@@ -762,6 +762,15 @@ homologação/ferramenta do ente). Migration `..._o4_08_active_debt_certificate.
 `tests/sprint-active-debt-certificate.test.mjs` verificado por mutação (usar o valor
 lançado em vez do saldo derruba). Próximo: execução fiscal (ajuizamento) sobre a CDA.
 
+**O4-11 — Rescisão do parcelamento por inadimplência ✅.** `rescindInstallmentPlan`
+rescinde o plano **ativo** quando há pelo menos `limite_atraso` parcelas vencidas e não
+pagas na data de referência (padrão 3); abaixo do limiar recusa; um plano já
+rescindido/quitado não rescinde. O crédito permanece em dívida ativa com o saldo
+remanescente (as parcelas pagas já arrecadaram). Reusa `taxes.manage`, sem migration (o
+status `rescindido` já existia no enum). Teste `tests/sprint-installment-rescission.test.mjs`
+verificado por mutação (inverter o limiar derruba). Próximo (UI): painel de parcelamentos
+(pagar parcela + rescindir) no `/tributos`.
+
 **O4-09 — Execução fiscal (Lei 6.830) ✅.** `fileFiscalExecution` ajuíza a cobrança de
 uma CDA ativa: registra número do processo (informado), data e valor ajuizado (fixado do
 valor inscrito na CDA); uma execução por CDA (`unique` + guarda de estado).
