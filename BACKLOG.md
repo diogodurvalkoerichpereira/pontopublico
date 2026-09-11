@@ -607,8 +607,15 @@ obrigatória; supressão não pode deixar o total abaixo do já empenhado. Atual
 Migration `20260909320000_o3_07_contract_amendments.sql`; teste
 `tests/sprint-contract-amendments.test.mjs` verificado por mutação (comparar o
 acréscimo isolado, não o acumulado, ao limite derruba).
-Próximo: itens do contrato (materiais/serviços por linha, com quantidade e
-preço unitário) e o vínculo com a licitação que o originou (dispensa/pregão);
+**O3-08 — Itens do contrato (Lei 14.133) ✅.** `addContractItem` detalha o
+contrato em linhas de material/serviço (valor da linha = quantidade × preço
+unitário, arredondado), numeração sequencial por contrato; a **soma dos itens
+não pode exceder o valor total do contrato** (invariante testado).
+`getContractItems` lista. Reusa `contracts.*`. Migration
+`20260909340000_o3_08_contract_items.sql`; teste
+`tests/sprint-contract-items.test.mjs` verificado por mutação (ignorar a soma
+dos itens já lançados no teto derruba).
+Próximo: o vínculo do contrato com a licitação que o originou (dispensa/pregão);
 ligar a baixa de estoque (O3-02) à entrada de bem em patrimônio (O3-03) quando
 o material for um bem permanente.
 
