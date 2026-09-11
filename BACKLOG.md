@@ -580,6 +580,15 @@ reservado também ao contrato — não só à dotação — quando um empenho de
 `contrato` é anulado. CHECK de origem do empenho ampliado para `'contrato'`.
 Migration `20260909220000_o3_04_contract_empenho.sql`; teste
 `tests/sprint-contract-empenho.test.mjs` verificado por mutação.
+**O3-07 — Termo aditivo de contrato (Lei 14.133, art. 125) ✅.**
+`registerContractAmendment` adita o contrato vigente: acréscimo/supressão de
+valor (limitado a **25% do valor original, de forma acumulada** entre aditivos)
+e/ou prorrogação de vigência; numeração sequencial por contrato, justificativa
+obrigatória; supressão não pode deixar o total abaixo do já empenhado. Atualiza
+`valor_total`/`vigencia_fim`. `getContractAmendments` lista. Reusa `contracts.*`.
+Migration `20260909320000_o3_07_contract_amendments.sql`; teste
+`tests/sprint-contract-amendments.test.mjs` verificado por mutação (comparar o
+acréscimo isolado, não o acumulado, ao limite derruba).
 Próximo: itens do contrato (materiais/serviços por linha, com quantidade e
 preço unitário) e o vínculo com a licitação que o originou (dispensa/pregão);
 ligar a baixa de estoque (O3-02) à entrada de bem em patrimônio (O3-03) quando
