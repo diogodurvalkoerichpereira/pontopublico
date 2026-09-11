@@ -573,6 +573,15 @@ do período: ingressos, saídas, fluxo líquido (ingressos − saídas) e as
 transferências internas à parte (que se anulam entre contas). Read-only, reusa
 `accounting.read`, sem migration. Teste `tests/sprint-cash-availability.test.mjs`
 verificado por mutação (contar saída como ingresso derruba).
+**O2-13 — Crédito adicional por remanejamento (Lei 4.320 art. 42-43) ✅.**
+`transferBudgetCredit` transfere dotação entre classificações no mesmo exercício:
+anula o orçado da origem e suplementa o destino, atômico (contas travadas em
+ordem estável); a **origem nunca fica abaixo do já empenhado** e as duas dotações
+têm de estar ativas. `budget_credit_movements` guarda a trilha com justificativa;
+`getBudgetCreditMovements` lista. Reusa `budget.*`. Migration
+`20260909390000_o2_13_budget_credit_transfer.sql`; teste
+`tests/sprint-budget-credit.test.mjs` verificado por mutação (ignorar o piso do
+empenhado derruba).
 Próximo: balanço financeiro completo (com receita/despesa orçamentária e
 extraorçamentária) e patrimonial, demonstração das variações patrimoniais
 (DCASP); conciliação bancária; ordem bancária (OB) e MSC-SICONFI.
