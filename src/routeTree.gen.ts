@@ -30,6 +30,7 @@ import { Route as ControleInternoRouteImport } from './routes/controle-interno'
 import { Route as ContratosRouteImport } from './routes/contratos'
 import { Route as CartaServicosRouteImport } from './routes/carta-servicos'
 import { Route as BalancosRouteImport } from './routes/balancos'
+import { Route as AtasRouteImport } from './routes/atas'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as AlmoxarifadoRouteImport } from './routes/almoxarifado'
 import { Route as IndexRouteImport } from './routes/index'
@@ -163,6 +164,11 @@ const CartaServicosRoute = CartaServicosRouteImport.update({
 const BalancosRoute = BalancosRouteImport.update({
   id: '/balancos',
   path: '/balancos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AtasRoute = AtasRouteImport.update({
+  id: '/atas',
+  path: '/atas',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppRoute = AppRouteImport.update({
@@ -315,6 +321,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/almoxarifado': typeof AlmoxarifadoRoute
   '/app': typeof AppRoute
+  '/atas': typeof AtasRoute
   '/balancos': typeof BalancosRoute
   '/carta-servicos': typeof CartaServicosRoute
   '/contratos': typeof ContratosRoute
@@ -367,6 +374,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/almoxarifado': typeof AlmoxarifadoRoute
   '/app': typeof AppRoute
+  '/atas': typeof AtasRoute
   '/balancos': typeof BalancosRoute
   '/carta-servicos': typeof CartaServicosRoute
   '/contratos': typeof ContratosRoute
@@ -420,6 +428,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/almoxarifado': typeof AlmoxarifadoRoute
   '/app': typeof AppRoute
+  '/atas': typeof AtasRoute
   '/balancos': typeof BalancosRoute
   '/carta-servicos': typeof CartaServicosRoute
   '/contratos': typeof ContratosRoute
@@ -474,6 +483,7 @@ export interface FileRouteTypes {
     | '/'
     | '/almoxarifado'
     | '/app'
+    | '/atas'
     | '/balancos'
     | '/carta-servicos'
     | '/contratos'
@@ -526,6 +536,7 @@ export interface FileRouteTypes {
     | '/'
     | '/almoxarifado'
     | '/app'
+    | '/atas'
     | '/balancos'
     | '/carta-servicos'
     | '/contratos'
@@ -578,6 +589,7 @@ export interface FileRouteTypes {
     | '/'
     | '/almoxarifado'
     | '/app'
+    | '/atas'
     | '/balancos'
     | '/carta-servicos'
     | '/contratos'
@@ -631,6 +643,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AlmoxarifadoRoute: typeof AlmoxarifadoRoute
   AppRoute: typeof AppRoute
+  AtasRoute: typeof AtasRoute
   BalancosRoute: typeof BalancosRoute
   CartaServicosRoute: typeof CartaServicosRoute
   ContratosRoute: typeof ContratosRoute
@@ -809,6 +822,13 @@ declare module '@tanstack/react-router' {
       path: '/balancos'
       fullPath: '/balancos'
       preLoaderRoute: typeof BalancosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/atas': {
+      id: '/atas'
+      path: '/atas'
+      fullPath: '/atas'
+      preLoaderRoute: typeof AtasRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/app': {
@@ -1084,6 +1104,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AlmoxarifadoRoute: AlmoxarifadoRoute,
   AppRoute: AppRoute,
+  AtasRoute: AtasRoute,
   BalancosRoute: BalancosRoute,
   CartaServicosRoute: CartaServicosRoute,
   ContratosRoute: ContratosRoute,

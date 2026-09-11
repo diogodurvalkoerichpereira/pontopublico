@@ -697,7 +697,13 @@ quando o material for um bem permanente; remessa ao PNCP (externo, homologação
 nunca acima, com a ata vigente (status e data); `getPriceRegistrations` lista.
 Migration `..._o3_12_price_registration.sql` (2 tabelas), reusa `contracts.*`. Teste
 `tests/sprint-price-registration.test.mjs` verificado por mutação (inverter o teste de
-saldo no consumo derruba). Próximo (UI): painel de atas + consumo no `/licitacoes`.
+saldo no consumo derruba).
+
+**O3-13 — Painel de Registro de Preços (UI) ✅.** Rota `/atas` dá cara ao O3-12: lista as
+atas com seus itens (registrada × consumida × saldo), ação "Consumir" por item (respeita o
+saldo e a vigência) e "Nova ata" a partir de uma licitação homologada. Reusa
+`getPriceRegistrations`, `createPriceRegistration`, `drawFromPriceRegistration`; item de
+menu em Contratações. Sem novo backend.
 
 **O3-11 — Baixa / alienação de bem patrimonial ✅.** `disposeAsset` registra a saída
 do bem do acervo (alienação, desfazimento, perda) e apura o resultado da baixa = valor

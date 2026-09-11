@@ -41,6 +41,7 @@ import {
   PiggyBank,
   Banknote,
   BookOpen,
+  ClipboardList,
   FileSignature,
   Boxes,
   Building,
@@ -389,6 +390,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       to: "/licitacoes",
       label: "Licitações",
       icon: Gavel,
+      section: "Contratações",
+    });
+  if (hasTenantPermission("contracts.read"))
+    items.push({
+      to: "/atas",
+      label: "Registro de Preços",
+      icon: ClipboardList,
       section: "Contratações",
     });
   if (hasTenantPermission("contracts.read"))
