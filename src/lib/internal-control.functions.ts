@@ -53,6 +53,57 @@ export const getInternalControlFindings = createServerFn({ method: "POST" })
     };
   });
 
+const SummaryInput = z.object({
+  tenant_id: z.string().uuid(),
+  data_referencia: z.string().date().optional(),
+});
+
+// O5-05b — Painel de acompanhamento dos apontamentos do controle interno. Consolida a
+// contagem por situação e destaca os VENCIDOS: apontamentos ainda em curso (aberto ou
+// em_implementacao) cujo prazo já passou da data de referência. Um apontamento encerrado
+// (implementado/nao_implementado) nunca é vencido. Reusa analytics.read.
+export const getInternalControlSummary = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => SummaryInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "analytics.read");
+    const ref = data.data_referencia ?? new Date().toISOString().slice(0, 10);
+    const row = (
+      await query<{
+        aberto: string;
+        em_implementacao: string;
+        implementado: string;
+        nao_implementado: string;
+        vencidos: string;
+        total: string;
+      }>(
+        `select
+           count(*) filter (where status='aberto')::text as aberto,
+           count(*) filter (where status='em_implementacao')::text as em_implementacao,
+           count(*) filter (where status='implementado')::text as implementado,
+           count(*) filter (where status='nao_implementado')::text as nao_implementado,
+           count(*) filter (
+             where status in ('aberto','em_implementacao') and prazo < $2::date
+           )::text as vencidos,
+           count(*)::text as total
+         from public.internal_control_findings where tenant_id = $1`,
+        [data.tenant_id, ref],
+      )
+    )[0];
+    return {
+      data_referencia: ref,
+      porStatus: {
+        aberto: Number(row.aberto),
+        em_implementacao: Number(row.em_implementacao),
+        implementado: Number(row.implementado),
+        nao_implementado: Number(row.nao_implementado),
+      },
+      vencidos: Number(row.vencidos),
+      total: Number(row.total),
+    };
+  });
+
 const OpenInput = z.object({
   tenant_id: z.string().uuid(),
   area: z.string().trim().min(2).max(120),

@@ -924,6 +924,14 @@ acompanhamento aberto→em_implementacao→implementado/nao_implementado, numera
 por ano, reusa `analytics.*`). Pendente: assinatura ICP-Brasil, dados abertos
 publicáveis.
 
+**O5-05b — Painel de acompanhamento do controle interno ✅.** `getInternalControlSummary`
+consolida a contagem de apontamentos por situação e destaca os **vencidos**: os ainda em
+curso (aberto/em_implementacao) com prazo anterior à data de referência — apontamento
+encerrado (implementado/nao_implementado) nunca é vencido. Reusa `analytics.read`, sem
+migration; `/controle-interno` ganha os cartões (total, em curso, implementados, prazo
+vencido em destaque). Teste `tests/sprint-internal-control-summary.test.mjs` verificado
+por mutação (contar encerrado vencido, ou ignorar o prazo, derruba).
+
 **O5-01b — Histórico de tramitação do processo ✅.** `getProtocolMovements` devolve o
 cabeçalho do processo e o trilho de movimentações em ordem cronológica (mais antiga →
 mais recente), com o nome das unidades de origem/destino, e **só do processo pedido**

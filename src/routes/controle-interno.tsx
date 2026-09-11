@@ -27,6 +27,7 @@ import {
   getInternalControlFindings,
   openInternalControlFinding,
   updateInternalControlFinding,
+  getInternalControlSummary,
 } from "@/lib/internal-control.functions";
 
 export const Route = createFileRoute("/controle-interno")({ component: Page });
@@ -76,6 +77,7 @@ function Content() {
   const load = useServerFn(getInternalControlFindings);
   const open = useServerFn(openInternalControlFinding);
   const update = useServerFn(updateInternalControlFinding);
+  const loadSummary = useServerFn(getInternalControlSummary);
   const qc = useQueryClient();
 
   const [openDialog, setOpenDialog] = useState(false);
@@ -106,8 +108,18 @@ function Content() {
   const items = (data?.findings ?? []) as Finding[];
   const canManage = data?.canManage ?? false;
 
-  const refresh = () =>
+  const { data: summary } = useQuery({
+    queryKey: ["internal-control-summary", activeTenant?.id],
+    enabled: Boolean(activeTenant),
+    queryFn: () => loadSummary({ data: { tenant_id: activeTenant!.id } }),
+  });
+
+  const refresh = () => {
     qc.invalidateQueries({ queryKey: ["internal-control", activeTenant?.id] });
+    qc.invalidateQueries({
+      queryKey: ["internal-control-summary", activeTenant?.id],
+    });
+  };
 
   const submitNew = async () => {
     if (!activeTenant) return;
@@ -198,6 +210,45 @@ function Content() {
           </Button>
         )}
       </div>
+
+      {summary && (
+        <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+          <div className="rounded-xl border bg-card p-4">
+            <div className="text-sm text-muted-foreground">Total</div>
+            <div className="text-2xl font-bold">{summary.total}</div>
+          </div>
+          <div className="rounded-xl border bg-card p-4">
+            <div className="text-sm text-muted-foreground">
+              Em curso (aberto + implem.)
+            </div>
+            <div className="text-2xl font-bold">
+              {summary.porStatus.aberto + summary.porStatus.em_implementacao}
+            </div>
+          </div>
+          <div className="rounded-xl border bg-card p-4">
+            <div className="text-sm text-muted-foreground">Implementados</div>
+            <div className="text-2xl font-bold">
+              {summary.porStatus.implementado}
+            </div>
+          </div>
+          <div
+            className={`rounded-xl border p-4 ${
+              summary.vencidos > 0
+                ? "border-destructive/50 bg-destructive/5"
+                : "bg-card"
+            }`}
+          >
+            <div className="text-sm text-muted-foreground">Prazo vencido</div>
+            <div
+              className={`text-2xl font-bold ${
+                summary.vencidos > 0 ? "text-destructive" : ""
+              }`}
+            >
+              {summary.vencidos}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="rounded-xl border bg-card overflow-x-auto">
         <table className="w-full text-sm">
