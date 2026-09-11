@@ -214,6 +214,68 @@ export const getBudgetCommitments = createServerFn({ method: "POST" })
     );
   });
 
+const ExecutionInput = z.object({
+  tenant_id: z.string().uuid(),
+  exercicio: z.number().int().min(2000).max(2200),
+});
+
+// O2-07 — Balanço da execução orçamentária da despesa (Lei 4.320): por dotação,
+// orçado × empenhado × liquidado × pago × saldo × restos a pagar. Empenho anulado
+// não conta. Restos a pagar = empenhado não pago (processados = liquidados não
+// pagos; não processados = empenhados ainda não liquidados).
+export const getBudgetExecution = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => ExecutionInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "budget.read");
+    const rows = await query<{
+      appropriation_id: string;
+      unidade_orcamentaria: string;
+      natureza_despesa: string;
+      valor_orcado: string;
+      empenhado: string;
+      liquidado: string;
+      pago: string;
+      saldo_dotacao: string;
+      restos_a_pagar: string;
+    }>(
+      `select a.id as appropriation_id, a.unidade_orcamentaria, a.natureza_despesa,
+         a.valor_orcado::text,
+         coalesce(sum(c.valor) filter (where c.status <> 'anulado'),0)::text as empenhado,
+         coalesce(sum(c.valor) filter (where c.status in ('liquidado','pago')),0)::text as liquidado,
+         coalesce(sum(c.valor) filter (where c.status = 'pago'),0)::text as pago,
+         (a.valor_orcado - coalesce(sum(c.valor) filter (where c.status <> 'anulado'),0))::text as saldo_dotacao,
+         coalesce(sum(c.valor) filter (where c.status in ('empenhado','liquidado')),0)::text as restos_a_pagar
+       from public.budget_appropriations a
+       left join public.budget_commitments c on c.appropriation_id = a.id
+       where a.tenant_id = $1 and a.exercicio = $2
+       group by a.id, a.unidade_orcamentaria, a.natureza_despesa, a.valor_orcado
+       order by a.unidade_orcamentaria, a.natureza_despesa`,
+      [data.tenant_id, data.exercicio],
+    );
+    const totais = rows.reduce(
+      (acc, r) => ({
+        orcado: acc.orcado + Number(r.valor_orcado),
+        empenhado: acc.empenhado + Number(r.empenhado),
+        liquidado: acc.liquidado + Number(r.liquidado),
+        pago: acc.pago + Number(r.pago),
+        restos_a_pagar: acc.restos_a_pagar + Number(r.restos_a_pagar),
+      }),
+      { orcado: 0, empenhado: 0, liquidado: 0, pago: 0, restos_a_pagar: 0 },
+    );
+    return {
+      rows,
+      totais: {
+        orcado: Number(totais.orcado.toFixed(2)),
+        empenhado: Number(totais.empenhado.toFixed(2)),
+        liquidado: Number(totais.liquidado.toFixed(2)),
+        pago: Number(totais.pago.toFixed(2)),
+        restos_a_pagar: Number(totais.restos_a_pagar.toFixed(2)),
+      },
+    };
+  });
+
 const CommitInput = z.object({
   tenant_id: z.string().uuid(),
   appropriation_id: z.string().uuid(),
