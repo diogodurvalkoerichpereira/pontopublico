@@ -526,8 +526,15 @@ do fato. Como os códigos PCASP dependem do plano do ente, o roteiro é **config
 de memória; sem mapeamento, o fato não contabiliza. `saveAccountingEventAccount` +
 `contabilizarEvento`. Migration `20260909170000_o2_06_accounting_event_accounts.sql`;
 teste `tests/sprint-accounting-routing.test.mjs` verificado por mutação.
-Próximo: **O2-07** — restos a pagar (empenhos não pagos no encerramento) e os
-balanços Lei 4.320/DCASP; depois tesouraria (OB, conciliação) e MSC-SICONFI.
+**O2-09 — Restos a pagar (encerramento do exercício) ✅.** No fim do exercício,
+`inscribeRestosAPagar` snapshota os empenhos não pagos em `restos_a_pagar`:
+liquidados → PROCESSADOS, empenhados → NÃO PROCESSADOS (Lei 4.320 art. 36); pago
+e anulado não inscrevem; cada empenho inscreve uma só vez (idempotente).
+`payRestoAPagar` quita o resto e o empenho de origem; `getRestosAPagar` lista.
+Reusa `budget.*`. Migration `20260909300000_o2_09_restos_a_pagar.sql`; teste
+`tests/sprint-restos-a-pagar.test.mjs` verificado por mutação.
+Próximo: balanços Lei 4.320/DCASP (orçamentário, financeiro, patrimonial,
+variações); depois tesouraria (OB, conciliação) e MSC-SICONFI.
 
 ### Onda 3 — Materiais e Contratações (14-18 sem)
 
