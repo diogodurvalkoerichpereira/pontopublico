@@ -581,6 +581,13 @@ fiscal) · NFS-e padrão nacional · certidões.
 Protocolo e processo eletrônico com ICP-Brasil · e-SIC/LAI · controle interno ·
 Portal da Transparência (LC 131/2009, dados abertos, acessibilidade).
 
+Entregue (base): O5-01 protocolo/processo eletrônico (numeração sequencial por
+ano + tramitação); O5-02 Portal da Transparência (relatório consolidado, LAI);
+O5-03 ouvidoria (Lei 13.460 — manifestações denúncia/reclamação/sugestão/elogio/
+informação/solicitação, numeração por ano, prazo e ciclo recebida→respondida,
+reusa `protocol.*`). Pendente: assinatura ICP-Brasil, e-SIC integrado, dados
+abertos publicáveis, controle interno.
+
 ### Onda 6 — Conformidade contínua ⚠️ (contínuo)
 
 Layout do TCE estadual (um por vez; a referência de Timóteo é SICOM/MG, não
