@@ -9,6 +9,7 @@ import { useAuth } from "@/lib/auth-context";
 import { getBudgetBalance } from "@/lib/budget-balance.functions";
 import { getCashAvailability } from "@/lib/cash-availability.functions";
 import { getEquityStatement } from "@/lib/equity-statement.functions";
+import { getFinancialBalance } from "@/lib/financial-balance.functions";
 
 export const Route = createFileRoute("/balancos")({ component: Page });
 
@@ -53,6 +54,7 @@ function Content() {
   const loadBalance = useServerFn(getBudgetBalance);
   const loadCash = useServerFn(getCashAvailability);
   const loadEquity = useServerFn(getEquityStatement);
+  const loadFinancial = useServerFn(getFinancialBalance);
   const [exercicio, setExercicio] = useState(String(new Date().getFullYear()));
   const canReadCash = hasTenantPermission("accounting.read");
 
@@ -78,8 +80,18 @@ function Content() {
       }),
   });
 
+  const { data: financial } = useQuery({
+    queryKey: ["financial-balance", activeTenant?.id, exercicio],
+    enabled: Boolean(activeTenant) && /^\d{4}$/.test(exercicio),
+    queryFn: () =>
+      loadFinancial({
+        data: { tenant_id: activeTenant!.id, exercicio: Number(exercicio) },
+      }),
+  });
+
   const resultado = balance?.resultado_orcamentario ?? 0;
   const resultadoPatrimonial = equity?.resultado_patrimonial ?? 0;
+  const resultadoFinanceiro = financial?.resultado_financeiro ?? 0;
 
   return (
     <section className="space-y-6">
@@ -141,6 +153,51 @@ function Content() {
           >
             {brl(resultado)} {resultado >= 0 ? "(superávit)" : "(déficit)"}
           </span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="rounded-xl border bg-card p-4">
+          <h2 className="font-bold mb-2">Balanço financeiro — ingressos</h2>
+          <Row
+            label="Receita orçamentária"
+            value={financial?.ingressos.receita_orcamentaria ?? 0}
+          />
+          <Row
+            label="Extra — restos inscritos"
+            value={financial?.ingressos.extraorcamentario_restos_inscritos ?? 0}
+          />
+          <Row
+            label="Total de ingressos"
+            value={financial?.ingressos.total ?? 0}
+            strong
+          />
+        </div>
+        <div className="rounded-xl border bg-card p-4">
+          <h2 className="font-bold mb-2">Balanço financeiro — dispêndios</h2>
+          <Row
+            label="Despesa orçamentária paga"
+            value={financial?.dispendios.despesa_orcamentaria ?? 0}
+          />
+          <Row
+            label="Extra — restos pagos"
+            value={financial?.dispendios.extraorcamentario_restos_pagos ?? 0}
+          />
+          <Row
+            label="Total de dispêndios"
+            value={financial?.dispendios.total ?? 0}
+            strong
+          />
+          <div className="flex items-center justify-between pt-2">
+            <span className="text-muted-foreground">Resultado financeiro</span>
+            <span
+              className={`font-bold tabular-nums ${
+                resultadoFinanceiro >= 0 ? "text-emerald-600" : "text-red-600"
+              }`}
+            >
+              {brl(resultadoFinanceiro)}
+            </span>
+          </div>
         </div>
       </div>
 

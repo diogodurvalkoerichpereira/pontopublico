@@ -632,6 +632,15 @@ dotação ativa tem a ação **Contingenciar** (valor + motivo) e o cabeçalho o
 **Crédito suplementar** (destino, fonte, valor, justificativa, por excesso de
 arrecadação). Reusa `contingenciarDotacao` e `openSupplementaryCredit`. Sem novo backend.
 
+**O2-25 — Balanço financeiro (Lei 4.320 Anexo 13) ✅.** `getFinancialBalance` confronta,
+no exercício, os **ingressos** (receita orçamentária arrecadada + inscrição de restos a
+pagar, extraorçamentário) com os **dispêndios** (despesa orçamentária paga + pagamento de
+restos a pagar, extraorçamentário) e apura o **resultado financeiro**; os restos são
+datados por `inscrito_em`/`pago_em`. Read-only, reusa `budget.read`, sem migration; cartões
+no `/balancos`. Teste `tests/sprint-financial-balance.test.mjs` verificado por mutação
+(somar em vez de subtrair no resultado derruba). Completa o quarteto da Lei 4.320
+(orçamentário, financeiro, patrimonial/DVP) no sistema.
+
 **O2-14 — Execução da receita por natureza ✅.** `getRevenueExecution` consolida,
 por natureza de receita, previsto × arrecadado × a arrecadar (piso zero) no
 exercício — o espelho, do lado da receita, da execução da despesa. Read-only,
