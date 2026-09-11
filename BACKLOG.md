@@ -490,8 +490,16 @@ orçamentária; não se orça abaixo do já empenhado). Migration
 `20260909120000_o2_01_budget_appropriations.sql`; teste
 `tests/sprint-budget-appropriations.test.mjs` verificado por mutação. É a âncora que
 a requisição de empenho da folha (O1-08) e o empenho PCASP passarão a reservar.
-Próximo: **O2-02** — reserva de saldo pelo empenho (liga O1-08 → dotação) e a
-máquina empenho→liquidação→pagamento reusando o motor de `payroll_cycles`.
+**O2-02 — Empenho contra dotação (reserva de saldo) ✅.** `budget_commitments`: o
+empenho (Lei 4.320 art. 58) referencia uma dotação e RESERVA seu valor no
+`valor_empenhado` da dotação, atômico (lock `for update`, nunca acima do saldo),
+com numeração sequencial por exercício (contador travado, molde do NSR do ponto).
+`createBudgetCommitment`/`getBudgetCommitments`. Migration
+`20260909130000_o2_02_budget_commitments.sql`; teste
+`tests/sprint-budget-commitment.test.mjs` verificado por mutação.
+Próximo: **O2-03** — liquidação e pagamento (estágios seguintes) reusando o motor de
+estados de `payroll_cycles`; e **O2-04** — ligar a requisição de empenho da folha
+(O1-08) a este empenho, fechando folha → orçamento.
 
 ### Onda 3 — Materiais e Contratações (14-18 sem)
 

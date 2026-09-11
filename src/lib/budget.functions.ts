@@ -176,3 +176,145 @@ export const saveBudgetAppropriation = createServerFn({ method: "POST" })
     });
     return { id };
   });
+
+const GetCommitmentsInput = z.object({
+  tenant_id: z.string().uuid(),
+  exercicio: z.number().int().min(2000).max(2200).optional(),
+});
+
+export const getBudgetCommitments = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => GetCommitmentsInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "budget.read");
+    return query<{
+      id: string;
+      exercicio: number;
+      numero: string;
+      data_empenho: string;
+      tipo: string;
+      credor: string;
+      historico: string;
+      valor: string;
+      status: string;
+      source: string;
+      natureza_despesa: string;
+      unidade_orcamentaria: string;
+    }>(
+      `select c.id, c.exercicio, c.numero::text, c.data_empenho::text, c.tipo,
+         c.credor, c.historico, c.valor::text, c.status, c.source,
+         a.natureza_despesa, a.unidade_orcamentaria
+       from public.budget_commitments c
+       join public.budget_appropriations a on a.id = c.appropriation_id
+       where c.tenant_id = $1 and ($2::int is null or c.exercicio = $2)
+       order by c.exercicio desc, c.numero desc`,
+      [data.tenant_id, data.exercicio ?? null],
+    );
+  });
+
+const CommitInput = z.object({
+  tenant_id: z.string().uuid(),
+  appropriation_id: z.string().uuid(),
+  data_empenho: z.string().date(),
+  tipo: z.enum(["ordinario", "global", "estimativo"]).default("ordinario"),
+  credor: z.string().trim().min(2).max(200),
+  historico: z.string().trim().min(3).max(500),
+  valor: z.number().positive().max(1_000_000_000_000),
+});
+
+// Empenha: reserva `valor` no saldo da dotação, atômico. Nunca acima do saldo
+// (orçado - empenhado). Numeração serializada por um contador do exercício
+// travado FOR UPDATE (molde do NSR do ponto).
+export const createBudgetCommitment = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => CommitInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "budget.manage");
+    return withTransaction(async (client) => {
+      const appropriation = (
+        await client.query<{
+          exercicio: number;
+          valor_orcado: string;
+          valor_empenhado: string;
+          status: string;
+        }>(
+          `select exercicio, valor_orcado::text, valor_empenhado::text, status
+           from public.budget_appropriations
+           where id = $1 and tenant_id = $2 for update`,
+          [data.appropriation_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!appropriation) throw new Error("Dotação não encontrada");
+      if (appropriation.status !== "ativa")
+        throw new Error("Dotação não está ativa para empenho");
+      const saldo =
+        Number(appropriation.valor_orcado) -
+        Number(appropriation.valor_empenhado);
+      if (data.valor > saldo)
+        throw new Error(
+          `Valor do empenho (${data.valor.toFixed(2)}) excede o saldo da dotação (${saldo.toFixed(2)})`,
+        );
+
+      await client.query(
+        `insert into public.budget_commitment_counters (tenant_id, exercicio)
+         values ($1, $2) on conflict do nothing`,
+        [data.tenant_id, appropriation.exercicio],
+      );
+      const counter = (
+        await client.query<{ last_numero: string }>(
+          `select last_numero::text from public.budget_commitment_counters
+           where tenant_id = $1 and exercicio = $2 for update`,
+          [data.tenant_id, appropriation.exercicio],
+        )
+      ).rows[0];
+      const numero = Number(counter.last_numero) + 1;
+      await client.query(
+        `update public.budget_commitment_counters set last_numero = $3
+         where tenant_id = $1 and exercicio = $2`,
+        [data.tenant_id, appropriation.exercicio, numero],
+      );
+
+      const id = randomUUID();
+      await client.query(
+        `insert into public.budget_commitments
+           (id, tenant_id, appropriation_id, exercicio, numero, data_empenho,
+            tipo, credor, historico, valor, status, source, created_by)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'empenhado','manual',$11)`,
+        [
+          id,
+          data.tenant_id,
+          data.appropriation_id,
+          appropriation.exercicio,
+          numero,
+          data.data_empenho,
+          data.tipo,
+          data.credor,
+          data.historico,
+          data.valor,
+          context.userId,
+        ],
+      );
+      await client.query(
+        `update public.budget_appropriations
+         set valor_empenhado = valor_empenhado + $3, updated_at = now()
+         where id = $1 and tenant_id = $2`,
+        [data.appropriation_id, data.tenant_id, data.valor],
+      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "commit",
+        resource: "budget_commitments",
+        recordId: id,
+        after: {
+          appropriation_id: data.appropriation_id,
+          numero,
+          valor: data.valor,
+          credor: data.credor,
+        },
+      });
+      return { id, numero };
+    });
+  });
