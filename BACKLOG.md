@@ -534,6 +534,16 @@ origem e carimba o marco), e **anular devolve o saldo** reservado à dotação
 `tests/sprint-budget-stages.test.mjs` verificado por mutação.
 Pendente de endurecimento: exigir MFA nas transições financeiras (molde
 `requireCriticalMfa` da folha) — registrado.
+
+**O2-03b — Anulação parcial de empenho (Lei 4.320 art. 59) ✅.**
+`partiallyCancelBudgetCommitment` reduz o valor de um empenho ainda no estágio
+`empenhado` (antes de liquidar) e **devolve a diferença** ao saldo empenhado da dotação (e
+ao contrato, se for empenho de contrato), contabilizando `empenho_anulacao` pelo valor
+devolvido. O novo valor tem de ser menor que o atual e maior que zero; só o estágio
+`empenhado` admite. Reusa `budget.manage`, sem migration; backend + teste (a UI da máquina
+de estados do empenho ainda não existe — segue com o restante do ciclo). Teste
+`tests/sprint-budget-partial-cancel.test.mjs` verificado por mutação (não devolver a
+diferença, ou anular parcialmente um empenho liquidado, derruba).
 **O2-04 — Folha → orçamento ✅.** `commitPayrollEmpenho` transforma a requisição
 de empenho da folha (O1-08) em empenhos reais contra dotação (O2-02), um por linha
 (natureza), reservando saldo; exige alocar toda linha e marca a requisição como

@@ -618,6 +618,115 @@ export const commitContractEmpenho = createServerFn({ method: "POST" })
     });
   });
 
+const PartialCancelInput = z.object({
+  tenant_id: z.string().uuid(),
+  commitment_id: z.string().uuid(),
+  novo_valor: z.number().positive().max(1_000_000_000_000),
+  motivo: z.string().trim().min(3).max(500),
+});
+
+// O2-03b — Anulação parcial de empenho (Lei 4.320 art. 59). Reduz o valor de um empenho
+// ainda no estágio 'empenhado' (antes de liquidar) e devolve a diferença ao saldo da
+// dotação (e ao contrato, se for empenho de contrato), contabilizando a anulação parcial.
+// O novo valor tem de ser menor que o atual e maior que zero. Reusa budget.manage.
+export const partiallyCancelBudgetCommitment = createServerFn({
+  method: "POST",
+})
+  .middleware([requireAuth])
+  .validator((data: unknown) => PartialCancelInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "budget.manage");
+    return withTransaction(async (client) => {
+      const commitment = (
+        await client.query<{
+          status: string;
+          appropriation_id: string;
+          valor: string;
+          exercicio: number;
+          source: string;
+          source_ref: string | null;
+        }>(
+          `select status, appropriation_id, valor::text, exercicio, source, source_ref
+           from public.budget_commitments
+           where id = $1 and tenant_id = $2 for update`,
+          [data.commitment_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!commitment) throw new Error("Empenho não encontrado");
+      if (commitment.status !== "empenhado")
+        throw new Error(
+          "Só um empenho no estágio 'empenhado' admite anulação parcial",
+        );
+      const atual = Number(commitment.valor);
+      if (data.novo_valor >= atual)
+        throw new Error("O novo valor deve ser menor que o valor empenhado");
+      const diferenca = Number((atual - data.novo_valor).toFixed(2));
+
+      // Devolve a diferença ao saldo da dotação (lock antes de escrever).
+      await client.query(
+        `select id from public.budget_appropriations
+         where id = $1 and tenant_id = $2 for update`,
+        [commitment.appropriation_id, data.tenant_id],
+      );
+      await client.query(
+        `update public.budget_appropriations
+         set valor_empenhado = valor_empenhado - $3, updated_at = now()
+         where id = $1 and tenant_id = $2`,
+        [commitment.appropriation_id, data.tenant_id, diferenca],
+      );
+      // Empenho de contrato: devolve também a diferença reservada no contrato.
+      if (commitment.source === "contrato" && commitment.source_ref) {
+        await client.query(
+          `select id from public.procurement_contracts
+           where id = $1 and tenant_id = $2 for update`,
+          [commitment.source_ref, data.tenant_id],
+        );
+        await client.query(
+          `update public.procurement_contracts
+           set valor_empenhado = valor_empenhado - $3, updated_at = now()
+           where id = $1 and tenant_id = $2`,
+          [commitment.source_ref, data.tenant_id, diferenca],
+        );
+      }
+      await client.query(
+        `update public.budget_commitments
+         set valor = $3
+         where id = $1 and tenant_id = $2`,
+        [data.commitment_id, data.tenant_id, data.novo_valor],
+      );
+      await contabilizarEvento({
+        client,
+        tenantId: data.tenant_id,
+        exercicio: commitment.exercicio,
+        dataLancamento: new Date().toISOString().slice(0, 10),
+        eventCode: "empenho_anulacao",
+        valor: diferenca,
+        historico: "Anulação parcial de empenho",
+        sourceRef: data.commitment_id,
+        actorId: context.userId,
+      });
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "anular_parcial",
+        resource: "budget_commitments",
+        recordId: data.commitment_id,
+        before: { valor: atual },
+        after: {
+          valor: data.novo_valor,
+          devolvido: diferenca,
+          motivo: data.motivo,
+        },
+      });
+      return {
+        id: data.commitment_id,
+        valor: data.novo_valor,
+        devolvido: diferenca,
+      };
+    });
+  });
+
 const TransitionInput = z.object({
   tenant_id: z.string().uuid(),
   commitment_id: z.string().uuid(),
