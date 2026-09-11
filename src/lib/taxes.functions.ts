@@ -1,0 +1,231 @@
+// O4-01 — Tributos (Onda 4). Lançamento, arrecadação e inscrição em dívida ativa.
+// A arrecadação nunca excede o saldo; quitação zera o saldo. Vencido e não pago
+// pode ser inscrito em dívida ativa (Lei 6.830).
+import { createServerFn } from "@tanstack/react-start";
+import { randomUUID } from "node:crypto";
+import { z } from "zod";
+import { query, queryOne, withTransaction } from "./db.server";
+import { requireAuth } from "./data.functions";
+import { recordAudit } from "./audit.server";
+import {
+  loadTenantAccess,
+  requireTenantPermission,
+} from "./tenant-access.server";
+
+const GetInput = z.object({
+  tenant_id: z.string().uuid(),
+  status: z
+    .enum(["lancado", "divida_ativa", "quitado", "cancelado"])
+    .optional(),
+});
+
+export const getTaxCredits = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => GetInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "taxes.read");
+    const credits = await query<{
+      id: string;
+      tributo: string;
+      exercicio: number;
+      contribuinte: string;
+      inscricao: string;
+      valor_lancado: string;
+      valor_pago: string;
+      saldo: string;
+      vencimento: string;
+      status: string;
+    }>(
+      `select id, tributo, exercicio, contribuinte, inscricao,
+         valor_lancado::text, valor_pago::text,
+         (valor_lancado - valor_pago)::text as saldo, vencimento::text, status
+       from public.tax_credits
+       where tenant_id = $1 and ($2::text is null or status = $2)
+       order by exercicio desc, tributo, inscricao`,
+      [data.tenant_id, data.status ?? null],
+    );
+    return {
+      credits,
+      canManage: access.permissions.includes("taxes.manage"),
+    };
+  });
+
+const LaunchInput = z.object({
+  tenant_id: z.string().uuid(),
+  tributo: z.enum(["IPTU", "ISS", "ITBI", "TAXA", "COSIP"]),
+  exercicio: z.number().int().min(2000).max(2200),
+  contribuinte: z.string().trim().min(2).max(200),
+  contribuinte_documento: z.string().trim().min(3).max(20),
+  inscricao: z.string().trim().min(1).max(40),
+  valor_lancado: z.number().positive().max(1_000_000_000_000),
+  vencimento: z.string().date(),
+});
+
+export const launchTaxCredit = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => LaunchInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "taxes.manage");
+    const duplicate = await queryOne<{ id: string }>(
+      `select id from public.tax_credits
+       where tenant_id=$1 and tributo=$2 and exercicio=$3 and lower(inscricao)=lower($4)`,
+      [data.tenant_id, data.tributo, data.exercicio, data.inscricao],
+    );
+    if (duplicate)
+      throw new Error("Crédito já lançado para esta inscrição no exercício");
+    const id = randomUUID();
+    await withTransaction(async (client) => {
+      await client.query(
+        `insert into public.tax_credits
+           (id, tenant_id, tributo, exercicio, contribuinte, contribuinte_documento,
+            inscricao, valor_lancado, vencimento, created_by)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        [
+          id,
+          data.tenant_id,
+          data.tributo,
+          data.exercicio,
+          data.contribuinte,
+          data.contribuinte_documento,
+          data.inscricao,
+          data.valor_lancado,
+          data.vencimento,
+          context.userId,
+        ],
+      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "launch",
+        resource: "tax_credits",
+        recordId: id,
+        after: data,
+      });
+    });
+    return { id };
+  });
+
+const PayInput = z.object({
+  tenant_id: z.string().uuid(),
+  credit_id: z.string().uuid(),
+  data_pagamento: z.string().date(),
+  valor: z.number().positive().max(1_000_000_000_000),
+});
+
+// Arrecada o tributo: soma ao pago (nunca acima do saldo); quita quando zera.
+export const recordTaxPayment = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => PayInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "taxes.manage");
+    return withTransaction(async (client) => {
+      const credit = (
+        await client.query<{
+          valor_lancado: string;
+          valor_pago: string;
+          status: string;
+        }>(
+          `select valor_lancado::text, valor_pago::text, status
+           from public.tax_credits where id=$1 and tenant_id=$2 for update`,
+          [data.credit_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!credit) throw new Error("Crédito tributário não encontrado");
+      if (credit.status === "quitado")
+        throw new Error("Crédito já está quitado");
+      if (credit.status === "cancelado")
+        throw new Error("Crédito cancelado não arrecada");
+      const saldo = Number(credit.valor_lancado) - Number(credit.valor_pago);
+      if (data.valor > saldo)
+        throw new Error(
+          `Pagamento (${data.valor.toFixed(2)}) excede o saldo devedor (${saldo.toFixed(2)})`,
+        );
+      const novoPago = Number(
+        (Number(credit.valor_pago) + data.valor).toFixed(2),
+      );
+      const quitado = novoPago >= Number(credit.valor_lancado);
+      const id = randomUUID();
+      await client.query(
+        `insert into public.tax_payments
+           (id, tenant_id, credit_id, data_pagamento, valor, created_by)
+         values ($1,$2,$3,$4,$5,$6)`,
+        [
+          id,
+          data.tenant_id,
+          data.credit_id,
+          data.data_pagamento,
+          data.valor,
+          context.userId,
+        ],
+      );
+      await client.query(
+        `update public.tax_credits
+         set valor_pago=$3, status=case when $4 then 'quitado' else status end,
+             updated_at=now()
+         where id=$1 and tenant_id=$2`,
+        [data.credit_id, data.tenant_id, novoPago, quitado],
+      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "pay",
+        resource: "tax_credits",
+        recordId: data.credit_id,
+        after: { valor: data.valor, quitado },
+      });
+      return { id, quitado, saldo: Number((saldo - data.valor).toFixed(2)) };
+    });
+  });
+
+const InscribeInput = z.object({
+  tenant_id: z.string().uuid(),
+  credit_id: z.string().uuid(),
+  data_referencia: z.string().date(),
+});
+
+// Inscreve em dívida ativa: crédito vencido e com saldo, não quitado (Lei 6.830).
+export const inscribeDividaAtiva = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => InscribeInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "taxes.manage");
+    return withTransaction(async (client) => {
+      const credit = (
+        await client.query<{
+          valor_lancado: string;
+          valor_pago: string;
+          vencimento: string;
+          status: string;
+        }>(
+          `select valor_lancado::text, valor_pago::text, vencimento::text, status
+           from public.tax_credits where id=$1 and tenant_id=$2 for update`,
+          [data.credit_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!credit) throw new Error("Crédito tributário não encontrado");
+      if (credit.status !== "lancado")
+        throw new Error("Só um crédito lançado pode ir a dívida ativa");
+      if (Number(credit.valor_pago) >= Number(credit.valor_lancado))
+        throw new Error("Crédito sem saldo devedor");
+      if (data.data_referencia <= credit.vencimento)
+        throw new Error("Crédito ainda não está vencido");
+      await client.query(
+        `update public.tax_credits set status='divida_ativa', updated_at=now()
+         where id=$1 and tenant_id=$2`,
+        [data.credit_id, data.tenant_id],
+      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "inscribe_divida_ativa",
+        resource: "tax_credits",
+        recordId: data.credit_id,
+        after: { data_referencia: data.data_referencia },
+      });
+      return { id: data.credit_id, status: "divida_ativa" };
+    });
+  });

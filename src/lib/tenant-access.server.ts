@@ -68,6 +68,10 @@ export const TENANT_PERMISSION_CODES = [
   "materials.manage",
   "assets.read",
   "assets.manage",
+  "taxes.read",
+  "taxes.manage",
+  "protocol.read",
+  "protocol.manage",
 ] as const;
 
 export type TenantPermission = (typeof TENANT_PERMISSION_CODES)[number];
@@ -259,6 +263,10 @@ function computeLegacyBridge(legacy: LegacyAccess): Set<TenantPermission> {
     bridged.add("materials.manage");
     bridged.add("assets.read");
     bridged.add("assets.manage");
+    bridged.add("taxes.read");
+    bridged.add("taxes.manage");
+    bridged.add("protocol.read");
+    bridged.add("protocol.manage");
   }
   return bridged;
 }
