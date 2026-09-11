@@ -768,8 +768,14 @@ pagas na data de referência (padrão 3); abaixo do limiar recusa; um plano já
 rescindido/quitado não rescinde. O crédito permanece em dívida ativa com o saldo
 remanescente (as parcelas pagas já arrecadaram). Reusa `taxes.manage`, sem migration (o
 status `rescindido` já existia no enum). Teste `tests/sprint-installment-rescission.test.mjs`
-verificado por mutação (inverter o limiar derruba). Próximo (UI): painel de parcelamentos
-(pagar parcela + rescindir) no `/tributos`.
+verificado por mutação (inverter o limiar derruba).
+
+**O4-12 — Painel de parcelamentos (UI) ✅.** Rota `/parcelamentos` dá cara ao O4-02/O4-11:
+lista os planos (total, parcelas pagas, situação), expande as parcelas de cada acordo com
+ação "Pagar" por parcela aberta, "Rescindir" por plano ativo e "Novo parcelamento" a
+partir de um crédito em dívida ativa. Reusa `getInstallmentPlans`, `createInstallmentPlan`,
+`payInstallment`, `rescindInstallmentPlan` + o novo leitor `getInstallments` (parcelas de
+um plano); item de menu em Contabilidade e Finanças.
 
 **O4-09 — Execução fiscal (Lei 6.830) ✅.** `fileFiscalExecution` ajuíza a cobrança de
 uma CDA ativa: registra número do processo (informado), data e valor ajuizado (fixado do

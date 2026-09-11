@@ -41,6 +41,7 @@ import {
   PiggyBank,
   Banknote,
   BookOpen,
+  CalendarClock,
   ClipboardList,
   FileSignature,
   Boxes,
@@ -383,6 +384,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       to: "/divida-ativa",
       label: "Dívida ativa",
       icon: Scale,
+      section: "Contabilidade e Finanças",
+    });
+  if (hasTenantPermission("taxes.read"))
+    items.push({
+      to: "/parcelamentos",
+      label: "Parcelamentos",
+      icon: CalendarClock,
       section: "Contabilidade e Finanças",
     });
   if (hasTenantPermission("contracts.read"))

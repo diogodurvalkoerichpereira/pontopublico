@@ -49,6 +49,34 @@ export const getInstallmentPlans = createServerFn({ method: "POST" })
     };
   });
 
+const GetInstallmentsInput = z.object({
+  tenant_id: z.string().uuid(),
+  plan_id: z.string().uuid(),
+});
+
+// Lista as parcelas de um plano (número, valor, vencimento, situação).
+export const getInstallments = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => GetInstallmentsInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "taxes.read");
+    return query<{
+      id: string;
+      numero: number;
+      valor: string;
+      vencimento: string;
+      status: string;
+      paga_em: string | null;
+    }>(
+      `select id, numero, valor::text, vencimento::text, status, paga_em::text
+       from public.tax_installments
+       where tenant_id = $1 and plan_id = $2
+       order by numero`,
+      [data.tenant_id, data.plan_id],
+    );
+  });
+
 const CreateInput = z.object({
   tenant_id: z.string().uuid(),
   credit_id: z.string().uuid(),
