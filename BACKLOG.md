@@ -726,6 +726,16 @@ de arrecadação → dívida ativa → parcelamento. Pendente (externo/homologa�
 nacional; emissão da CND com autenticação e layout do ente; execução fiscal
 integrada ao Judiciário.
 
+**O4-07 — Encargos de mora do crédito tributário ✅.** `getUpdatedTaxDebt` calcula o
+valor atualizado do crédito: sobre o saldo devedor (lançado − pago), a partir do
+vencimento, aplica multa de mora (uma vez) e juros de mora por mês ou fração (mês
+comercial de 30 dias; CTN art. 161 §1º — padrão 1%/mês, multa 2%). É **calculadora
+paramétrica** (as alíquotas vêm do ente) e de **previsão** — não grava nem declara
+conformidade com código municipal específico. Read-only, reusa `taxes.read`, sem
+migration; ação "Atualizar" no `/tributos`. Teste `tests/sprint-tax-mora.test.mjs`
+verificado por mutação (ignorar os meses de mora nos juros derruba). Próximo: CDA
+numerada e execução fiscal (Lei 6.830).
+
 ### Onda 5 — Apoio, controle e transparência (10-14 sem)
 
 Protocolo e processo eletrônico com ICP-Brasil · e-SIC/LAI · controle interno ·

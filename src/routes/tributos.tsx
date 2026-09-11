@@ -9,6 +9,7 @@ import {
   FileWarning,
   Briefcase,
   ArrowLeftRight,
+  Calculator,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +35,7 @@ import {
   getTaxCredits,
   recordTaxPayment,
   inscribeDividaAtiva,
+  getUpdatedTaxDebt,
 } from "@/lib/taxes.functions";
 import { getProperties, launchIptu } from "@/lib/real-estate.functions";
 import { getServiceTaxpayers, launchIss } from "@/lib/service-tax.functions";
@@ -100,6 +102,7 @@ function Content() {
   const loadTaxpayers = useServerFn(getServiceTaxpayers);
   const pay = useServerFn(recordTaxPayment);
   const inscribe = useServerFn(inscribeDividaAtiva);
+  const updatedDebt = useServerFn(getUpdatedTaxDebt);
   const launch = useServerFn(launchIptu);
   const doLaunchIss = useServerFn(launchIss);
   const doLaunchItbi = useServerFn(launchItbi);
@@ -199,6 +202,28 @@ function Content() {
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Falha ao inscrever",
+      );
+    }
+  };
+
+  const doUpdatedDebt = async (c: Credit) => {
+    if (!activeTenant) return;
+    try {
+      const r = await updatedDebt({
+        data: {
+          tenant_id: activeTenant.id,
+          credit_id: c.id,
+          data_referencia: hoje(),
+        },
+      });
+      toast.success(
+        `Atualizado: ${brl(r.valor_atualizado)} (saldo ${brl(r.saldo)} + multa ${brl(
+          r.multa,
+        )} + juros ${brl(r.juros)}, ${r.meses_mora} mês(es) de mora)`,
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Falha ao atualizar",
       );
     }
   };
@@ -370,6 +395,15 @@ function Content() {
                           onClick={() => doInscribe(c)}
                         >
                           <FileWarning className="size-4" /> Dívida ativa
+                        </Button>
+                      )}
+                      {c.status !== "quitado" && c.status !== "cancelado" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => doUpdatedDebt(c)}
+                        >
+                          <Calculator className="size-4" /> Atualizar
                         </Button>
                       )}
                     </div>

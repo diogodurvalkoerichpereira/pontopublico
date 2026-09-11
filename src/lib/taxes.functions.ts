@@ -229,3 +229,71 @@ export const inscribeDividaAtiva = createServerFn({ method: "POST" })
       return { id: data.credit_id, status: "divida_ativa" };
     });
   });
+
+const UpdatedDebtInput = z.object({
+  tenant_id: z.string().uuid(),
+  credit_id: z.string().uuid(),
+  data_referencia: z.string().date(),
+  // Encargos de mora parametrizáveis pelo ente (não presume código municipal).
+  // Padrão: multa de mora 2% (uma vez) e juros de 1% ao mês (CTN art. 161, §1º).
+  multa_percent: z.number().min(0).max(100).default(2),
+  juros_mes_percent: z.number().min(0).max(100).default(1),
+});
+
+// O4-07 — Valor atualizado do crédito com encargos de mora. Sobre o saldo devedor
+// (lançado − pago), a partir do vencimento, aplica multa de mora (uma vez) e juros de
+// mora por mês (ou fração — mês comercial de 30 dias, fração conta como mês inteiro).
+// Cálculo de PREVISÃO (não grava): as alíquotas vêm do ente, então é uma calculadora
+// paramétrica, não uma declaração de conformidade com legislação específica.
+export const getUpdatedTaxDebt = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => UpdatedDebtInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "taxes.read");
+    const credit = await queryOne<{
+      valor_lancado: string;
+      valor_pago: string;
+      vencimento: string;
+      status: string;
+    }>(
+      `select valor_lancado::text, valor_pago::text, vencimento::text, status
+       from public.tax_credits where id=$1 and tenant_id=$2`,
+      [data.credit_id, data.tenant_id],
+    );
+    if (!credit) throw new Error("Crédito tributário não encontrado");
+    const saldo = Number(
+      (Number(credit.valor_lancado) - Number(credit.valor_pago)).toFixed(2),
+    );
+    const n2 = (v: number) => Number(v.toFixed(2));
+
+    // Sem saldo ou ainda não vencido (na data de referência): sem encargos.
+    if (saldo <= 0 || data.data_referencia <= credit.vencimento) {
+      return {
+        saldo: Math.max(0, saldo),
+        dias_atraso: 0,
+        meses_mora: 0,
+        multa: 0,
+        juros: 0,
+        valor_atualizado: Math.max(0, saldo),
+      };
+    }
+
+    const umDia = 86_400_000;
+    const diasAtraso = Math.round(
+      (Date.parse(data.data_referencia) - Date.parse(credit.vencimento)) /
+        umDia,
+    );
+    // Mês ou fração: cada 30 dias iniciados conta como um mês de mora.
+    const mesesMora = Math.ceil(diasAtraso / 30);
+    const multa = n2(saldo * (data.multa_percent / 100));
+    const juros = n2(saldo * (data.juros_mes_percent / 100) * mesesMora);
+    return {
+      saldo,
+      dias_atraso: diasAtraso,
+      meses_mora: mesesMora,
+      multa,
+      juros,
+      valor_atualizado: n2(saldo + multa + juros),
+    };
+  });
