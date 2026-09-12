@@ -231,7 +231,14 @@ motor genérico já existe); endurecer o atalho `personId=id` (sem CPF).
   (`IS TRUE`/`IS FALSE`); qualquer outro valor é recusado antes de tocar o
   banco. `tests/pgrest-guards.test.mjs` cobre os três casos, verificado
   revertendo a correção (3 testes caem).
-- Migrar `.validator()` (deprecado, 65 usos) para `.inputValidator()`.
+- ✅ **Item invertido, corrigido:** a nota dizia migrar `.validator()` (dito
+  deprecado) para `.inputValidator()`. Checado contra o `@tanstack/react-start`
+  realmente instalado (`node_modules/@tanstack/start-client-core`): é o
+  **oposto** — `inputValidator` que carrega `@deprecated Use validator instead`
+  na definição de tipos; `.validator()` é a API atual, já em 234 dos 237 usos.
+  Migrados os 3 usos de `.inputValidator()` restantes (`data.functions.ts`,
+  `ocr.functions.ts`, `document-ocr.functions.ts`) para `.validator()`, alinhando
+  os 3 à maioria. Catraca e suíte inteira (321 testes) verdes.
 - ✅ **Exigir `requireAuth` nos proxies de OCR** (`extractAtestadoOCR`,
   `extractDocumentoOCR`): eram endpoints públicos que consomiam a
   `LOVABLE_API_KEY` sem autenticação — risco de abuso do serviço pago, não de

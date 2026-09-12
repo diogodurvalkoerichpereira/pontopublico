@@ -36,7 +36,7 @@ const OCR_TOOL = {
 
 export const extractAtestadoOCR = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .inputValidator((d: unknown) => InputSchema.parse(d))
+  .validator((d: unknown) => InputSchema.parse(d))
   .handler(async ({ data }) => {
     const apiKey = process.env.LOVABLE_API_KEY;
     if (!apiKey) {
