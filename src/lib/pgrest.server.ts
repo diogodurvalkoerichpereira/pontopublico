@@ -222,8 +222,15 @@ function filterPredicates(
       return `${col} IN (${ph})`;
     }
     if (f.op === "is") {
+      // O operador IS do PostgreSQL só aceita os literais NULL/TRUE/FALSE/
+      // UNKNOWN à direita — não um parâmetro ($1): "IS $1" é erro de sintaxe
+      // para qualquer valor não nulo. TRUE/FALSE viram literais na própria SQL
+      // (não há dado do cliente ali, sem risco de injeção); qualquer outro
+      // valor é rejeitado antes de compor a query.
       if (f.val === null) return `${col} IS NULL`;
-      return `${col} IS ${pushParam(params, f.val)}`;
+      if (f.val === true) return `${col} IS TRUE`;
+      if (f.val === false) return `${col} IS FALSE`;
+      throw new Error('Filtro "is" só aceita null, true ou false');
     }
     const opMap: Record<string, string> = {
       eq: "=",

@@ -223,7 +223,12 @@ motor genérico já existe); endurecer o atalho `personId=id` (sem CPF).
 
 - Remover os 6 `scripts/reconcile-sprint*.sql` órfãos que nenhum script executa.
 - `test:all` que rode a suíte inteira de validadores.
-- Corrigir o operador `is` em `pgrest.server.ts` (`IS $1` é SQL inválido para não-nulo).
+- ✅ **Corrigir o operador `is` em `pgrest.server.ts`** (`IS $1` era SQL
+  inválido para não-nulo — PostgreSQL só aceita `IS NULL/TRUE/FALSE/UNKNOWN`
+  literal, nunca um parâmetro). `true`/`false` agora viram literal
+  (`IS TRUE`/`IS FALSE`); qualquer outro valor é recusado antes de tocar o
+  banco. `tests/pgrest-guards.test.mjs` cobre os três casos, verificado
+  revertendo a correção (3 testes caem).
 - Migrar `.validator()` (deprecado, 65 usos) para `.inputValidator()`.
 - ✅ **Exigir `requireAuth` nos proxies de OCR** (`extractAtestadoOCR`,
   `extractDocumentoOCR`): eram endpoints públicos que consomiam a

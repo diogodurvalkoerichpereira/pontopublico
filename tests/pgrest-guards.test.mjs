@@ -351,4 +351,67 @@ test("time_entries select filtra as batidas excluídas (deleted_at IS NULL)", as
   );
 });
 
+// ---------------------------------------------------------------------------
+// Filtro "is": IS só aceita NULL/TRUE/FALSE literais, nunca um parâmetro
+// ($1) — "IS $1" é erro de sintaxe no PostgreSQL para valor não nulo.
+// ---------------------------------------------------------------------------
+
+test('filtro "is" com true vira literal IS TRUE (não $1)', async () => {
+  stub.resetExecuted();
+  const res = await runQuery(
+    {
+      table: "profiles",
+      action: "select",
+      filters: [{ col: "ativo", op: "is", val: true }],
+    },
+    rhCtx,
+  );
+  assert.equal(res.error, null);
+  assert.equal(stub.executed.length, 1);
+  const { text, params } = stub.executed[0];
+  assert.match(text, /"ativo" IS TRUE/);
+  assert.ok(
+    !params.includes(true),
+    "TRUE é literal na SQL, não deve virar parâmetro",
+  );
+});
+
+test('filtro "is" com false vira literal IS FALSE (não $1)', async () => {
+  stub.resetExecuted();
+  const res = await runQuery(
+    {
+      table: "profiles",
+      action: "select",
+      filters: [{ col: "ativo", op: "is", val: false }],
+    },
+    rhCtx,
+  );
+  assert.equal(res.error, null);
+  assert.equal(stub.executed.length, 1);
+  const { text, params } = stub.executed[0];
+  assert.match(text, /"ativo" IS FALSE/);
+  assert.ok(
+    !params.includes(false),
+    "FALSE é literal na SQL, não deve virar parâmetro",
+  );
+});
+
+test('filtro "is" com valor não nulo/booleano é recusado antes do banco', async () => {
+  stub.resetExecuted();
+  const res = await runQuery(
+    {
+      table: "profiles",
+      action: "select",
+      filters: [{ col: "nome", op: "is", val: "alterado" }],
+    },
+    rhCtx,
+  );
+  assert.ok(res.error, "IS com string produziria SQL inválido; deve recusar");
+  assert.equal(
+    stub.executed.length,
+    0,
+    "nenhuma consulta com IS $1 pode chegar ao banco",
+  );
+});
+
 process.on("exit", () => rmSync(dir, { recursive: true, force: true }));
