@@ -764,6 +764,13 @@ não pode exceder o valor total do contrato** (invariante testado).
 `20260909340000_o3_08_contract_items.sql`; teste
 `tests/sprint-contract-items.test.mjs` verificado por mutação (ignorar a soma
 dos itens já lançados no teto derruba).
+**O3-06b — Resumo das licitações ✅.** `getProcurementSummary` consolida a contagem por
+desfecho (aberta/homologada/fracassada/deserta/revogada), o valor estimado total e o
+**valor homologado** só das homologadas. Reusa `contracts.read`, sem migration;
+`/licitacoes` ganha os cartões (total, estimado, homologado, fracassadas/desertas). Teste
+`tests/sprint-procurement-summary.test.mjs` verificado por mutação (somar homologado de
+não-homologadas derruba).
+
 **O3-08b — Propostas e julgamento por menor preço (Lei 14.133 art. 33-34) ✅.**
 `recordProcurementProposal` registra propostas de fornecedores numa licitação **aberta**
 (uma por fornecedor/licitação; pode entrar desclassificada com motivo);

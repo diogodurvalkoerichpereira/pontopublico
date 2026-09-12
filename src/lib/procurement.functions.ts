@@ -51,6 +51,59 @@ export const getProcurementProcesses = createServerFn({ method: "POST" })
     };
   });
 
+const SummaryInput = z.object({
+  tenant_id: z.string().uuid(),
+  ano: z.number().int().min(2000).max(2200).optional(),
+});
+
+// O3-06b — Resumo das licitações. Consolida a contagem por desfecho
+// (aberta/homologada/fracassada/deserta/revogada), o valor estimado total e o **valor
+// homologado** das já homologadas. Reusa contracts.read.
+export const getProcurementSummary = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => SummaryInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "contracts.read");
+    const row = (
+      await query<{
+        aberta: string;
+        homologada: string;
+        fracassada: string;
+        deserta: string;
+        revogada: string;
+        valor_estimado: string;
+        valor_homologado: string;
+        total: string;
+      }>(
+        `select
+           count(*) filter (where status='aberta')::text as aberta,
+           count(*) filter (where status='homologada')::text as homologada,
+           count(*) filter (where status='fracassada')::text as fracassada,
+           count(*) filter (where status='deserta')::text as deserta,
+           count(*) filter (where status='revogada')::text as revogada,
+           coalesce(sum(valor_estimado),0)::text as valor_estimado,
+           coalesce(sum(valor_homologado) filter (where status='homologada'),0)::text as valor_homologado,
+           count(*)::text as total
+         from public.procurement_processes
+         where tenant_id = $1 and ($2::int is null or ano = $2)`,
+        [data.tenant_id, data.ano ?? null],
+      )
+    )[0];
+    return {
+      porStatus: {
+        aberta: Number(row.aberta),
+        homologada: Number(row.homologada),
+        fracassada: Number(row.fracassada),
+        deserta: Number(row.deserta),
+        revogada: Number(row.revogada),
+      },
+      valorEstimado: Number(row.valor_estimado),
+      valorHomologado: Number(row.valor_homologado),
+      total: Number(row.total),
+    };
+  });
+
 const OpenInput = z.object({
   tenant_id: z.string().uuid(),
   numero: z.string().trim().min(1).max(40),

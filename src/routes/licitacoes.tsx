@@ -30,6 +30,7 @@ import {
   recordProcurementProposal,
   getProcurementJudgment,
   adjudicateProcurementWinner,
+  getProcurementSummary,
 } from "@/lib/procurement.functions";
 
 export const Route = createFileRoute("/licitacoes")({ component: Page });
@@ -142,8 +143,19 @@ function Content() {
   const items = (data?.processes ?? []) as Process[];
   const canManage = data?.canManage ?? false;
 
-  const refresh = () =>
+  const loadSummary = useServerFn(getProcurementSummary);
+  const { data: summary } = useQuery({
+    queryKey: ["procurement-summary", activeTenant?.id],
+    enabled: Boolean(activeTenant),
+    queryFn: () => loadSummary({ data: { tenant_id: activeTenant!.id } }),
+  });
+
+  const refresh = () => {
     qc.invalidateQueries({ queryKey: ["procurement", activeTenant?.id] });
+    qc.invalidateQueries({
+      queryKey: ["procurement-summary", activeTenant?.id],
+    });
+  };
 
   const submitNew = async () => {
     if (!activeTenant) return;
@@ -290,6 +302,41 @@ function Content() {
           </Button>
         )}
       </div>
+
+      {summary && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="rounded-xl border bg-card p-4">
+            <div className="text-sm text-muted-foreground">Licitações</div>
+            <div className="text-2xl font-bold">{summary.total}</div>
+            <div className="text-xs text-muted-foreground">
+              {summary.porStatus.aberta} abertas ·{" "}
+              {summary.porStatus.homologada} homologadas
+            </div>
+          </div>
+          <div className="rounded-xl border bg-card p-4">
+            <div className="text-sm text-muted-foreground">Valor estimado</div>
+            <div className="text-2xl font-bold">
+              {brl(summary.valorEstimado)}
+            </div>
+          </div>
+          <div className="rounded-xl border bg-card p-4">
+            <div className="text-sm text-muted-foreground">
+              Valor homologado
+            </div>
+            <div className="text-2xl font-bold">
+              {brl(summary.valorHomologado)}
+            </div>
+          </div>
+          <div className="rounded-xl border bg-card p-4">
+            <div className="text-sm text-muted-foreground">
+              Fracassadas/desertas
+            </div>
+            <div className="text-2xl font-bold">
+              {summary.porStatus.fracassada + summary.porStatus.deserta}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="rounded-xl border bg-card overflow-x-auto">
         <table className="w-full text-sm">
