@@ -1060,6 +1060,15 @@ remanescente (as parcelas pagas já arrecadaram). Reusa `taxes.manage`, sem migr
 status `rescindido` já existia no enum). Teste `tests/sprint-installment-rescission.test.mjs`
 verificado por mutação (inverter o limiar derruba).
 
+**O4-02b — Carteira de parcelamentos (REFIS) ✅.** `getInstallmentPlansSummary` consolida os
+planos por situação (ativo/quitado/rescindido) e, nas parcelas: o **arrecadado** (pagas, de
+qualquer plano), o **a receber** (abertas de planos **ainda ativos** — plano rescindido
+devolveu o saldo à dívida ativa e deixa de ser recebível pela via do parcelamento) e o
+**vencido** em aberto (de plano ativo, vencimento < referência), a inadimplência da
+carteira. Read-only, reusa `taxes.read`, sem migration; `/parcelamentos` ganha os cartões.
+Teste `tests/sprint-installment-plans-summary.test.mjs` verificado por mutação (contar
+parcelas de plano rescindido no "a receber", ou ignorar o vencimento no "vencido", derruba).
+
 **O4-12 — Painel de parcelamentos (UI) ✅.** Rota `/parcelamentos` dá cara ao O4-02/O4-11:
 lista os planos (total, parcelas pagas, situação), expande as parcelas de cada acordo com
 ação "Pagar" por parcela aberta, "Rescindir" por plano ativo e "Novo parcelamento" a

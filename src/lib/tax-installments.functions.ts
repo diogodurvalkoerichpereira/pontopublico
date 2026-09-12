@@ -356,3 +356,55 @@ export const rescindInstallmentPlan = createServerFn({ method: "POST" })
       };
     });
   });
+
+const SummaryInput = z.object({
+  tenant_id: z.string().uuid(),
+  data_referencia: z.string().date(),
+});
+
+// O4-02b — Carteira de parcelamentos (REFIS). Consolida os planos por situação
+// (ativo/quitado/rescindido) e, nas parcelas: o **arrecadado** (parcelas pagas, de qualquer
+// plano — o dinheiro já entrou), o **a receber** (parcelas abertas de planos **ainda
+// ativos** — plano rescindido devolve o saldo à dívida ativa, deixa de ser recebível pela
+// via do parcelamento) e o **vencido** (abertas de plano ativo com vencimento anterior à
+// data de referência) — a inadimplência da carteira. Read-only, reusa taxes.read.
+export const getInstallmentPlansSummary = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => SummaryInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "taxes.read");
+    const planos = (
+      await query<{ ativos: string; quitados: string; rescindidos: string }>(
+        `select
+           count(*) filter (where status='ativo')::text as ativos,
+           count(*) filter (where status='quitado')::text as quitados,
+           count(*) filter (where status='rescindido')::text as rescindidos
+         from public.tax_installment_plans
+         where tenant_id = $1`,
+        [data.tenant_id],
+      )
+    )[0];
+    const parc = (
+      await query<{ arrecadado: string; a_receber: string; vencido: string }>(
+        `select
+           coalesce(sum(i.valor) filter (where i.status='paga'),0)::text as arrecadado,
+           coalesce(sum(i.valor) filter (where i.status='aberta' and p.status='ativo'),0)::text as a_receber,
+           coalesce(sum(i.valor) filter (where i.status='aberta' and p.status='ativo' and i.vencimento < $2::date),0)::text as vencido
+         from public.tax_installments i
+         join public.tax_installment_plans p on p.id = i.plan_id
+         where i.tenant_id = $1`,
+        [data.tenant_id, data.data_referencia],
+      )
+    )[0];
+    return {
+      planosPorStatus: {
+        ativo: Number(planos.ativos),
+        quitado: Number(planos.quitados),
+        rescindido: Number(planos.rescindidos),
+      },
+      arrecadado: Number(parc.arrecadado),
+      aReceber: Number(parc.a_receber),
+      vencido: Number(parc.vencido),
+    };
+  });

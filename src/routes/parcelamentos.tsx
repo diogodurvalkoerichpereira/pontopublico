@@ -29,6 +29,7 @@ import {
   createInstallmentPlan,
   payInstallment,
   rescindInstallmentPlan,
+  getInstallmentPlansSummary,
 } from "@/lib/tax-installments.functions";
 import { getTaxCredits } from "@/lib/taxes.functions";
 
@@ -83,6 +84,7 @@ function Content() {
   const create = useServerFn(createInstallmentPlan);
   const pay = useServerFn(payInstallment);
   const rescind = useServerFn(rescindInstallmentPlan);
+  const loadSummary = useServerFn(getInstallmentPlansSummary);
   const qc = useQueryClient();
 
   const [open, setOpen] = useState(false);
@@ -116,6 +118,15 @@ function Content() {
       }),
   });
 
+  const { data: summary } = useQuery({
+    queryKey: ["installment-summary", activeTenant?.id],
+    enabled: Boolean(activeTenant),
+    queryFn: () =>
+      loadSummary({
+        data: { tenant_id: activeTenant!.id, data_referencia: hoje() },
+      }),
+  });
+
   const plans = (data?.plans ?? []) as Plan[];
   const canManage = data?.canManage ?? false;
   const parcelaveis = useMemo(
@@ -130,6 +141,9 @@ function Content() {
     qc.invalidateQueries({ queryKey: ["installment-plans", activeTenant?.id] });
     qc.invalidateQueries({ queryKey: ["installments", activeTenant?.id] });
     qc.invalidateQueries({ queryKey: ["tax-credits", activeTenant?.id] });
+    qc.invalidateQueries({
+      queryKey: ["installment-summary", activeTenant?.id],
+    });
   };
 
   const submitCreate = async () => {
@@ -215,6 +229,41 @@ function Content() {
           </Button>
         )}
       </div>
+
+      {summary && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-xl border bg-card p-4">
+            <div className="text-xs text-muted-foreground">Planos ativos</div>
+            <div className="text-2xl font-bold tabular-nums">
+              {summary.planosPorStatus.ativo}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {summary.planosPorStatus.quitado} quitados ·{" "}
+              {summary.planosPorStatus.rescindido} rescindidos
+            </div>
+          </div>
+          <div className="rounded-xl border bg-card p-4">
+            <div className="text-xs text-muted-foreground">Arrecadado</div>
+            <div className="text-2xl font-bold tabular-nums">
+              {brl(summary.arrecadado)}
+            </div>
+          </div>
+          <div className="rounded-xl border bg-card p-4">
+            <div className="text-xs text-muted-foreground">A receber</div>
+            <div className="text-2xl font-bold tabular-nums text-primary">
+              {brl(summary.aReceber)}
+            </div>
+          </div>
+          <div className="rounded-xl border bg-card p-4">
+            <div className="text-xs text-muted-foreground">
+              Vencido em aberto
+            </div>
+            <div className="text-2xl font-bold tabular-nums text-destructive">
+              {brl(summary.vencido)}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="rounded-xl border bg-card overflow-x-auto">
         <table className="w-full text-sm">
