@@ -112,6 +112,60 @@ export const saveMaterialItem = createServerFn({ method: "POST" })
     return { id };
   });
 
+const MovementSummaryInput = z.object({
+  tenant_id: z.string().uuid(),
+  from: z.string().date(),
+  to: z.string().date(),
+});
+
+// O3-02b — Consolidação da movimentação de material por período. Soma as entradas e as
+// saídas (quantidade e valor = quantidade × valor unitário) das movimentações entre `from`
+// e `to` (inclusive). Base para o consumo do período (VPD) e a conferência do almoxarifado.
+// Reusa materials.read.
+export const getMaterialMovementSummary = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => MovementSummaryInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "materials.read");
+    if (data.to < data.from)
+      throw new Error("A data final não pode anteceder a inicial");
+    const row = (
+      await query<{
+        entradas: string;
+        entradas_qtd: string;
+        entradas_valor: string;
+        saidas: string;
+        saidas_qtd: string;
+        saidas_valor: string;
+      }>(
+        `select
+           count(*) filter (where tipo='entrada')::text as entradas,
+           coalesce(sum(quantidade) filter (where tipo='entrada'),0)::text as entradas_qtd,
+           coalesce(sum(quantidade * valor_unitario) filter (where tipo='entrada'),0)::text as entradas_valor,
+           count(*) filter (where tipo='saida')::text as saidas,
+           coalesce(sum(quantidade) filter (where tipo='saida'),0)::text as saidas_qtd,
+           coalesce(sum(quantidade * valor_unitario) filter (where tipo='saida'),0)::text as saidas_valor
+         from public.material_movements
+         where tenant_id = $1 and data_movimento between $2 and $3`,
+        [data.tenant_id, data.from, data.to],
+      )
+    )[0];
+    return {
+      periodo: { from: data.from, to: data.to },
+      entradas: {
+        movimentos: Number(row.entradas),
+        quantidade: round3(Number(row.entradas_qtd)),
+        valor: round2(Number(row.entradas_valor)),
+      },
+      saidas: {
+        movimentos: Number(row.saidas),
+        quantidade: round3(Number(row.saidas_qtd)),
+        valor: round2(Number(row.saidas_valor)),
+      },
+    };
+  });
+
 const LedgerInput = z.object({
   tenant_id: z.string().uuid(),
   item_id: z.string().uuid(),

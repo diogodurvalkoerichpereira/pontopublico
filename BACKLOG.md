@@ -805,6 +805,13 @@ Incorporar nos itens permanentes. Teste `tests/sprint-material-asset-incorporati
 verificado por mutação (usar o saldo total em vez de custo médio × quantidade, ou
 incorporar material de consumo, derruba).
 
+**O3-02b — Consolidação de movimentação de material por período ✅.**
+`getMaterialMovementSummary` soma as entradas e as saídas (quantidade e valor = quantidade
+× valor unitário) das movimentações no intervalo [from, to]; movimento fora do período não
+entra. Reusa `materials.read`, sem migration; `/almoxarifado` ganha o filtro de período com
+os cartões de entradas/saídas. Teste `tests/sprint-material-movement-summary.test.mjs`
+verificado por mutação (trocar o tipo somado, ou ignorar o filtro de período, derruba).
+
 **O3-18 — Razão (kardex) de movimentação de material ✅.** `getMaterialLedger` relê as
 movimentações do item em ordem cronológica e recompõe o saldo em quantidade linha a linha
 (entrada soma, saída subtrai); o saldo corrente final bate com o saldo do próprio item.

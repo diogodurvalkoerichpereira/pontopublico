@@ -29,6 +29,7 @@ import {
   recordMaterialMovement,
   getMaterialInventory,
   getMaterialLedger,
+  getMaterialMovementSummary,
 } from "@/lib/materials.functions";
 import { incorporateMaterialAsset } from "@/lib/assets.functions";
 
@@ -91,7 +92,11 @@ function Content() {
   const loadInventory = useServerFn(getMaterialInventory);
   const loadLedger = useServerFn(getMaterialLedger);
   const incorporate = useServerFn(incorporateMaterialAsset);
+  const loadMovSummary = useServerFn(getMaterialMovementSummary);
   const qc = useQueryClient();
+
+  const monthStart = new Date().toISOString().slice(0, 8) + "01";
+  const [periodo, setPeriodo] = useState({ from: monthStart, to: hoje() });
 
   const [itemOpen, setItemOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
@@ -141,6 +146,24 @@ function Content() {
     queryFn: () => loadInventory({ data: { tenant_id: activeTenant!.id } }),
   });
   const inventory = (inv?.categorias ?? []) as InventoryLine[];
+
+  const { data: movSummary } = useQuery({
+    queryKey: [
+      "material-mov-summary",
+      activeTenant?.id,
+      periodo.from,
+      periodo.to,
+    ],
+    enabled: Boolean(activeTenant),
+    queryFn: () =>
+      loadMovSummary({
+        data: {
+          tenant_id: activeTenant!.id,
+          from: periodo.from,
+          to: periodo.to,
+        },
+      }),
+  });
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["material-items", activeTenant?.id] });
@@ -313,6 +336,60 @@ function Content() {
             </div>
           </div>
         ))}
+      </div>
+
+      <div className="rounded-xl border bg-card p-4 space-y-3">
+        <div className="flex items-end gap-3 flex-wrap">
+          <div>
+            <Label>De</Label>
+            <Input
+              type="date"
+              value={periodo.from}
+              onChange={(e) =>
+                setPeriodo((p) => ({ ...p, from: e.target.value }))
+              }
+            />
+          </div>
+          <div>
+            <Label>Até</Label>
+            <Input
+              type="date"
+              value={periodo.to}
+              onChange={(e) =>
+                setPeriodo((p) => ({ ...p, to: e.target.value }))
+              }
+            />
+          </div>
+          <div className="text-sm text-muted-foreground">
+            Movimentação do período
+          </div>
+        </div>
+        {movSummary && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-lg border p-3">
+              <div className="text-sm text-muted-foreground">
+                Entradas ({movSummary.entradas.movimentos})
+              </div>
+              <div className="text-lg font-bold">
+                {brl(movSummary.entradas.valor)}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {movSummary.entradas.quantidade} un
+              </div>
+            </div>
+            <div className="rounded-lg border p-3">
+              <div className="text-sm text-muted-foreground">
+                Saídas ({movSummary.saidas.movimentos})
+              </div>
+              <div className="text-lg font-bold">
+                {brl(movSummary.saidas.valor)}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {movSummary.saidas.quantidade} un
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="rounded-xl border bg-card overflow-x-auto">
