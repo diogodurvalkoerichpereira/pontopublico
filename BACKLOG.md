@@ -622,6 +622,17 @@ desbalanceado; `getBalancete` devolve saldo por conta e o balancete fecha em zer
 O helper `postEntry(client, …)` é reusado pelos roteiros automáticos. Permissões
 `accounting.*`. Migration `20260909160000_o2_05_accounting_ledger.sql`; teste
 `tests/sprint-accounting-ledger.test.mjs` verificado por mutação.
+
+**O2-05b — Razão de conta + tela de contabilidade (UI) ✅.** `getAccountLedger` lista, em
+ordem cronológica, os lançamentos que tocaram **uma** conta no exercício (data, histórico,
+lado D/C, valor) com o **saldo corrente** após cada um (Σdébito − Σcrédito) e os totais — o
+detalhe que o balancete consolida, para auditoria e conciliação; linha de outra conta não
+entra. Read-only, reusa `accounting.read`, sem migration. Ativa a contabilidade na
+interface: nova rota `/contabilidade` (balancete por exercício + razão por conta), reusando
+`getBalancete` — que existia no backend (O2-05) sem tela. Item de menu "Contabilidade".
+Teste `tests/sprint-account-razao.test.mjs` verificado por mutação (inverter o sinal do lado
+no saldo, ou remover o filtro pela conta, derruba).
+
 **O2-06 — Contabilização automática por fato ✅.** Empenho, anulação, liquidação e
 pagamento geram lançamento contábil balanceado no razão (O2-05) na MESMA transação
 do fato. Como os códigos PCASP dependem do plano do ente, o roteiro é **configurável**

@@ -1,11 +1,12 @@
 /**
- * O2-05 (Onda 2) — razão contábil em partidas dobradas: COMPORTAMENTO.
+ * O2-05b (Onda 2) — Razão de uma conta contábil (livro razão, PCASP): COMPORTAMENTO.
  *
- * postAccountingEntry escritura um lançamento balanceado (Σdébito = Σcrédito) e o
- * recusa se desbalanceado; getBalancete devolve o saldo por conta. Confere a
- * dupla partida e o balancete.
+ * getAccountLedger lista, em ordem cronológica, os lançamentos que tocaram UMA conta no
+ * exercício, com o saldo corrente após cada um (Σdébito − Σcrédito) e os totais. Linha de
+ * outra conta não entra.
  *
- * Mutação: remover a checagem de balanceamento (aceita desbalanceado) derruba.
+ * Mutação: inverter o sinal do lado no saldo corrente (débito subtrai / crédito soma), ou
+ * remover o filtro pela conta, derruba o teste.
  */
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
@@ -21,7 +22,7 @@ let tenantId;
 let userId;
 const fn = {};
 
-const dir = mkdtempSync(join(tmpdir(), "ledger-test-"));
+const dir = mkdtempSync(join(tmpdir(), "account-razao-test-"));
 
 const dbStub = join(dir, "db.mjs");
 writeFileSync(
@@ -92,6 +93,22 @@ async function bundle(entry, name) {
 
 const ctx = () => ({ userId });
 
+// Cria um lançamento com uma linha (D/C) numa conta.
+async function seedEntry({ data_lancamento, conta, lado, valor }) {
+  const entryId = randomUUID();
+  await db.query(
+    `insert into public.accounting_entries
+       (id, tenant_id, exercicio, data_lancamento, historico, source, valor)
+     values ($1,$2,2026,$3,'lancamento','manual',$4)`,
+    [entryId, tenantId, data_lancamento, valor],
+  );
+  await db.query(
+    `insert into public.accounting_entry_lines (id, tenant_id, entry_id, conta, lado, valor)
+     values ($1,$2,$3,$4,$5,$6)`,
+    [randomUUID(), tenantId, entryId, conta, lado, valor],
+  );
+}
+
 before(async () => {
   db = await createTestDb();
   globalThis.__db = db;
@@ -106,10 +123,9 @@ before(async () => {
     [userId, `a-${userId}@t.local`],
   );
   await db.query("insert into public.profiles (id) values ($1)", [userId]);
-  Object.assign(fn, await bundle("src/lib/accounting.functions.ts", "acc.mjs"));
   Object.assign(
     fn,
-    await bundle("src/lib/accounting-read.functions.ts", "accr.mjs"),
+    await bundle("src/lib/accounting-read.functions.ts", "acc.mjs"),
   );
 });
 
@@ -119,66 +135,41 @@ after(async () => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-test("lançamento balanceado é escriturado; o balancete bate", async () => {
-  // Empenho: D 6.2.2.1.1 (credito empenhado a liquidar) C 5.2.2.1.1 ... (controle).
-  await fn.postAccountingEntry({
-    data: {
-      tenant_id: tenantId,
-      exercicio: 2026,
-      data_lancamento: "2026-03-15",
-      historico: "Empenho de material",
-      lines: [
-        { conta: "6.2.2.1.1", lado: "D", valor: 1000 },
-        { conta: "5.2.2.1.1", lado: "C", valor: 1000 },
-      ],
-    },
-    context: ctx(),
+test("razão cronológico com saldo corrente, isolado por conta", async () => {
+  // Conta 1.1.1.1: crédito 300 em 02-01 e débito 1000 em 03-01 (inseridos fora de ordem).
+  await seedEntry({
+    data_lancamento: "2026-03-01",
+    conta: "1.1.1.1",
+    lado: "D",
+    valor: 1000,
   });
-  const bal = await fn.getBalancete({
-    data: { tenant_id: tenantId, exercicio: 2026 },
-    context: ctx(),
+  await seedEntry({
+    data_lancamento: "2026-02-01",
+    conta: "1.1.1.1",
+    lado: "C",
+    valor: 300,
   });
-  const byConta = new Map(bal.map((b) => [b.conta, b]));
-  assert.equal(Number(byConta.get("6.2.2.1.1").saldo), 1000);
-  assert.equal(Number(byConta.get("5.2.2.1.1").saldo), -1000);
-  // O balancete inteiro soma zero (partidas dobradas).
-  const somaSaldos = bal.reduce((s, b) => s + Number(b.saldo), 0);
-  assert.equal(somaSaldos, 0);
-});
+  // Outra conta: não entra no razão de 1.1.1.1.
+  await seedEntry({
+    data_lancamento: "2026-02-15",
+    conta: "2.2.2.2",
+    lado: "D",
+    valor: 5000,
+  });
 
-test("lançamento desbalanceado é recusado", async () => {
-  await assert.rejects(
-    fn.postAccountingEntry({
-      data: {
-        tenant_id: tenantId,
-        exercicio: 2026,
-        data_lancamento: "2026-03-16",
-        historico: "Desbalanceado",
-        lines: [
-          { conta: "1.1.1.1.1", lado: "D", valor: 1000 },
-          { conta: "2.1.1.1.1", lado: "C", valor: 900 },
-        ],
-      },
-      context: ctx(),
-    }),
-    /desbalanceado/,
-  );
-});
-
-test("lançamento com débito e crédito múltiplos que se igualam é aceito", async () => {
-  const r = await fn.postAccountingEntry({
-    data: {
-      tenant_id: tenantId,
-      exercicio: 2026,
-      data_lancamento: "2026-03-17",
-      historico: "Rateio",
-      lines: [
-        { conta: "3.1.1.1.1", lado: "D", valor: 700 },
-        { conta: "3.1.1.1.2", lado: "D", valor: 300 },
-        { conta: "1.1.1.1.1", lado: "C", valor: 1000 },
-      ],
-    },
+  const r = await fn.getAccountLedger({
+    data: { tenant_id: tenantId, exercicio: 2026, conta: "1.1.1.1" },
     context: ctx(),
   });
-  assert.equal(r.valor, 1000);
+
+  assert.equal(r.linhas.length, 2);
+  // Ordem cronológica: crédito 02-01 primeiro (saldo -300), depois débito 03-01 (saldo 700).
+  assert.equal(r.linhas[0].data_lancamento, "2026-02-01");
+  assert.equal(r.linhas[0].lado, "C");
+  assert.equal(r.linhas[0].saldo, -300);
+  assert.equal(r.linhas[1].data_lancamento, "2026-03-01");
+  assert.equal(r.linhas[1].saldo, 700); // -300 + 1000
+  assert.equal(r.debito, 1000);
+  assert.equal(r.credito, 300);
+  assert.equal(r.saldo, 700); // sem os 5000 da outra conta
 });

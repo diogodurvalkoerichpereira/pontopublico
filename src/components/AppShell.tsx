@@ -388,6 +388,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       icon: Banknote,
       section: "Contabilidade e Finanças",
     });
+  if (hasTenantPermission("accounting.read"))
+    items.push({
+      to: "/contabilidade",
+      label: "Contabilidade",
+      icon: BookOpen,
+      section: "Contabilidade e Finanças",
+    });
   if (hasTenantPermission("budget.read"))
     items.push({
       to: "/balancos",
