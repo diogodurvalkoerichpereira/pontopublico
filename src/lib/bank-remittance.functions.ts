@@ -1,8 +1,23 @@
+/**
+ * Remessa bancária da folha.
+ *
+ * ATENÇÃO — este módulo NÃO gera CNAB 240. O formato produzido aqui é próprio
+ * do projeto: linhas de comprimento variável com um "header", detalhes e um
+ * "trailer" simplificados. O CNAB 240 da FEBRABAN exige registros de 240
+ * posições fixas, com header de arquivo, header de lote, segmentos A/B/C,
+ * trailer de lote e trailer de arquivo. Nenhum banco aceita o arquivo atual.
+ *
+ * O rótulo gravado em `layout_version` é RASCUNHO-NAO-CNAB240-v1 justamente
+ * para que nem a interface nem uma declaração de conformidade em licitação
+ * possam apresentá-lo como padrão oficial. Ver src/lib/conformance.ts.
+ */
 import { createHash, randomUUID } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
+import { recordAudit } from "./audit.server";
+import { conformanceOf } from "./conformance";
 import {
   loadTenantAccess,
   requireTenantPermission,
@@ -55,7 +70,7 @@ export const generateBankRemittance = createServerFn({ method: "POST" })
       const hash = createHash("sha256").update(content).digest("hex"),
         id = randomUUID();
       await c.query(
-        `insert into public.bank_remittance_batches(id,tenant_id,payroll_cycle_id,bank_code,layout_version,records_count,total_amount,file_content,file_sha256,created_by)values($1,$2,$3,$4,'CNAB240-v1',$5,$6,$7,$8,$9)`,
+        `insert into public.bank_remittance_batches(id,tenant_id,payroll_cycle_id,bank_code,layout_version,records_count,total_amount,file_content,file_sha256,created_by)values($1,$2,$3,$4,'RASCUNHO-NAO-CNAB240-v1',$5,$6,$7,$8,$9)`,
         [
           id,
           data.tenant_id,
@@ -68,7 +83,28 @@ export const generateBankRemittance = createServerFn({ method: "POST" })
           context.userId,
         ],
       );
-      return { id, content, hash, total };
+      // Trilha de auditoria do ato de saída de dados (remessa bancária).
+      await recordAudit(c, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "remessa.gerar",
+        resource: "bank_remittance_batches",
+        recordId: id,
+        after: {
+          bank_code: data.bank_code,
+          payroll_cycle_id: cycle.id,
+          records_count: rows.length,
+          total_amount: total,
+          file_sha256: hash,
+        },
+      });
+      return {
+        id,
+        content,
+        hash,
+        total,
+        conformidade: conformanceOf("remessa-bancaria"),
+      };
     });
   });
 export const getBankRemittances = createServerFn({ method: "POST" })

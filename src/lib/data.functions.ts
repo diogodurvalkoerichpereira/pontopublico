@@ -15,6 +15,7 @@ import {
   TOKEN_TTL,
 } from "./auth.server";
 import { runQuery, loadAccess } from "./pgrest.server";
+import { loadTenantAccess } from "./tenant-access.server";
 import {
   loadEmailSettings,
   sendMailWith,
@@ -53,6 +54,7 @@ async function bearerUserId(): Promise<{
   userId: string;
   email: string;
   sessionId: string;
+  mfaVerifiedAt: string | null;
 }> {
   const request = getRequest();
   const authHeader = request?.headers?.get("authorization");
@@ -60,8 +62,11 @@ async function bearerUserId(): Promise<{
   const token = authHeader.slice(7);
   const claims = verifyToken(token);
   if (!claims?.sub || !claims.sid) throw new Error("Unauthorized");
-  const session = await queryOne<{ id: string }>(
-    `select id from private.auth_sessions
+  const session = await queryOne<{
+    id: string;
+    mfa_verified_at: string | null;
+  }>(
+    `select id, mfa_verified_at::text from private.auth_sessions
      where id=$1 and user_id=$2 and revoked_at is null and expires_at>now()`,
     [claims.sid, claims.sub],
   );
@@ -71,13 +76,18 @@ async function bearerUserId(): Promise<{
      where id=$1 and last_seen_at < now()-interval '5 minutes'`,
     [claims.sid],
   );
-  return { userId: claims.sub, email: claims.email, sessionId: claims.sid };
+  return {
+    userId: claims.sub,
+    email: claims.email,
+    sessionId: claims.sid,
+    mfaVerifiedAt: session.mfa_verified_at,
+  };
 }
 
 export const requireAuth = createMiddleware({ type: "function" }).server(
   async ({ next }) => {
-    const { userId, email, sessionId } = await bearerUserId();
-    return next({ context: { userId, email, sessionId } });
+    const { userId, email, sessionId, mfaVerifiedAt } = await bearerUserId();
+    return next({ context: { userId, email, sessionId, mfaVerifiedAt } });
   },
 );
 
@@ -87,7 +97,16 @@ export const dbQuery = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as QueryReq)
   .handler(async ({ data, context }) => {
     const ctx = await loadAccess(context.userId);
-    return runQuery(data, ctx);
+    // O tenant vem do cliente (shim), então não pode ser confiado cru: só é
+    // aceito depois de loadTenantAccess confirmar associação ativa em
+    // tenant_memberships, que lança se o usuário não for membro daquele ente.
+    // Um tenant_id de outro ente falha aqui, antes de tocar o compilador.
+    let tenantId: string | null = null;
+    if (data.tenant_id) {
+      await loadTenantAccess(context.userId, data.tenant_id);
+      tenantId = data.tenant_id;
+    }
+    return runQuery(data, ctx, tenantId);
   });
 
 // ---------- Auth ----------
@@ -506,11 +525,13 @@ export const adminCreateUser = createServerFn({ method: "POST" })
          VALUES ($1,$2,'ativo',true) ON CONFLICT (tenant_id, user_id) DO NOTHING`,
         [targetTenant.id, id],
       );
+      // RH novo recebe rh_operador (papel que materializa o RH legado, O0-10),
+      // para não depender da ponte de compatibilidade em loadTenantAccess.
       const tenantRole =
         data.role === "admin"
           ? "tenant_admin"
           : data.role === "rh"
-            ? "sector_manager"
+            ? "rh_operador"
             : "employee";
       await client.query(
         `INSERT INTO public.security_user_roles (tenant_id, user_id, role_id, created_by)

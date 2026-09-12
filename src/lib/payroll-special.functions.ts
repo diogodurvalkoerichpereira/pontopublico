@@ -1,9 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
-import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
+import { recordAudit } from "./audit.server";
 import {
   loadTenantAccess,
   loadTenantUnitScope,
@@ -13,9 +13,8 @@ import {
 import {
   calculateThirteenthSalary,
   countThirteenthSalaryMonths,
-  type IncomeTaxBand,
-  type ProgressiveBand,
 } from "./payroll-special";
+import { loadFiscalTables } from "./fiscal-tables.server";
 
 const TenantInput = z.object({ tenant_id: z.string().uuid() });
 
@@ -23,14 +22,6 @@ function checksum(value: unknown) {
   return createHash("sha256")
     .update(JSON.stringify(value), "utf8")
     .digest("hex");
-}
-
-function auditMetadata() {
-  const request = getRequest();
-  return {
-    requestId: request?.headers?.get("x-request-id") ?? randomUUID(),
-    ip: request?.headers?.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
-  };
 }
 
 export const getSpecialPayrollWorkspace = createServerFn({ method: "POST" })
@@ -207,7 +198,6 @@ export const createSpecialPayroll = createServerFn({ method: "POST" })
     if (!selectedIds.length) throw new Error("Selecione ao menos um vínculo");
     const referenceDate = `${data.reference_month}-01`;
     const referenceYear = Number(data.reference_month.slice(0, 4));
-    const event = auditMetadata();
 
     return withTransaction(async (client) => {
       const linksResult = await client.query<{
@@ -265,18 +255,19 @@ export const createSpecialPayroll = createServerFn({ method: "POST" })
         sequence = Number(next.rows[0].sequence);
       }
 
-      const configResult = await client.query<{
-        teto_inss: string;
-        inss_faixas: ProgressiveBand[];
-        irrf_faixas: IncomeTaxBand[];
-        deducao_dependente: string;
-      }>(
-        `select teto_inss::text,inss_faixas,irrf_faixas,deducao_dependente::text
-         from public.payroll_config order by updated_at desc limit 1`,
+      // Tabelas fiscais versionadas vigentes na competência (O1-01b): a fonte
+      // saiu do singleton payroll_config para fiscal_tables (com checksum na
+      // memória, defensável perante o TCE). Ver ADR 0003.
+      const fiscalTables = await loadFiscalTables(
+        data.tenant_id,
+        referenceDate,
       );
-      const taxConfig = configResult.rows[0];
-      if (data.cycle_type.startsWith("decimo_") && !taxConfig)
-        throw new Error("Configuração de INSS/IRRF não encontrada");
+      const inssTable = fiscalTables.get("INSS_FEDERAL");
+      const irrfTable = fiscalTables.get("IRRF_FEDERAL");
+      if (data.cycle_type.startsWith("decimo_") && (!inssTable || !irrfTable))
+        throw new Error(
+          "Tabelas fiscais INSS/IRRF não encontradas para a competência",
+        );
 
       const historyResult = await client.query<{
         employment_link_id: string;
@@ -396,16 +387,18 @@ export const createSpecialPayroll = createServerFn({ method: "POST" })
             link.admission_date,
             link.termination_date,
           );
+          if (!inssTable || !irrfTable)
+            throw new Error(
+              "Tabelas fiscais INSS/IRRF não encontradas para a competência",
+            );
           const calculation = calculateThirteenthSalary({
             calculationBase: methodBase,
             months,
             installment:
               data.cycle_type === "decimo_primeira" ? "primeira" : "segunda",
             firstInstallmentPaid: firstPaid.get(link.id),
-            socialSecurityBands: taxConfig.inss_faixas,
-            socialSecurityCeiling: Number(taxConfig.teto_inss),
-            incomeTaxBands: taxConfig.irrf_faixas,
-            dependentDeduction: Number(taxConfig.deducao_dependente),
+            inssBrackets: inssTable.brackets,
+            irrfBrackets: irrfTable.brackets,
           });
           specialResults.push({
             linkId: link.id,
@@ -444,7 +437,22 @@ export const createSpecialPayroll = createServerFn({ method: "POST" })
       const configuration = {
         advance_percentage: data.advance_percentage ?? null,
         calculation_method: data.calculation_method ?? null,
-        tax_snapshot: taxConfig ?? null,
+        // Provenância fiscal: id + checksum das versões vigentes usadas (ADR 0003).
+        tax_snapshot:
+          inssTable && irrfTable
+            ? {
+                inss: {
+                  code: "INSS_FEDERAL",
+                  version_id: inssTable.versionId,
+                  checksum: inssTable.checksum,
+                },
+                irrf: {
+                  code: "IRRF_FEDERAL",
+                  version_id: irrfTable.versionId,
+                  checksum: irrfTable.checksum,
+                },
+              }
+            : null,
         engine_version: "special-v1.0.0",
       };
       await client.query(
@@ -534,25 +542,20 @@ export const createSpecialPayroll = createServerFn({ method: "POST" })
           }),
         ],
       );
-      await client.query(
-        `insert into public.audit_events
-           (tenant_id,actor_id,action,resource,record_id,after_data,request_id,ip)
-         values ($1,$2,'create_special_payroll','payroll_cycles',$3,$4::jsonb,$5,$6::inet)`,
-        [
-          data.tenant_id,
-          context.userId,
-          cycleId,
-          JSON.stringify({
-            reference_month: referenceDate,
-            cycle_type: data.cycle_type,
-            sequence,
-            links: specialResults.length,
-            ...totals,
-          }),
-          event.requestId,
-          event.ip,
-        ],
-      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "create_special_payroll",
+        resource: "payroll_cycles",
+        recordId: cycleId,
+        after: {
+          reference_month: referenceDate,
+          cycle_type: data.cycle_type,
+          sequence,
+          links: specialResults.length,
+          ...totals,
+        },
+      });
       return { cycleId, sequence, links: specialResults.length, ...totals };
     });
   });

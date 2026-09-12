@@ -1,0 +1,120 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+# Cancela execuções antigas do mesmo ramo: o resultado que importa é o do
+# último commit.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  qualidade:
+    name: Qualidade estática
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      # `npm ci` exige lockfile em dia. Ele já abortou o build de produção uma
+      # vez por dessincronia, então falhar aqui é intencional.
+      - run: npm ci --no-audit --no-fund
+      # O repositório tem débito de lint e de tipos herdado das Sprints 12-20.
+      # A catraca fixa o número atual como teto: o débito não cresce, e cada
+      # correção baixa o teto de forma permanente.
+      - name: Catraca de qualidade (tipos e lint)
+        run: node scripts/quality-ratchet.mjs
+
+  esquema:
+    name: Esquema em PGlite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      # Replay completo de bootstrap + migrations, coletando todas as falhas em
+      # vez de parar na primeira. Foi criado depois que a Sprint 19 passou verde
+      # com erro de sintaxe e a Sprint 13 com coluna inexistente.
+      - name: Dry run das migrations
+        run: npm run db:dryrun
+
+  banco-real:
+    name: Migrations em PostgreSQL real
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: pontopublico
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      # PGlite não é PostgreSQL: difere em SET ROLE, extensões e catálogo. Este
+      # job é a única prova de que o esquema aplica no banco que roda em
+      # produção.
+      - name: Aplicar migrations
+        env:
+          DATABASE_URL: postgres://postgres:ci@127.0.0.1:5433/pontopublico
+        run: npm run db:migrate
+      - name: Confirmar que nada ficou pendente
+        env:
+          DATABASE_URL: postgres://postgres:ci@127.0.0.1:5433/pontopublico
+        run: npm run db:status
+      # Reaplicar deve ser no-op: o ledger com checksum precisa reconhecer tudo.
+      - name: Reaplicação é idempotente
+        env:
+          DATABASE_URL: postgres://postgres:ci@127.0.0.1:5433/pontopublico
+        run: npm run db:migrate
+
+  testes:
+    name: Testes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm test
+
+  build:
+    name: Build de produção
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      # O Dockerfile força o preset node-server do Nitro; sem servidor emitido
+      # a imagem não sobe. Este passo pega isso antes do deploy.
+      - name: Build
+        env:
+          SESSION_SECRET: ci-somente-para-build-com-32-caracteres
+        run: npm run build
+      - name: Servidor Nitro foi emitido
+        run: test -f .output/server/index.mjs

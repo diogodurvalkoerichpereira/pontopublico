@@ -25,6 +25,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth-context";
+import { useMfaChallenge } from "@/components/mfa/mfa-challenge";
 import {
   getSecurityModel,
   saveSecurityAssignment,
@@ -57,6 +58,7 @@ function Content() {
   const getModel = useServerFn(getSecurityModel);
   const saveRole = useServerFn(saveSecurityRole);
   const saveAssignment = useServerFn(saveSecurityAssignment);
+  const { ensure: ensureMfa, dialog: mfaDialog } = useMfaChallenge();
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [form, setForm] = useState({
@@ -127,16 +129,18 @@ function Content() {
     if (!activeTenant) return;
     setSaving(true);
     try {
-      const result = await saveRole({
-        data: {
-          id: selectedId ?? undefined,
-          tenant_id: activeTenant.id,
-          codigo: form.codigo,
-          nome: form.nome,
-          descricao: form.descricao || null,
-          permission_ids: form.permissionIds,
-        },
-      });
+      const result = await ensureMfa(() =>
+        saveRole({
+          data: {
+            id: selectedId ?? undefined,
+            tenant_id: activeTenant.id,
+            codigo: form.codigo,
+            nome: form.nome,
+            descricao: form.descricao || null,
+            permission_ids: form.permissionIds,
+          },
+        }),
+      );
       setSelectedId(result.id);
       await queryClient.invalidateQueries({
         queryKey: ["security-model", activeTenant.id],
@@ -192,23 +196,25 @@ function Content() {
   const submitAssignment = async () => {
     if (!activeTenant || !selectedId) return;
     try {
-      await saveAssignment({
-        data: {
-          id: assignmentForm.id,
-          tenant_id: activeTenant.id,
-          user_id: assignmentForm.userId,
-          role_id: selectedId,
-          valid_from: assignmentForm.validFrom,
-          valid_to: assignmentForm.validTo || null,
-          revoked: assignmentForm.revoked,
-          scopes: Object.entries(assignmentForm.scopes)
-            .filter(([, scope]) => scope.selected)
-            .map(([unit_id, scope]) => ({
-              unit_id,
-              include_descendants: scope.descendants,
-            })),
-        },
-      });
+      await ensureMfa(() =>
+        saveAssignment({
+          data: {
+            id: assignmentForm.id,
+            tenant_id: activeTenant.id,
+            user_id: assignmentForm.userId,
+            role_id: selectedId,
+            valid_from: assignmentForm.validFrom,
+            valid_to: assignmentForm.validTo || null,
+            revoked: assignmentForm.revoked,
+            scopes: Object.entries(assignmentForm.scopes)
+              .filter(([, scope]) => scope.selected)
+              .map(([unit_id, scope]) => ({
+                unit_id,
+                include_descendants: scope.descendants,
+              })),
+          },
+        }),
+      );
       await queryClient.invalidateQueries({
         queryKey: ["security-model", activeTenant.id],
       });
@@ -243,6 +249,7 @@ function Content() {
 
   return (
     <section className="space-y-6">
+      {mfaDialog}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <LockKeyhole className="size-7 text-primary" />

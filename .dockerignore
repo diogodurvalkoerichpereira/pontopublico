@@ -17,6 +17,6 @@ dist
 *.log
 npm-debug.log*
 
-# Documentação de sprint: não participa do build.
-SPRINT*.md
-RELATORIO_*.md
+# Documentação: não participa do build.
+*.md
+docs/

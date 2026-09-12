@@ -1,5 +1,13 @@
-export type ProgressiveBand = { ate: number; aliquota: number };
-export type IncomeTaxBand = { ate: number; aliquota: number; deduzir: number };
+// A matemática fiscal (faixa progressiva / tabela por faixa) vem do motor do ADR
+// 0003 — fonte única. As faixas chegam de `loadFiscalTables` (versionadas, com
+// checksum), não mais do singleton `payroll_config` (congelado no O1-01b).
+import {
+  progressiveLookup,
+  bracketLookup,
+  type FiscalBracket,
+} from "./payroll-formula";
+
+const round2 = (value: number) => Number(value.toFixed(2));
 
 function utcDate(value: string) {
   return new Date(`${value.slice(0, 10)}T00:00:00Z`);
@@ -26,47 +34,14 @@ export function countThirteenthSalaryMonths(
   return months;
 }
 
-export function calculateProgressiveContribution(
-  base: number,
-  bands: ProgressiveBand[],
-  ceiling: number,
-) {
-  const limited = Math.max(0, Math.min(base, ceiling));
-  let total = 0;
-  let previous = 0;
-  for (const band of [...bands].sort((a, b) => a.ate - b.ate)) {
-    if (limited <= previous) break;
-    const top = Math.min(limited, band.ate);
-    total += Math.max(0, top - previous) * band.aliquota;
-    previous = band.ate;
-  }
-  return Number(total.toFixed(2));
-}
-
-export function calculateIncomeTax(
-  base: number,
-  bands: IncomeTaxBand[],
-  dependentDeduction = 0,
-  dependents = 0,
-) {
-  const taxable = Math.max(0, base - dependentDeduction * dependents);
-  const band = [...bands]
-    .sort((a, b) => a.ate - b.ate)
-    .find((item) => taxable <= item.ate);
-  if (!band) return 0;
-  return Number(Math.max(0, taxable * band.aliquota - band.deduzir).toFixed(2));
-}
-
 export function calculateThirteenthSalary(input: {
   calculationBase: number;
   months: number;
   installment: "primeira" | "segunda";
   firstInstallmentPaid?: number;
-  socialSecurityBands: ProgressiveBand[];
-  socialSecurityCeiling: number;
-  incomeTaxBands: IncomeTaxBand[];
-  dependentDeduction?: number;
-  dependents?: number;
+  // Faixas das tabelas fiscais vigentes (INSS = progressive, IRRF = bracket).
+  inssBrackets: FiscalBracket[];
+  irrfBrackets: FiscalBracket[];
 }) {
   const months = Math.max(0, Math.min(12, Math.trunc(input.months)));
   const entitlement = Number(
@@ -84,16 +59,16 @@ export function calculateThirteenthSalary(input: {
       netAmount: earnings,
     };
   }
-  const socialSecurity = calculateProgressiveContribution(
-    entitlement,
-    input.socialSecurityBands,
-    input.socialSecurityCeiling,
+  // INSS progressivo: o teto é o topo da última faixa (progressiveLookup para
+  // por faixa). IRRF: faixa onde base<=ate, base*aliquota - deduzir.
+  const socialSecurity = round2(
+    progressiveLookup(entitlement, input.inssBrackets),
   );
-  const incomeTax = calculateIncomeTax(
-    Math.max(0, entitlement - socialSecurity),
-    input.incomeTaxBands,
-    input.dependentDeduction,
-    input.dependents,
+  const incomeTax = round2(
+    bracketLookup(
+      Math.max(0, entitlement - socialSecurity),
+      input.irrfBrackets,
+    ),
   );
   const firstInstallmentCompensation = Number(
     Math.max(0, input.firstInstallmentPaid ?? 0).toFixed(2),
@@ -109,5 +84,72 @@ export function calculateThirteenthSalary(input: {
     firstInstallmentCompensation,
     deductions,
     netAmount: Number((entitlement - deductions).toFixed(2)),
+  };
+}
+
+export interface TerminationTaxInput {
+  // Verbas TRIBUTAVEIS
+  salaryBalance: number; // saldo de salario — competencia final (INSS + IRRF normais)
+  thirteenthAmount: number; // 13o proporcional — tributacao EXCLUSIVA (base propria)
+  // Verbas ISENTAS — informadas para deixar a isencao explicita e auditavel:
+  noticeAmount: number; // aviso previo indenizado — isento (STJ REsp 1.230.957; verba indenizatoria)
+  vacationAmount: number; // ferias indenizadas + 1/3 — isentas (Sumula 386 STJ; art. 6 V Lei 7.713)
+  fgtsPenalty: number; // saldo/multa FGTS — isento
+  inssBrackets: FiscalBracket[];
+  irrfBrackets: FiscalBracket[];
+}
+
+export interface TerminationTaxResult {
+  inssSalario: number;
+  irrfSalario: number;
+  inssThirteenth: number;
+  irrfThirteenth: number;
+  inssTotal: number;
+  irrfTotal: number;
+  taxableSalary: number; // base tributada da competencia
+  taxableThirteenth: number; // base tributada do 13o (exclusiva)
+  exemptTotal: number; // verbas indenizatorias fora da base (auditoria)
+}
+
+/**
+ * Retencoes da rescisao pelo motor fiscal versionado (ADR 0003). Duas trilhas
+ * independentes de tributacao:
+ *  - Competencia final: INSS progressivo sobre o saldo de salario; IRRF por faixa
+ *    sobre (saldo - INSS).
+ *  - 13o proporcional: tributacao EXCLUSIVA — base propria, nao soma a do salario;
+ *    INSS progressivo e IRRF por faixa sobre a propria verba.
+ * Aviso previo indenizado, ferias indenizadas + 1/3 e FGTS/multa sao verbas
+ * indenizatorias: NAO integram a base (isencao pacificada). Recebe-las torna a
+ * isencao explicita e o `exemptTotal` conferivel no termo.
+ */
+export function calculateTerminationTaxes(
+  input: TerminationTaxInput,
+): TerminationTaxResult {
+  const salary = Math.max(0, input.salaryBalance);
+  const thirteenth = Math.max(0, input.thirteenthAmount);
+  const inssSalario = round2(progressiveLookup(salary, input.inssBrackets));
+  const irrfSalario = round2(
+    bracketLookup(Math.max(0, salary - inssSalario), input.irrfBrackets),
+  );
+  const inssThirteenth = round2(
+    progressiveLookup(thirteenth, input.inssBrackets),
+  );
+  const irrfThirteenth = round2(
+    bracketLookup(Math.max(0, thirteenth - inssThirteenth), input.irrfBrackets),
+  );
+  return {
+    inssSalario,
+    irrfSalario,
+    inssThirteenth,
+    irrfThirteenth,
+    inssTotal: round2(inssSalario + inssThirteenth),
+    irrfTotal: round2(irrfSalario + irrfThirteenth),
+    taxableSalary: salary,
+    taxableThirteenth: thirteenth,
+    exemptTotal: round2(
+      Math.max(0, input.noticeAmount) +
+        Math.max(0, input.vacationAmount) +
+        Math.max(0, input.fgtsPenalty),
+    ),
   };
 }

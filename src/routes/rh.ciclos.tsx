@@ -24,6 +24,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/lib/auth-context";
+import { useMfaChallenge } from "@/components/mfa/mfa-challenge";
 import {
   getPayrollCycleWorkspace,
   materializePayrollPreview,
@@ -57,6 +58,7 @@ function Content() {
   const load = useServerFn(getPayrollCycleWorkspace);
   const materialize = useServerFn(materializePayrollPreview);
   const transition = useServerFn(transitionPayrollCycle);
+  const { ensure: ensureMfa, dialog: mfaDialog } = useMfaChallenge();
   const qc = useQueryClient();
   const [selectedCycleId, setSelectedCycleId] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -166,15 +168,19 @@ function Content() {
     if (!activeTenant || !selected) return;
     setBusy(true);
     try {
-      await transition({
-        data: {
-          tenant_id: activeTenant.id,
-          cycle_id: selected.id,
-          expected_version: selected.version,
-          action,
-          reason: reopenReason,
-        },
-      });
+      // Fechar/reabrir folha exige segundo fator (O0-09): ensure captura o
+      // MFA_REQUIRED, faz o challenge e repete a transição.
+      await ensureMfa(() =>
+        transition({
+          data: {
+            tenant_id: activeTenant.id,
+            cycle_id: selected.id,
+            expected_version: selected.version,
+            action,
+            reason: reopenReason,
+          },
+        }),
+      );
       await refresh();
       setReasonOpen(false);
       setReason("");
@@ -197,6 +203,7 @@ function Content() {
 
   return (
     <section className="space-y-6">
+      {mfaDialog}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <WalletCards className="size-7 text-primary" />

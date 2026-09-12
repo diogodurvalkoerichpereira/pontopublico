@@ -7,6 +7,41 @@ import {
   requireTenantPermission,
 } from "./tenant-access.server";
 const tenant = z.object({ tenant_id: z.string().uuid() });
+
+// Classificação da despesa com pessoal ante os limites da LRF. Função pura,
+// exportada para ser exercitada por teste de comportamento sem subir o servidor.
+// Espelha exatamente a lógica que antes vivia inline no handler de
+// getFiscalDashboard — não altere as faixas sem revisar a regra fiscal.
+export function classifyLrf(
+  personnel: number,
+  rcl: number,
+  config: {
+    legal_limit: number;
+    warning_ratio: number;
+    prudential_ratio: number;
+  },
+): {
+  ratio: number;
+  warning: number;
+  prudential: number;
+  legalLimit: number;
+  level: string;
+} {
+  const legalLimit = Number(config.legal_limit);
+  const ratio = rcl ? personnel / rcl : 0;
+  const warning = legalLimit * Number(config.warning_ratio);
+  const prudential = legalLimit * Number(config.prudential_ratio);
+  const level =
+    ratio > legalLimit
+      ? "exceeded"
+      : ratio > prudential
+        ? "prudential"
+        : ratio > warning
+          ? "warning"
+          : "regular";
+  return { ratio, warning, prudential, legalLimit, level };
+}
+
 export const saveFiscalMonth = createServerFn({ method: "POST" })
   .middleware([requireAuth])
   .validator((v: unknown) =>
@@ -60,18 +95,12 @@ export const getFiscalDashboard = createServerFn({ method: "POST" })
       source_url: "https://www.planalto.gov.br/ccivil_03/leis/lcp/lcp101.htm",
     };
     const rcl = rows.reduce((s, r) => s + Number(r.net_current_revenue), 0),
-      personnel = rows.reduce((s, r) => s + Number(r.personnel_expense), 0),
-      ratio = rcl ? personnel / rcl : 0,
-      warning = Number(config.legal_limit) * Number(config.warning_ratio),
-      prudential = Number(config.legal_limit) * Number(config.prudential_ratio);
-    const level =
-      ratio > Number(config.legal_limit)
-        ? "exceeded"
-        : ratio > prudential
-          ? "prudential"
-          : ratio > warning
-            ? "warning"
-            : "regular";
+      personnel = rows.reduce((s, r) => s + Number(r.personnel_expense), 0);
+    const { ratio, warning, prudential, legalLimit, level } = classifyLrf(
+      personnel,
+      rcl,
+      config,
+    );
     return {
       months: rows,
       rcl,
@@ -79,7 +108,7 @@ export const getFiscalDashboard = createServerFn({ method: "POST" })
       ratio,
       warning,
       prudential,
-      legalLimit: Number(config.legal_limit),
+      legalLimit,
       level,
       legalBasis: config.legal_basis,
       sourceUrl: config.source_url,

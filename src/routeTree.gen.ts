@@ -9,23 +9,45 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TributosRouteImport } from './routes/tributos'
+import { Route as TesourariaRouteImport } from './routes/tesouraria'
 import { Route as RhRouteImport } from './routes/rh'
+import { Route as RestosAPagarRouteImport } from './routes/restos-a-pagar'
+import { Route as ProtocoloRouteImport } from './routes/protocolo'
 import { Route as PortalFinanceiroRouteImport } from './routes/portal-financeiro'
 import { Route as PontoRouteImport } from './routes/ponto'
+import { Route as PatrimonioRouteImport } from './routes/patrimonio'
+import { Route as ParcelamentosRouteImport } from './routes/parcelamentos'
+import { Route as OuvidoriaRouteImport } from './routes/ouvidoria'
+import { Route as OrdensBancariasRouteImport } from './routes/ordens-bancarias'
+import { Route as OrcamentoRouteImport } from './routes/orcamento'
 import { Route as MeusDocumentosRouteImport } from './routes/meus-documentos'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as LicitacoesRouteImport } from './routes/licitacoes'
 import { Route as GestorRouteImport } from './routes/gestor'
+import { Route as FrotasRouteImport } from './routes/frotas'
+import { Route as EsicRouteImport } from './routes/esic'
+import { Route as EmpenhosRouteImport } from './routes/empenhos'
+import { Route as DividaAtivaRouteImport } from './routes/divida-ativa'
+import { Route as ControleInternoRouteImport } from './routes/controle-interno'
+import { Route as ContratosRouteImport } from './routes/contratos'
+import { Route as ConsignacoesRouteImport } from './routes/consignacoes'
+import { Route as CartaServicosRouteImport } from './routes/carta-servicos'
+import { Route as BalancosRouteImport } from './routes/balancos'
+import { Route as AtasRouteImport } from './routes/atas'
 import { Route as AppRouteImport } from './routes/app'
+import { Route as AlmoxarifadoRouteImport } from './routes/almoxarifado'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as RhVtVaRouteImport } from './routes/rh.vt-va'
+import { Route as RhTabelasFiscaisRouteImport } from './routes/rh.tabelas-fiscais'
 import { Route as RhSimulacoesRouteImport } from './routes/rh.simulacoes'
 import { Route as RhRubricasRouteImport } from './routes/rh.rubricas'
+import { Route as RhPrevidenciaRouteImport } from './routes/rh.previdencia'
 import { Route as RhPessoasRouteImport } from './routes/rh.pessoas'
 import { Route as RhMovimentacoesRouteImport } from './routes/rh.movimentacoes'
 import { Route as RhImportacoesRouteImport } from './routes/rh.importacoes'
 import { Route as RhFuncionariosRouteImport } from './routes/rh.funcionarios'
 import { Route as RhFolhasEspeciaisRouteImport } from './routes/rh.folhas-especiais'
-import { Route as RhFolhaRouteImport } from './routes/rh.folha'
 import { Route as RhFeriasRouteImport } from './routes/rh.ferias'
 import { Route as RhFamiliaRouteImport } from './routes/rh.familia'
 import { Route as RhEventosFuncionaisRouteImport } from './routes/rh.eventos-funcionais'
@@ -33,6 +55,7 @@ import { Route as RhEscalasRouteImport } from './routes/rh.escalas'
 import { Route as RhCiclosRouteImport } from './routes/rh.ciclos'
 import { Route as GestorLrfRouteImport } from './routes/gestor/lrf'
 import { Route as GestorAssistenteRouteImport } from './routes/gestor/assistente'
+import { Route as ContaSegurancaRouteImport } from './routes/conta.seguranca'
 import { Route as AdminUsuariosRouteImport } from './routes/admin.usuarios'
 import { Route as AdminSegurancaRouteImport } from './routes/admin.seguranca'
 import { Route as AdminMigracaoHistoricaRouteImport } from './routes/admin/migracao-historica'
@@ -42,9 +65,29 @@ import { Route as AdminConfiguracoesRouteImport } from './routes/admin.configura
 import { Route as AdminAuditoriaRouteImport } from './routes/admin.auditoria'
 import { Route as RhFuncionariosIdRouteImport } from './routes/rh.funcionarios.$id'
 
+const TributosRoute = TributosRouteImport.update({
+  id: '/tributos',
+  path: '/tributos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TesourariaRoute = TesourariaRouteImport.update({
+  id: '/tesouraria',
+  path: '/tesouraria',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RhRoute = RhRouteImport.update({
   id: '/rh',
   path: '/rh',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RestosAPagarRoute = RestosAPagarRouteImport.update({
+  id: '/restos-a-pagar',
+  path: '/restos-a-pagar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProtocoloRoute = ProtocoloRouteImport.update({
+  id: '/protocolo',
+  path: '/protocolo',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PortalFinanceiroRoute = PortalFinanceiroRouteImport.update({
@@ -57,6 +100,31 @@ const PontoRoute = PontoRouteImport.update({
   path: '/ponto',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PatrimonioRoute = PatrimonioRouteImport.update({
+  id: '/patrimonio',
+  path: '/patrimonio',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ParcelamentosRoute = ParcelamentosRouteImport.update({
+  id: '/parcelamentos',
+  path: '/parcelamentos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OuvidoriaRoute = OuvidoriaRouteImport.update({
+  id: '/ouvidoria',
+  path: '/ouvidoria',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OrdensBancariasRoute = OrdensBancariasRouteImport.update({
+  id: '/ordens-bancarias',
+  path: '/ordens-bancarias',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OrcamentoRoute = OrcamentoRouteImport.update({
+  id: '/orcamento',
+  path: '/orcamento',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MeusDocumentosRoute = MeusDocumentosRouteImport.update({
   id: '/meus-documentos',
   path: '/meus-documentos',
@@ -67,14 +135,74 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LicitacoesRoute = LicitacoesRouteImport.update({
+  id: '/licitacoes',
+  path: '/licitacoes',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const GestorRoute = GestorRouteImport.update({
   id: '/gestor',
   path: '/gestor',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FrotasRoute = FrotasRouteImport.update({
+  id: '/frotas',
+  path: '/frotas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EsicRoute = EsicRouteImport.update({
+  id: '/esic',
+  path: '/esic',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EmpenhosRoute = EmpenhosRouteImport.update({
+  id: '/empenhos',
+  path: '/empenhos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DividaAtivaRoute = DividaAtivaRouteImport.update({
+  id: '/divida-ativa',
+  path: '/divida-ativa',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ControleInternoRoute = ControleInternoRouteImport.update({
+  id: '/controle-interno',
+  path: '/controle-interno',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ContratosRoute = ContratosRouteImport.update({
+  id: '/contratos',
+  path: '/contratos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConsignacoesRoute = ConsignacoesRouteImport.update({
+  id: '/consignacoes',
+  path: '/consignacoes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CartaServicosRoute = CartaServicosRouteImport.update({
+  id: '/carta-servicos',
+  path: '/carta-servicos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BalancosRoute = BalancosRouteImport.update({
+  id: '/balancos',
+  path: '/balancos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AtasRoute = AtasRouteImport.update({
+  id: '/atas',
+  path: '/atas',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppRoute = AppRouteImport.update({
   id: '/app',
   path: '/app',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AlmoxarifadoRoute = AlmoxarifadoRouteImport.update({
+  id: '/almoxarifado',
+  path: '/almoxarifado',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -87,6 +215,11 @@ const RhVtVaRoute = RhVtVaRouteImport.update({
   path: '/vt-va',
   getParentRoute: () => RhRoute,
 } as any)
+const RhTabelasFiscaisRoute = RhTabelasFiscaisRouteImport.update({
+  id: '/tabelas-fiscais',
+  path: '/tabelas-fiscais',
+  getParentRoute: () => RhRoute,
+} as any)
 const RhSimulacoesRoute = RhSimulacoesRouteImport.update({
   id: '/simulacoes',
   path: '/simulacoes',
@@ -95,6 +228,11 @@ const RhSimulacoesRoute = RhSimulacoesRouteImport.update({
 const RhRubricasRoute = RhRubricasRouteImport.update({
   id: '/rubricas',
   path: '/rubricas',
+  getParentRoute: () => RhRoute,
+} as any)
+const RhPrevidenciaRoute = RhPrevidenciaRouteImport.update({
+  id: '/previdencia',
+  path: '/previdencia',
   getParentRoute: () => RhRoute,
 } as any)
 const RhPessoasRoute = RhPessoasRouteImport.update({
@@ -120,11 +258,6 @@ const RhFuncionariosRoute = RhFuncionariosRouteImport.update({
 const RhFolhasEspeciaisRoute = RhFolhasEspeciaisRouteImport.update({
   id: '/folhas-especiais',
   path: '/folhas-especiais',
-  getParentRoute: () => RhRoute,
-} as any)
-const RhFolhaRoute = RhFolhaRouteImport.update({
-  id: '/folha',
-  path: '/folha',
   getParentRoute: () => RhRoute,
 } as any)
 const RhFeriasRoute = RhFeriasRouteImport.update({
@@ -161,6 +294,11 @@ const GestorAssistenteRoute = GestorAssistenteRouteImport.update({
   id: '/assistente',
   path: '/assistente',
   getParentRoute: () => GestorRoute,
+} as any)
+const ContaSegurancaRoute = ContaSegurancaRouteImport.update({
+  id: '/conta/seguranca',
+  path: '/conta/seguranca',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AdminUsuariosRoute = AdminUsuariosRouteImport.update({
   id: '/admin/usuarios',
@@ -205,13 +343,34 @@ const RhFuncionariosIdRoute = RhFuncionariosIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/almoxarifado': typeof AlmoxarifadoRoute
   '/app': typeof AppRoute
+  '/atas': typeof AtasRoute
+  '/balancos': typeof BalancosRoute
+  '/carta-servicos': typeof CartaServicosRoute
+  '/consignacoes': typeof ConsignacoesRoute
+  '/contratos': typeof ContratosRoute
+  '/controle-interno': typeof ControleInternoRoute
+  '/divida-ativa': typeof DividaAtivaRoute
+  '/empenhos': typeof EmpenhosRoute
+  '/esic': typeof EsicRoute
+  '/frotas': typeof FrotasRoute
   '/gestor': typeof GestorRouteWithChildren
+  '/licitacoes': typeof LicitacoesRoute
   '/login': typeof LoginRoute
   '/meus-documentos': typeof MeusDocumentosRoute
+  '/orcamento': typeof OrcamentoRoute
+  '/ordens-bancarias': typeof OrdensBancariasRoute
+  '/ouvidoria': typeof OuvidoriaRoute
+  '/parcelamentos': typeof ParcelamentosRoute
+  '/patrimonio': typeof PatrimonioRoute
   '/ponto': typeof PontoRoute
   '/portal-financeiro': typeof PortalFinanceiroRoute
+  '/protocolo': typeof ProtocoloRoute
+  '/restos-a-pagar': typeof RestosAPagarRoute
   '/rh': typeof RhRouteWithChildren
+  '/tesouraria': typeof TesourariaRoute
+  '/tributos': typeof TributosRoute
   '/admin/auditoria': typeof AdminAuditoriaRoute
   '/admin/configuracoes': typeof AdminConfiguracoesRoute
   '/admin/data-mart': typeof AdminDataMartRoute
@@ -219,6 +378,7 @@ export interface FileRoutesByFullPath {
   '/admin/migracao-historica': typeof AdminMigracaoHistoricaRoute
   '/admin/seguranca': typeof AdminSegurancaRoute
   '/admin/usuarios': typeof AdminUsuariosRoute
+  '/conta/seguranca': typeof ContaSegurancaRoute
   '/gestor/assistente': typeof GestorAssistenteRoute
   '/gestor/lrf': typeof GestorLrfRoute
   '/rh/ciclos': typeof RhCiclosRoute
@@ -226,26 +386,48 @@ export interface FileRoutesByFullPath {
   '/rh/eventos-funcionais': typeof RhEventosFuncionaisRoute
   '/rh/familia': typeof RhFamiliaRoute
   '/rh/ferias': typeof RhFeriasRoute
-  '/rh/folha': typeof RhFolhaRoute
   '/rh/folhas-especiais': typeof RhFolhasEspeciaisRoute
   '/rh/funcionarios': typeof RhFuncionariosRouteWithChildren
   '/rh/importacoes': typeof RhImportacoesRoute
   '/rh/movimentacoes': typeof RhMovimentacoesRoute
   '/rh/pessoas': typeof RhPessoasRoute
+  '/rh/previdencia': typeof RhPrevidenciaRoute
   '/rh/rubricas': typeof RhRubricasRoute
   '/rh/simulacoes': typeof RhSimulacoesRoute
+  '/rh/tabelas-fiscais': typeof RhTabelasFiscaisRoute
   '/rh/vt-va': typeof RhVtVaRoute
   '/rh/funcionarios/$id': typeof RhFuncionariosIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/almoxarifado': typeof AlmoxarifadoRoute
   '/app': typeof AppRoute
+  '/atas': typeof AtasRoute
+  '/balancos': typeof BalancosRoute
+  '/carta-servicos': typeof CartaServicosRoute
+  '/consignacoes': typeof ConsignacoesRoute
+  '/contratos': typeof ContratosRoute
+  '/controle-interno': typeof ControleInternoRoute
+  '/divida-ativa': typeof DividaAtivaRoute
+  '/empenhos': typeof EmpenhosRoute
+  '/esic': typeof EsicRoute
+  '/frotas': typeof FrotasRoute
   '/gestor': typeof GestorRouteWithChildren
+  '/licitacoes': typeof LicitacoesRoute
   '/login': typeof LoginRoute
   '/meus-documentos': typeof MeusDocumentosRoute
+  '/orcamento': typeof OrcamentoRoute
+  '/ordens-bancarias': typeof OrdensBancariasRoute
+  '/ouvidoria': typeof OuvidoriaRoute
+  '/parcelamentos': typeof ParcelamentosRoute
+  '/patrimonio': typeof PatrimonioRoute
   '/ponto': typeof PontoRoute
   '/portal-financeiro': typeof PortalFinanceiroRoute
+  '/protocolo': typeof ProtocoloRoute
+  '/restos-a-pagar': typeof RestosAPagarRoute
   '/rh': typeof RhRouteWithChildren
+  '/tesouraria': typeof TesourariaRoute
+  '/tributos': typeof TributosRoute
   '/admin/auditoria': typeof AdminAuditoriaRoute
   '/admin/configuracoes': typeof AdminConfiguracoesRoute
   '/admin/data-mart': typeof AdminDataMartRoute
@@ -253,6 +435,7 @@ export interface FileRoutesByTo {
   '/admin/migracao-historica': typeof AdminMigracaoHistoricaRoute
   '/admin/seguranca': typeof AdminSegurancaRoute
   '/admin/usuarios': typeof AdminUsuariosRoute
+  '/conta/seguranca': typeof ContaSegurancaRoute
   '/gestor/assistente': typeof GestorAssistenteRoute
   '/gestor/lrf': typeof GestorLrfRoute
   '/rh/ciclos': typeof RhCiclosRoute
@@ -260,27 +443,49 @@ export interface FileRoutesByTo {
   '/rh/eventos-funcionais': typeof RhEventosFuncionaisRoute
   '/rh/familia': typeof RhFamiliaRoute
   '/rh/ferias': typeof RhFeriasRoute
-  '/rh/folha': typeof RhFolhaRoute
   '/rh/folhas-especiais': typeof RhFolhasEspeciaisRoute
   '/rh/funcionarios': typeof RhFuncionariosRouteWithChildren
   '/rh/importacoes': typeof RhImportacoesRoute
   '/rh/movimentacoes': typeof RhMovimentacoesRoute
   '/rh/pessoas': typeof RhPessoasRoute
+  '/rh/previdencia': typeof RhPrevidenciaRoute
   '/rh/rubricas': typeof RhRubricasRoute
   '/rh/simulacoes': typeof RhSimulacoesRoute
+  '/rh/tabelas-fiscais': typeof RhTabelasFiscaisRoute
   '/rh/vt-va': typeof RhVtVaRoute
   '/rh/funcionarios/$id': typeof RhFuncionariosIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/almoxarifado': typeof AlmoxarifadoRoute
   '/app': typeof AppRoute
+  '/atas': typeof AtasRoute
+  '/balancos': typeof BalancosRoute
+  '/carta-servicos': typeof CartaServicosRoute
+  '/consignacoes': typeof ConsignacoesRoute
+  '/contratos': typeof ContratosRoute
+  '/controle-interno': typeof ControleInternoRoute
+  '/divida-ativa': typeof DividaAtivaRoute
+  '/empenhos': typeof EmpenhosRoute
+  '/esic': typeof EsicRoute
+  '/frotas': typeof FrotasRoute
   '/gestor': typeof GestorRouteWithChildren
+  '/licitacoes': typeof LicitacoesRoute
   '/login': typeof LoginRoute
   '/meus-documentos': typeof MeusDocumentosRoute
+  '/orcamento': typeof OrcamentoRoute
+  '/ordens-bancarias': typeof OrdensBancariasRoute
+  '/ouvidoria': typeof OuvidoriaRoute
+  '/parcelamentos': typeof ParcelamentosRoute
+  '/patrimonio': typeof PatrimonioRoute
   '/ponto': typeof PontoRoute
   '/portal-financeiro': typeof PortalFinanceiroRoute
+  '/protocolo': typeof ProtocoloRoute
+  '/restos-a-pagar': typeof RestosAPagarRoute
   '/rh': typeof RhRouteWithChildren
+  '/tesouraria': typeof TesourariaRoute
+  '/tributos': typeof TributosRoute
   '/admin/auditoria': typeof AdminAuditoriaRoute
   '/admin/configuracoes': typeof AdminConfiguracoesRoute
   '/admin/data-mart': typeof AdminDataMartRoute
@@ -288,6 +493,7 @@ export interface FileRoutesById {
   '/admin/migracao-historica': typeof AdminMigracaoHistoricaRoute
   '/admin/seguranca': typeof AdminSegurancaRoute
   '/admin/usuarios': typeof AdminUsuariosRoute
+  '/conta/seguranca': typeof ContaSegurancaRoute
   '/gestor/assistente': typeof GestorAssistenteRoute
   '/gestor/lrf': typeof GestorLrfRoute
   '/rh/ciclos': typeof RhCiclosRoute
@@ -295,14 +501,15 @@ export interface FileRoutesById {
   '/rh/eventos-funcionais': typeof RhEventosFuncionaisRoute
   '/rh/familia': typeof RhFamiliaRoute
   '/rh/ferias': typeof RhFeriasRoute
-  '/rh/folha': typeof RhFolhaRoute
   '/rh/folhas-especiais': typeof RhFolhasEspeciaisRoute
   '/rh/funcionarios': typeof RhFuncionariosRouteWithChildren
   '/rh/importacoes': typeof RhImportacoesRoute
   '/rh/movimentacoes': typeof RhMovimentacoesRoute
   '/rh/pessoas': typeof RhPessoasRoute
+  '/rh/previdencia': typeof RhPrevidenciaRoute
   '/rh/rubricas': typeof RhRubricasRoute
   '/rh/simulacoes': typeof RhSimulacoesRoute
+  '/rh/tabelas-fiscais': typeof RhTabelasFiscaisRoute
   '/rh/vt-va': typeof RhVtVaRoute
   '/rh/funcionarios/$id': typeof RhFuncionariosIdRoute
 }
@@ -310,13 +517,34 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/almoxarifado'
     | '/app'
+    | '/atas'
+    | '/balancos'
+    | '/carta-servicos'
+    | '/consignacoes'
+    | '/contratos'
+    | '/controle-interno'
+    | '/divida-ativa'
+    | '/empenhos'
+    | '/esic'
+    | '/frotas'
     | '/gestor'
+    | '/licitacoes'
     | '/login'
     | '/meus-documentos'
+    | '/orcamento'
+    | '/ordens-bancarias'
+    | '/ouvidoria'
+    | '/parcelamentos'
+    | '/patrimonio'
     | '/ponto'
     | '/portal-financeiro'
+    | '/protocolo'
+    | '/restos-a-pagar'
     | '/rh'
+    | '/tesouraria'
+    | '/tributos'
     | '/admin/auditoria'
     | '/admin/configuracoes'
     | '/admin/data-mart'
@@ -324,6 +552,7 @@ export interface FileRouteTypes {
     | '/admin/migracao-historica'
     | '/admin/seguranca'
     | '/admin/usuarios'
+    | '/conta/seguranca'
     | '/gestor/assistente'
     | '/gestor/lrf'
     | '/rh/ciclos'
@@ -331,26 +560,48 @@ export interface FileRouteTypes {
     | '/rh/eventos-funcionais'
     | '/rh/familia'
     | '/rh/ferias'
-    | '/rh/folha'
     | '/rh/folhas-especiais'
     | '/rh/funcionarios'
     | '/rh/importacoes'
     | '/rh/movimentacoes'
     | '/rh/pessoas'
+    | '/rh/previdencia'
     | '/rh/rubricas'
     | '/rh/simulacoes'
+    | '/rh/tabelas-fiscais'
     | '/rh/vt-va'
     | '/rh/funcionarios/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/almoxarifado'
     | '/app'
+    | '/atas'
+    | '/balancos'
+    | '/carta-servicos'
+    | '/consignacoes'
+    | '/contratos'
+    | '/controle-interno'
+    | '/divida-ativa'
+    | '/empenhos'
+    | '/esic'
+    | '/frotas'
     | '/gestor'
+    | '/licitacoes'
     | '/login'
     | '/meus-documentos'
+    | '/orcamento'
+    | '/ordens-bancarias'
+    | '/ouvidoria'
+    | '/parcelamentos'
+    | '/patrimonio'
     | '/ponto'
     | '/portal-financeiro'
+    | '/protocolo'
+    | '/restos-a-pagar'
     | '/rh'
+    | '/tesouraria'
+    | '/tributos'
     | '/admin/auditoria'
     | '/admin/configuracoes'
     | '/admin/data-mart'
@@ -358,6 +609,7 @@ export interface FileRouteTypes {
     | '/admin/migracao-historica'
     | '/admin/seguranca'
     | '/admin/usuarios'
+    | '/conta/seguranca'
     | '/gestor/assistente'
     | '/gestor/lrf'
     | '/rh/ciclos'
@@ -365,26 +617,48 @@ export interface FileRouteTypes {
     | '/rh/eventos-funcionais'
     | '/rh/familia'
     | '/rh/ferias'
-    | '/rh/folha'
     | '/rh/folhas-especiais'
     | '/rh/funcionarios'
     | '/rh/importacoes'
     | '/rh/movimentacoes'
     | '/rh/pessoas'
+    | '/rh/previdencia'
     | '/rh/rubricas'
     | '/rh/simulacoes'
+    | '/rh/tabelas-fiscais'
     | '/rh/vt-va'
     | '/rh/funcionarios/$id'
   id:
     | '__root__'
     | '/'
+    | '/almoxarifado'
     | '/app'
+    | '/atas'
+    | '/balancos'
+    | '/carta-servicos'
+    | '/consignacoes'
+    | '/contratos'
+    | '/controle-interno'
+    | '/divida-ativa'
+    | '/empenhos'
+    | '/esic'
+    | '/frotas'
     | '/gestor'
+    | '/licitacoes'
     | '/login'
     | '/meus-documentos'
+    | '/orcamento'
+    | '/ordens-bancarias'
+    | '/ouvidoria'
+    | '/parcelamentos'
+    | '/patrimonio'
     | '/ponto'
     | '/portal-financeiro'
+    | '/protocolo'
+    | '/restos-a-pagar'
     | '/rh'
+    | '/tesouraria'
+    | '/tributos'
     | '/admin/auditoria'
     | '/admin/configuracoes'
     | '/admin/data-mart'
@@ -392,6 +666,7 @@ export interface FileRouteTypes {
     | '/admin/migracao-historica'
     | '/admin/seguranca'
     | '/admin/usuarios'
+    | '/conta/seguranca'
     | '/gestor/assistente'
     | '/gestor/lrf'
     | '/rh/ciclos'
@@ -399,27 +674,49 @@ export interface FileRouteTypes {
     | '/rh/eventos-funcionais'
     | '/rh/familia'
     | '/rh/ferias'
-    | '/rh/folha'
     | '/rh/folhas-especiais'
     | '/rh/funcionarios'
     | '/rh/importacoes'
     | '/rh/movimentacoes'
     | '/rh/pessoas'
+    | '/rh/previdencia'
     | '/rh/rubricas'
     | '/rh/simulacoes'
+    | '/rh/tabelas-fiscais'
     | '/rh/vt-va'
     | '/rh/funcionarios/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AlmoxarifadoRoute: typeof AlmoxarifadoRoute
   AppRoute: typeof AppRoute
+  AtasRoute: typeof AtasRoute
+  BalancosRoute: typeof BalancosRoute
+  CartaServicosRoute: typeof CartaServicosRoute
+  ConsignacoesRoute: typeof ConsignacoesRoute
+  ContratosRoute: typeof ContratosRoute
+  ControleInternoRoute: typeof ControleInternoRoute
+  DividaAtivaRoute: typeof DividaAtivaRoute
+  EmpenhosRoute: typeof EmpenhosRoute
+  EsicRoute: typeof EsicRoute
+  FrotasRoute: typeof FrotasRoute
   GestorRoute: typeof GestorRouteWithChildren
+  LicitacoesRoute: typeof LicitacoesRoute
   LoginRoute: typeof LoginRoute
   MeusDocumentosRoute: typeof MeusDocumentosRoute
+  OrcamentoRoute: typeof OrcamentoRoute
+  OrdensBancariasRoute: typeof OrdensBancariasRoute
+  OuvidoriaRoute: typeof OuvidoriaRoute
+  ParcelamentosRoute: typeof ParcelamentosRoute
+  PatrimonioRoute: typeof PatrimonioRoute
   PontoRoute: typeof PontoRoute
   PortalFinanceiroRoute: typeof PortalFinanceiroRoute
+  ProtocoloRoute: typeof ProtocoloRoute
+  RestosAPagarRoute: typeof RestosAPagarRoute
   RhRoute: typeof RhRouteWithChildren
+  TesourariaRoute: typeof TesourariaRoute
+  TributosRoute: typeof TributosRoute
   AdminAuditoriaRoute: typeof AdminAuditoriaRoute
   AdminConfiguracoesRoute: typeof AdminConfiguracoesRoute
   AdminDataMartRoute: typeof AdminDataMartRoute
@@ -427,15 +724,44 @@ export interface RootRouteChildren {
   AdminMigracaoHistoricaRoute: typeof AdminMigracaoHistoricaRoute
   AdminSegurancaRoute: typeof AdminSegurancaRoute
   AdminUsuariosRoute: typeof AdminUsuariosRoute
+  ContaSegurancaRoute: typeof ContaSegurancaRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/tributos': {
+      id: '/tributos'
+      path: '/tributos'
+      fullPath: '/tributos'
+      preLoaderRoute: typeof TributosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tesouraria': {
+      id: '/tesouraria'
+      path: '/tesouraria'
+      fullPath: '/tesouraria'
+      preLoaderRoute: typeof TesourariaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/rh': {
       id: '/rh'
       path: '/rh'
       fullPath: '/rh'
       preLoaderRoute: typeof RhRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/restos-a-pagar': {
+      id: '/restos-a-pagar'
+      path: '/restos-a-pagar'
+      fullPath: '/restos-a-pagar'
+      preLoaderRoute: typeof RestosAPagarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/protocolo': {
+      id: '/protocolo'
+      path: '/protocolo'
+      fullPath: '/protocolo'
+      preLoaderRoute: typeof ProtocoloRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/portal-financeiro': {
@@ -452,6 +778,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PontoRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/patrimonio': {
+      id: '/patrimonio'
+      path: '/patrimonio'
+      fullPath: '/patrimonio'
+      preLoaderRoute: typeof PatrimonioRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/parcelamentos': {
+      id: '/parcelamentos'
+      path: '/parcelamentos'
+      fullPath: '/parcelamentos'
+      preLoaderRoute: typeof ParcelamentosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ouvidoria': {
+      id: '/ouvidoria'
+      path: '/ouvidoria'
+      fullPath: '/ouvidoria'
+      preLoaderRoute: typeof OuvidoriaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ordens-bancarias': {
+      id: '/ordens-bancarias'
+      path: '/ordens-bancarias'
+      fullPath: '/ordens-bancarias'
+      preLoaderRoute: typeof OrdensBancariasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/orcamento': {
+      id: '/orcamento'
+      path: '/orcamento'
+      fullPath: '/orcamento'
+      preLoaderRoute: typeof OrcamentoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/meus-documentos': {
       id: '/meus-documentos'
       path: '/meus-documentos'
@@ -466,6 +827,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/licitacoes': {
+      id: '/licitacoes'
+      path: '/licitacoes'
+      fullPath: '/licitacoes'
+      preLoaderRoute: typeof LicitacoesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/gestor': {
       id: '/gestor'
       path: '/gestor'
@@ -473,11 +841,88 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GestorRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/frotas': {
+      id: '/frotas'
+      path: '/frotas'
+      fullPath: '/frotas'
+      preLoaderRoute: typeof FrotasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/esic': {
+      id: '/esic'
+      path: '/esic'
+      fullPath: '/esic'
+      preLoaderRoute: typeof EsicRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/empenhos': {
+      id: '/empenhos'
+      path: '/empenhos'
+      fullPath: '/empenhos'
+      preLoaderRoute: typeof EmpenhosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/divida-ativa': {
+      id: '/divida-ativa'
+      path: '/divida-ativa'
+      fullPath: '/divida-ativa'
+      preLoaderRoute: typeof DividaAtivaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/controle-interno': {
+      id: '/controle-interno'
+      path: '/controle-interno'
+      fullPath: '/controle-interno'
+      preLoaderRoute: typeof ControleInternoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/contratos': {
+      id: '/contratos'
+      path: '/contratos'
+      fullPath: '/contratos'
+      preLoaderRoute: typeof ContratosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/consignacoes': {
+      id: '/consignacoes'
+      path: '/consignacoes'
+      fullPath: '/consignacoes'
+      preLoaderRoute: typeof ConsignacoesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/carta-servicos': {
+      id: '/carta-servicos'
+      path: '/carta-servicos'
+      fullPath: '/carta-servicos'
+      preLoaderRoute: typeof CartaServicosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/balancos': {
+      id: '/balancos'
+      path: '/balancos'
+      fullPath: '/balancos'
+      preLoaderRoute: typeof BalancosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/atas': {
+      id: '/atas'
+      path: '/atas'
+      fullPath: '/atas'
+      preLoaderRoute: typeof AtasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/app': {
       id: '/app'
       path: '/app'
       fullPath: '/app'
       preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/almoxarifado': {
+      id: '/almoxarifado'
+      path: '/almoxarifado'
+      fullPath: '/almoxarifado'
+      preLoaderRoute: typeof AlmoxarifadoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -494,6 +939,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RhVtVaRouteImport
       parentRoute: typeof RhRoute
     }
+    '/rh/tabelas-fiscais': {
+      id: '/rh/tabelas-fiscais'
+      path: '/tabelas-fiscais'
+      fullPath: '/rh/tabelas-fiscais'
+      preLoaderRoute: typeof RhTabelasFiscaisRouteImport
+      parentRoute: typeof RhRoute
+    }
     '/rh/simulacoes': {
       id: '/rh/simulacoes'
       path: '/simulacoes'
@@ -506,6 +958,13 @@ declare module '@tanstack/react-router' {
       path: '/rubricas'
       fullPath: '/rh/rubricas'
       preLoaderRoute: typeof RhRubricasRouteImport
+      parentRoute: typeof RhRoute
+    }
+    '/rh/previdencia': {
+      id: '/rh/previdencia'
+      path: '/previdencia'
+      fullPath: '/rh/previdencia'
+      preLoaderRoute: typeof RhPrevidenciaRouteImport
       parentRoute: typeof RhRoute
     }
     '/rh/pessoas': {
@@ -541,13 +1000,6 @@ declare module '@tanstack/react-router' {
       path: '/folhas-especiais'
       fullPath: '/rh/folhas-especiais'
       preLoaderRoute: typeof RhFolhasEspeciaisRouteImport
-      parentRoute: typeof RhRoute
-    }
-    '/rh/folha': {
-      id: '/rh/folha'
-      path: '/folha'
-      fullPath: '/rh/folha'
-      preLoaderRoute: typeof RhFolhaRouteImport
       parentRoute: typeof RhRoute
     }
     '/rh/ferias': {
@@ -598,6 +1050,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/gestor/assistente'
       preLoaderRoute: typeof GestorAssistenteRouteImport
       parentRoute: typeof GestorRoute
+    }
+    '/conta/seguranca': {
+      id: '/conta/seguranca'
+      path: '/conta/seguranca'
+      fullPath: '/conta/seguranca'
+      preLoaderRoute: typeof ContaSegurancaRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/admin/usuarios': {
       id: '/admin/usuarios'
@@ -689,14 +1148,15 @@ interface RhRouteChildren {
   RhEventosFuncionaisRoute: typeof RhEventosFuncionaisRoute
   RhFamiliaRoute: typeof RhFamiliaRoute
   RhFeriasRoute: typeof RhFeriasRoute
-  RhFolhaRoute: typeof RhFolhaRoute
   RhFolhasEspeciaisRoute: typeof RhFolhasEspeciaisRoute
   RhFuncionariosRoute: typeof RhFuncionariosRouteWithChildren
   RhImportacoesRoute: typeof RhImportacoesRoute
   RhMovimentacoesRoute: typeof RhMovimentacoesRoute
   RhPessoasRoute: typeof RhPessoasRoute
+  RhPrevidenciaRoute: typeof RhPrevidenciaRoute
   RhRubricasRoute: typeof RhRubricasRoute
   RhSimulacoesRoute: typeof RhSimulacoesRoute
+  RhTabelasFiscaisRoute: typeof RhTabelasFiscaisRoute
   RhVtVaRoute: typeof RhVtVaRoute
 }
 
@@ -706,14 +1166,15 @@ const RhRouteChildren: RhRouteChildren = {
   RhEventosFuncionaisRoute: RhEventosFuncionaisRoute,
   RhFamiliaRoute: RhFamiliaRoute,
   RhFeriasRoute: RhFeriasRoute,
-  RhFolhaRoute: RhFolhaRoute,
   RhFolhasEspeciaisRoute: RhFolhasEspeciaisRoute,
   RhFuncionariosRoute: RhFuncionariosRouteWithChildren,
   RhImportacoesRoute: RhImportacoesRoute,
   RhMovimentacoesRoute: RhMovimentacoesRoute,
   RhPessoasRoute: RhPessoasRoute,
+  RhPrevidenciaRoute: RhPrevidenciaRoute,
   RhRubricasRoute: RhRubricasRoute,
   RhSimulacoesRoute: RhSimulacoesRoute,
+  RhTabelasFiscaisRoute: RhTabelasFiscaisRoute,
   RhVtVaRoute: RhVtVaRoute,
 }
 
@@ -721,13 +1182,34 @@ const RhRouteWithChildren = RhRoute._addFileChildren(RhRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AlmoxarifadoRoute: AlmoxarifadoRoute,
   AppRoute: AppRoute,
+  AtasRoute: AtasRoute,
+  BalancosRoute: BalancosRoute,
+  CartaServicosRoute: CartaServicosRoute,
+  ConsignacoesRoute: ConsignacoesRoute,
+  ContratosRoute: ContratosRoute,
+  ControleInternoRoute: ControleInternoRoute,
+  DividaAtivaRoute: DividaAtivaRoute,
+  EmpenhosRoute: EmpenhosRoute,
+  EsicRoute: EsicRoute,
+  FrotasRoute: FrotasRoute,
   GestorRoute: GestorRouteWithChildren,
+  LicitacoesRoute: LicitacoesRoute,
   LoginRoute: LoginRoute,
   MeusDocumentosRoute: MeusDocumentosRoute,
+  OrcamentoRoute: OrcamentoRoute,
+  OrdensBancariasRoute: OrdensBancariasRoute,
+  OuvidoriaRoute: OuvidoriaRoute,
+  ParcelamentosRoute: ParcelamentosRoute,
+  PatrimonioRoute: PatrimonioRoute,
   PontoRoute: PontoRoute,
   PortalFinanceiroRoute: PortalFinanceiroRoute,
+  ProtocoloRoute: ProtocoloRoute,
+  RestosAPagarRoute: RestosAPagarRoute,
   RhRoute: RhRouteWithChildren,
+  TesourariaRoute: TesourariaRoute,
+  TributosRoute: TributosRoute,
   AdminAuditoriaRoute: AdminAuditoriaRoute,
   AdminConfiguracoesRoute: AdminConfiguracoesRoute,
   AdminDataMartRoute: AdminDataMartRoute,
@@ -735,6 +1217,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminMigracaoHistoricaRoute: AdminMigracaoHistoricaRoute,
   AdminSegurancaRoute: AdminSegurancaRoute,
   AdminUsuariosRoute: AdminUsuariosRoute,
+  ContaSegurancaRoute: ContaSegurancaRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

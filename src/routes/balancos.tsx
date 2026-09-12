@@ -1,0 +1,266 @@
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { BarChart3 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useAuth } from "@/lib/auth-context";
+import { getBudgetBalance } from "@/lib/budget-balance.functions";
+import { getCashAvailability } from "@/lib/cash-availability.functions";
+import { getEquityStatement } from "@/lib/equity-statement.functions";
+import { getFinancialBalance } from "@/lib/financial-balance.functions";
+
+export const Route = createFileRoute("/balancos")({ component: Page });
+
+function Page() {
+  const { session, loading, hasTenantPermission } = useAuth();
+  const nav = useNavigate();
+  useEffect(() => {
+    if (loading) return;
+    if (!session) nav({ to: "/login" });
+    else if (!hasTenantPermission("budget.read")) nav({ to: "/app" });
+  }, [session, loading, hasTenantPermission, nav]);
+  if (!session) return null;
+  return <Content />;
+}
+
+const brl = (v: number | string) =>
+  Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+function Row({
+  label,
+  value,
+  strong,
+}: {
+  label: string;
+  value: number;
+  strong?: boolean;
+}) {
+  return (
+    <div
+      className={`flex items-center justify-between py-2 border-b last:border-0 ${
+        strong ? "font-bold" : ""
+      }`}
+    >
+      <span className="text-muted-foreground">{label}</span>
+      <span className="tabular-nums">{brl(value)}</span>
+    </div>
+  );
+}
+
+function Content() {
+  const { activeTenant, hasTenantPermission } = useAuth();
+  const loadBalance = useServerFn(getBudgetBalance);
+  const loadCash = useServerFn(getCashAvailability);
+  const loadEquity = useServerFn(getEquityStatement);
+  const loadFinancial = useServerFn(getFinancialBalance);
+  const [exercicio, setExercicio] = useState(String(new Date().getFullYear()));
+  const canReadCash = hasTenantPermission("accounting.read");
+
+  const { data: balance } = useQuery({
+    queryKey: ["budget-balance", activeTenant?.id, exercicio],
+    enabled: Boolean(activeTenant) && /^\d{4}$/.test(exercicio),
+    queryFn: () =>
+      loadBalance({
+        data: { tenant_id: activeTenant!.id, exercicio: Number(exercicio) },
+      }),
+  });
+  const { data: cash } = useQuery({
+    queryKey: ["cash-availability", activeTenant?.id],
+    enabled: Boolean(activeTenant) && canReadCash,
+    queryFn: () => loadCash({ data: { tenant_id: activeTenant!.id } }),
+  });
+  const { data: equity } = useQuery({
+    queryKey: ["equity-statement", activeTenant?.id, exercicio],
+    enabled: Boolean(activeTenant) && canReadCash && /^\d{4}$/.test(exercicio),
+    queryFn: () =>
+      loadEquity({
+        data: { tenant_id: activeTenant!.id, exercicio: Number(exercicio) },
+      }),
+  });
+
+  const { data: financial } = useQuery({
+    queryKey: ["financial-balance", activeTenant?.id, exercicio],
+    enabled: Boolean(activeTenant) && /^\d{4}$/.test(exercicio),
+    queryFn: () =>
+      loadFinancial({
+        data: { tenant_id: activeTenant!.id, exercicio: Number(exercicio) },
+      }),
+  });
+
+  const resultado = balance?.resultado_orcamentario ?? 0;
+  const resultadoPatrimonial = equity?.resultado_patrimonial ?? 0;
+  const resultadoFinanceiro = financial?.resultado_financeiro ?? 0;
+
+  return (
+    <section className="space-y-6">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <BarChart3 className="size-6 text-primary" />
+          <div>
+            <h1 className="text-2xl font-extrabold tracking-tight">Balanços</h1>
+            <p className="text-sm text-muted-foreground">
+              Balanço orçamentário (Lei 4.320) e disponibilidade de caixa
+            </p>
+          </div>
+        </div>
+        <div className="w-32">
+          <Label>Exercício</Label>
+          <Input
+            type="number"
+            value={exercicio}
+            onChange={(e) => setExercicio(e.target.value)}
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="rounded-xl border bg-card p-4">
+          <h2 className="font-bold mb-2">Receita</h2>
+          <Row label="Prevista" value={balance?.receita.prevista ?? 0} />
+          <Row label="Arrecadada" value={balance?.receita.arrecadada ?? 0} />
+          <Row
+            label="Diferença"
+            value={balance?.receita.diferenca ?? 0}
+            strong
+          />
+        </div>
+        <div className="rounded-xl border bg-card p-4">
+          <h2 className="font-bold mb-2">Despesa</h2>
+          <Row label="Fixada" value={balance?.despesa.fixada ?? 0} />
+          <Row label="Empenhada" value={balance?.despesa.empenhada ?? 0} />
+          <Row label="Liquidada" value={balance?.despesa.liquidada ?? 0} />
+          <Row label="Paga" value={balance?.despesa.paga ?? 0} />
+          <Row
+            label="Saldo de dotação"
+            value={balance?.despesa.saldo_dotacao ?? 0}
+            strong
+          />
+        </div>
+      </div>
+
+      <div className="rounded-xl border bg-card p-4">
+        <h2 className="font-bold mb-2">Resultado orçamentário</h2>
+        <div className="flex items-center justify-between">
+          <span className="text-muted-foreground">
+            Receita arrecadada − despesa empenhada
+          </span>
+          <span
+            className={`text-xl font-bold tabular-nums ${
+              resultado >= 0 ? "text-emerald-600" : "text-red-600"
+            }`}
+          >
+            {brl(resultado)} {resultado >= 0 ? "(superávit)" : "(déficit)"}
+          </span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="rounded-xl border bg-card p-4">
+          <h2 className="font-bold mb-2">Balanço financeiro — ingressos</h2>
+          <Row
+            label="Receita orçamentária"
+            value={financial?.ingressos.receita_orcamentaria ?? 0}
+          />
+          <Row
+            label="Extra — restos inscritos"
+            value={financial?.ingressos.extraorcamentario_restos_inscritos ?? 0}
+          />
+          <Row
+            label="Total de ingressos"
+            value={financial?.ingressos.total ?? 0}
+            strong
+          />
+        </div>
+        <div className="rounded-xl border bg-card p-4">
+          <h2 className="font-bold mb-2">Balanço financeiro — dispêndios</h2>
+          <Row
+            label="Despesa orçamentária paga"
+            value={financial?.dispendios.despesa_orcamentaria ?? 0}
+          />
+          <Row
+            label="Extra — restos pagos"
+            value={financial?.dispendios.extraorcamentario_restos_pagos ?? 0}
+          />
+          <Row
+            label="Total de dispêndios"
+            value={financial?.dispendios.total ?? 0}
+            strong
+          />
+          <div className="flex items-center justify-between pt-2">
+            <span className="text-muted-foreground">Resultado financeiro</span>
+            <span
+              className={`font-bold tabular-nums ${
+                resultadoFinanceiro >= 0 ? "text-emerald-600" : "text-red-600"
+              }`}
+            >
+              {brl(resultadoFinanceiro)}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-xl border bg-card p-4">
+        <h2 className="font-bold mb-2">Restos a pagar inscritos</h2>
+        <Row
+          label="Processados"
+          value={balance?.restos_a_pagar.processados ?? 0}
+        />
+        <Row
+          label="Não processados"
+          value={balance?.restos_a_pagar.nao_processados ?? 0}
+        />
+        <Row label="Total" value={balance?.restos_a_pagar.total ?? 0} strong />
+      </div>
+
+      {canReadCash && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="rounded-xl border bg-card p-4">
+            <h2 className="font-bold mb-2">Balanço patrimonial</h2>
+            <Row label="Ativo" value={equity?.ativo ?? 0} />
+            <Row label="Passivo" value={equity?.passivo ?? 0} />
+            <Row
+              label="Patrimônio líquido"
+              value={equity?.patrimonio_liquido ?? 0}
+              strong
+            />
+          </div>
+          <div className="rounded-xl border bg-card p-4">
+            <h2 className="font-bold mb-2">Variações patrimoniais (DVP)</h2>
+            <Row label="Aumentativas (VPA)" value={equity?.vpa ?? 0} />
+            <Row label="Diminutivas (VPD)" value={equity?.vpd ?? 0} />
+            <div className="flex items-center justify-between pt-2">
+              <span className="text-muted-foreground">
+                Resultado patrimonial (VPA − VPD)
+              </span>
+              <span
+                className={`font-bold tabular-nums ${
+                  resultadoPatrimonial >= 0
+                    ? "text-emerald-600"
+                    : "text-red-600"
+                }`}
+              >
+                {brl(resultadoPatrimonial)}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {canReadCash && (
+        <div className="rounded-xl border bg-card p-4">
+          <h2 className="font-bold mb-2">Disponibilidade de caixa</h2>
+          <Row
+            label="Saldo consolidado (contas ativas)"
+            value={cash?.saldo_consolidado ?? 0}
+            strong
+          />
+          <Row label="Ingressos (período)" value={cash?.ingressos ?? 0} />
+          <Row label="Saídas (período)" value={cash?.saidas ?? 0} />
+          <Row label="Fluxo líquido" value={cash?.fluxo_liquido ?? 0} strong />
+        </div>
+      )}
+    </section>
+  );
+}

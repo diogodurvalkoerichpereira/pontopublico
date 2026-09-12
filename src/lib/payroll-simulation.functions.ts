@@ -1,9 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
-import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { query, queryOne, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
+import { recordAudit, recordAuditQ } from "./audit.server";
 import {
   loadTenantAccess,
   loadTenantUnitScope,
@@ -11,6 +11,7 @@ import {
   requireUnitInScope,
 } from "./tenant-access.server";
 import { checksumFormulaAst } from "./payroll-formula.server";
+import { loadFiscalTables } from "./fiscal-tables.server";
 import {
   evaluateFormulaAst,
   type PayrollFormulaVariable,
@@ -19,14 +20,6 @@ import {
 
 const ENGINE_VERSION = "ast-v1.0.0";
 const TenantInput = z.object({ tenant_id: z.string().uuid() });
-
-function metadata() {
-  const request = getRequest();
-  return {
-    requestId: request?.headers?.get("x-request-id") ?? randomUUID(),
-    ip: request?.headers?.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
-  };
-}
 
 function checksum(value: unknown) {
   return createHash("sha256")
@@ -189,7 +182,6 @@ export const saveEmploymentLinkRubric = createServerFn({ method: "POST" })
       : null;
     if (data.id && !before) throw new Error("Atribuição não encontrada");
     const id = data.id ?? randomUUID();
-    const event = metadata();
 
     await withTransaction(async (client) => {
       if (data.id) {
@@ -234,21 +226,15 @@ export const saveEmploymentLinkRubric = createServerFn({ method: "POST" })
           ],
         );
       }
-      await client.query(
-        `insert into public.audit_events
-           (tenant_id,actor_id,action,resource,record_id,before_data,after_data,request_id,ip)
-         values ($1,$2,$3,'employment_link_rubrics',$4,$5::jsonb,$6::jsonb,$7,$8::inet)`,
-        [
-          data.tenant_id,
-          context.userId,
-          data.id ? "update" : "create",
-          id,
-          before ? JSON.stringify(before) : null,
-          JSON.stringify(data),
-          event.requestId,
-          event.ip,
-        ],
-      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: data.id ? "update" : "create",
+        resource: "employment_link_rubrics",
+        recordId: id,
+        before: before ?? null,
+        after: data,
+      });
     });
     return { id };
   });
@@ -306,7 +292,7 @@ export const runPayrollSimulation = createServerFn({ method: "POST" })
       throw new Error("Há vínculo inválido ou desligado na seleção");
     links.forEach((link) => requireUnitInScope(scope, link.unit_id));
 
-    const sources = await query<CalculationSource>(
+    const assignmentSources = await query<CalculationSource>(
       `select assignment.id as assignment_id,assignment.employment_link_id,
          rubric.id as rubric_id,rubric.code as rubric_code,rubric.name as rubric_name,
          rubric.nature,rubric.calculation_order,link.base_salary,
@@ -328,6 +314,87 @@ export const runPayrollSimulation = createServerFn({ method: "POST" })
        order by assignment.employment_link_id,rubric.calculation_order,rubric.code`,
       [data.tenant_id, linkIds, referenceDate],
     );
+
+    // Rubricas do REGIME (O1-02c): declaradas uma vez por regime, aplicam-se a
+    // todo vinculo daquele regime. Sem linha de assignment, entao fixed_amount/
+    // quantity nulos e parameters vazio; a formula (ex.: table_lookup contra a
+    // tabela RPPS do ente) faz o calculo. Ver ADR 0003.
+    const regimeSources = await query<CalculationSource>(
+      `select prr.id as assignment_id,link.id as employment_link_id,
+         rubric.id as rubric_id,rubric.code as rubric_code,rubric.name as rubric_name,
+         rubric.nature,rubric.calculation_order,link.base_salary,
+         null::numeric as fixed_amount,null::numeric as quantity,'{}'::jsonb as parameters,
+         version.id as version_id,version.version_number,version.formula_ast,
+         version.formula_checksum,version.rounding_scale,version.rounding_mode
+       from public.pension_regime_rubrics prr
+       join public.employment_links link on link.pension_regime_id=prr.pension_regime_id
+         and link.tenant_id=prr.tenant_id
+       join public.payroll_rubrics rubric on rubric.id=prr.rubric_id
+       join public.payroll_rubric_versions version on version.rubric_id=rubric.id
+         and version.tenant_id=prr.tenant_id and version.status='publicada'
+         and version.valid_from<=$3::date
+         and (version.valid_to is null or version.valid_to>=$3::date)
+       where prr.tenant_id=$1 and link.id=any($2::uuid[]) and rubric.status='ativo'
+       order by link.id,rubric.calculation_order,rubric.code`,
+      [data.tenant_id, linkIds, referenceDate],
+    );
+
+    // Variaveis mensais (O1-04): valores por vinculo/rubrica/competencia (folha de
+    // ponto valorada, importacoes, itens pontuais). Entram como `fixed_amount` — a
+    // formula da rubrica os aplica. Somadas por (rubrica, parcela) na competencia.
+    const monthlyVarSources = await query<
+      CalculationSource & { installment_number: number }
+    >(
+      `select mv.id as assignment_id,mv.employment_link_id,
+         rubric.id as rubric_id,rubric.code as rubric_code,rubric.name as rubric_name,
+         rubric.nature,rubric.calculation_order,link.base_salary,
+         mv.amount as fixed_amount,null::numeric as quantity,'{}'::jsonb as parameters,
+         version.id as version_id,version.version_number,version.formula_ast,
+         version.formula_checksum,version.rounding_scale,version.rounding_mode,
+         mv.installment_number
+       from public.payroll_monthly_variables mv
+       join public.employment_links link on link.id=mv.employment_link_id
+       join public.payroll_rubrics rubric on rubric.id=mv.rubric_id
+       join public.payroll_rubric_versions version on version.rubric_id=rubric.id
+         and version.tenant_id=mv.tenant_id and version.status='publicada'
+         and version.valid_from<=$3::date
+         and (version.valid_to is null or version.valid_to>=$3::date)
+       where mv.tenant_id=$1 and mv.employment_link_id=any($2::uuid[])
+         and mv.reference_month=$3::date
+         and mv.installment_number=1 and rubric.status='ativo'
+       order by mv.employment_link_id,rubric.calculation_order,rubric.code`,
+      [data.tenant_id, linkIds, referenceDate],
+    );
+
+    // A atribuicao explicita por vinculo tem precedencia: uma rubrica ja atribuida
+    // ao vinculo nao e reaplicada pela regra do regime nem pela variavel mensal
+    // (evita dupla contagem). Ordem de precedencia: assignment > regime > mensal.
+    const assignedKey = new Set(
+      assignmentSources.map((s) => `${s.employment_link_id}:${s.rubric_id}`),
+    );
+    const sources: CalculationSource[] = [
+      ...assignmentSources,
+      ...regimeSources.filter(
+        (s) => !assignedKey.has(`${s.employment_link_id}:${s.rubric_id}`),
+      ),
+    ];
+    const presentKey = new Set(
+      sources.map((s) => `${s.employment_link_id}:${s.rubric_id}`),
+    );
+    for (const mv of monthlyVarSources) {
+      if (!presentKey.has(`${mv.employment_link_id}:${mv.rubric_id}`))
+        sources.push(mv);
+    }
+    // A ordem de calculo tem de respeitar `calculation_order` INDEPENDENTE da
+    // origem (atribuicao, regime ou variavel mensal): as bases de incidencia
+    // (inss/irrf/fgts) sao acumuladas conforme cada rubrica e calculada, entao uma
+    // rubrica que ALIMENTA a base (ex.: remuneracao de ferias/extras vinda de
+    // payroll_monthly_variables, O1-05b/O1-04b) precisa vir ANTES do INSS/IRRF que
+    // a consome — senao seu valor nao entra no salario-de-contribuicao. A dedup
+    // acima ja fixou a precedencia; aqui so ordenamos para o acumulo bater. O laco
+    // de dependencia (depends_on_rubric_id) reordena o que faltar. Estavel: mesma
+    // calculation_order preserva a ordem de insercao.
+    sources.sort((a, b) => a.calculation_order - b.calculation_order);
 
     const incidenceRows = await query<{
       version_id: string;
@@ -379,6 +446,14 @@ export const runPayrollSimulation = createServerFn({ method: "POST" })
     );
 
     try {
+      // Tabelas fiscais vigentes na competência, pré-carregadas uma vez e
+      // passadas ao avaliador puro (nós table_lookup consultam este Map, sem
+      // I/O dentro do avaliador). Ver O1-01 / ADR 0003.
+      const fiscalTables = await loadFiscalTables(
+        data.tenant_id,
+        referenceDate,
+      );
+
       const items: Array<{
         id: string;
         linkId: string;
@@ -459,6 +534,7 @@ export const runPayrollSimulation = createServerFn({ method: "POST" })
           const evaluation = evaluateFormulaAst(
             verified.ast,
             variables,
+            fiscalTables,
             Number(source.rounding_scale),
             source.rounding_mode,
           );
@@ -536,25 +612,19 @@ export const runPayrollSimulation = createServerFn({ method: "POST" })
           [runId, links.length],
         );
       });
-      const event = metadata();
-      await query(
-        `insert into public.audit_events
-           (tenant_id,actor_id,action,resource,record_id,after_data,request_id,ip)
-         values ($1,$2,'simulate','payroll_calculation_runs',$3,$4::jsonb,$5,$6::inet)`,
-        [
-          data.tenant_id,
-          context.userId,
-          runId,
-          JSON.stringify({
-            reference_month: referenceDate,
-            links: links.length,
-            items: items.length,
-            input_checksum: checksum(snapshot),
-          }),
-          event.requestId,
-          event.ip,
-        ],
-      );
+      await recordAuditQ({
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "simulate",
+        resource: "payroll_calculation_runs",
+        recordId: runId,
+        after: {
+          reference_month: referenceDate,
+          links: links.length,
+          items: items.length,
+          input_checksum: checksum(snapshot),
+        },
+      });
       return {
         runId,
         linksProcessed: links.length,

@@ -1,15 +1,36 @@
+/**
+ * Exportações para órgãos de controle.
+ *
+ * ATENÇÃO — nenhum layout oficial está implementado aqui. Três dos quatro
+ * códigos (TCE-CE SIM, SIOPE e MANAD) produzem exatamente o MESMO CSV de cinco
+ * colunas — matrícula, CPF, bruto, descontos, líquido — e o quarto (PCS) produz
+ * um XML de estrutura própria. Os layouts reais têm dezenas a centenas de
+ * campos, cada um com estrutura distinta, e são publicados pelos respectivos
+ * órgãos.
+ *
+ * Por isso os códigos carregam o prefixo RASCUNHO_: o arquivo gerado serve para
+ * conferência interna, não para entrega ao órgão, e não pode sustentar
+ * declaração de conformidade em licitação. Ver src/lib/conformance.ts.
+ */
 import { createHash, randomUUID } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
+import { recordAudit } from "./audit.server";
+import { conformanceOf } from "./conformance";
 import {
   loadTenantAccess,
   requireTenantPermission,
 } from "./tenant-access.server";
 const I = z.object({
   tenant_id: z.string().uuid(),
-  code: z.enum(["TCE_CE_SIM", "SIOPE", "MAND", "PCS_2025"]),
+  code: z.enum([
+    "RASCUNHO_TCE_CE_SIM",
+    "RASCUNHO_SIOPE",
+    "RASCUNHO_MANAD",
+    "RASCUNHO_PCS",
+  ]),
   version: z.string(),
   reference_month: z.string().regex(/^\d{4}-\d{2}$/),
 });
@@ -37,6 +58,7 @@ export const generateOfficialExport = createServerFn({ method: "POST" })
             data.reference_month + "-01",
             JSON.stringify({
               required: ["matricula", "cpf", "bruto", "descontos", "liquido"],
+              conformidade: conformanceOf("exportacao-oficial"),
             }),
           ],
         );
@@ -54,7 +76,7 @@ export const generateOfficialExport = createServerFn({ method: "POST" })
           errors.push(`LINHA_${i + 1}_CADASTRO_INCOMPLETO`);
       });
       const content =
-        data.code === "PCS_2025"
+        data.code === "RASCUNHO_PCS"
           ? `<pcs versao="${data.version}">${rows.map((r: any) => `<servidor matricula="${r.matricula}" cpf="${r.cpf}" liquido="${r.liquido}"/>`).join("")}</pcs>`
           : rows
               .map((r: any) =>
@@ -78,6 +100,29 @@ export const generateOfficialExport = createServerFn({ method: "POST" })
           context.userId,
         ],
       );
-      return { id, content, errors, hash };
+      // Trilha de auditoria do ato de saída de dados (exportação oficial).
+      await recordAudit(c, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "exportacao.gerar",
+        resource: "official_export_batches",
+        recordId: id,
+        after: {
+          code: data.code,
+          version: data.version,
+          reference_month: data.reference_month,
+          status: errors.length ? "invalido" : "valido",
+          records_count: rows.length,
+          file_sha256: hash,
+          validation_errors: errors,
+        },
+      });
+      return {
+        id,
+        content,
+        errors,
+        hash,
+        conformidade: conformanceOf("exportacao-oficial"),
+      };
     });
   });

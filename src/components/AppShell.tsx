@@ -9,7 +9,6 @@ import {
   FolderOpen,
   Clock,
   Calendar,
-  Wallet,
   UserCog,
   Menu,
   ChevronRight,
@@ -36,6 +35,24 @@ import {
   Scale,
   Bot,
   ArchiveRestore,
+  Landmark,
+  Wallet,
+  MessageSquareWarning,
+  PiggyBank,
+  Banknote,
+  BookOpen,
+  CalendarClock,
+  ClipboardList,
+  CreditCard,
+  FileSignature,
+  Boxes,
+  Building,
+  FileStack,
+  Gavel,
+  Car,
+  FileSearch,
+  ShieldAlert,
+  BarChart3,
 } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
 import { SupportWidget } from "@/components/SupportWidget";
@@ -183,6 +200,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       section: "Recursos Humanos",
     });
   }
+  if (hasTenantPermission("people.read")) {
+    items.push({
+      to: "/consignacoes",
+      label: "Consignações",
+      icon: CreditCard,
+      section: "Recursos Humanos",
+    });
+  }
   if (hasTenantPermission("family.read")) {
     items.push({
       to: "/rh/familia",
@@ -252,6 +277,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       icon: Palmtree,
       section: "Recursos Humanos",
     });
+  if (hasTenantPermission("people.read"))
+    items.push({
+      to: "/rh/previdencia",
+      label: "Previdência",
+      icon: Landmark,
+      section: "Recursos Humanos",
+    });
+  if (hasTenantPermission("fiscal.read"))
+    items.push({
+      to: "/rh/tabelas-fiscais",
+      label: "Tabelas fiscais",
+      icon: Scale,
+      section: "Folha de Pagamento",
+    });
   if (hasTenantPermission("payroll.import.read"))
     items.push({
       to: "/rh/importacoes",
@@ -283,13 +322,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         icon: Calendar,
         section: "Recursos Humanos",
       });
-    if (hasPermission("close_payroll"))
-      items.push({
-        to: "/rh/folha",
-        label: "Folha",
-        icon: Wallet,
-        section: "Recursos Humanos",
-      });
+    // A folha legada (/rh/folha, payroll_periods) foi aposentada no O0-13; a
+    // única folha é /rh/ciclos (payroll_cycles). Ver ADR 0005 e 0017.
     if (hasPermission("manage_employees"))
       items.push({
         to: "/rh/vt-va",
@@ -313,6 +347,152 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     icon: BadgeDollarSign,
     section: "Geral",
   });
+  items.push({
+    to: "/conta/seguranca",
+    label: "Segurança da conta",
+    icon: ShieldCheck,
+    section: "Geral",
+  });
+  if (hasTenantPermission("budget.read"))
+    items.push({
+      to: "/orcamento",
+      label: "Orçamento",
+      icon: PiggyBank,
+      section: "Contabilidade e Finanças",
+    });
+  if (hasTenantPermission("budget.read"))
+    items.push({
+      to: "/empenhos",
+      label: "Empenhos",
+      icon: ReceiptText,
+      section: "Contabilidade e Finanças",
+    });
+  if (hasTenantPermission("accounting.read"))
+    items.push({
+      to: "/tesouraria",
+      label: "Tesouraria",
+      icon: Wallet,
+      section: "Contabilidade e Finanças",
+    });
+  if (hasTenantPermission("accounting.read"))
+    items.push({
+      to: "/ordens-bancarias",
+      label: "Ordens bancárias",
+      icon: Banknote,
+      section: "Contabilidade e Finanças",
+    });
+  if (hasTenantPermission("budget.read"))
+    items.push({
+      to: "/balancos",
+      label: "Balanços",
+      icon: BarChart3,
+      section: "Contabilidade e Finanças",
+    });
+  if (hasTenantPermission("budget.read"))
+    items.push({
+      to: "/restos-a-pagar",
+      label: "Restos a Pagar",
+      icon: FileStack,
+      section: "Contabilidade e Finanças",
+    });
+  if (hasTenantPermission("taxes.read"))
+    items.push({
+      to: "/tributos",
+      label: "Tributos",
+      icon: Landmark,
+      section: "Contabilidade e Finanças",
+    });
+  if (hasTenantPermission("taxes.read"))
+    items.push({
+      to: "/divida-ativa",
+      label: "Dívida ativa",
+      icon: Scale,
+      section: "Contabilidade e Finanças",
+    });
+  if (hasTenantPermission("taxes.read"))
+    items.push({
+      to: "/parcelamentos",
+      label: "Parcelamentos",
+      icon: CalendarClock,
+      section: "Contabilidade e Finanças",
+    });
+  if (hasTenantPermission("contracts.read"))
+    items.push({
+      to: "/licitacoes",
+      label: "Licitações",
+      icon: Gavel,
+      section: "Contratações",
+    });
+  if (hasTenantPermission("contracts.read"))
+    items.push({
+      to: "/atas",
+      label: "Registro de Preços",
+      icon: ClipboardList,
+      section: "Contratações",
+    });
+  if (hasTenantPermission("contracts.read"))
+    items.push({
+      to: "/contratos",
+      label: "Contratos",
+      icon: FileSignature,
+      section: "Contratações",
+    });
+  if (hasTenantPermission("materials.read"))
+    items.push({
+      to: "/almoxarifado",
+      label: "Almoxarifado",
+      icon: Boxes,
+      section: "Materiais e Patrimônio",
+    });
+  if (hasTenantPermission("assets.read"))
+    items.push({
+      to: "/patrimonio",
+      label: "Patrimônio",
+      icon: Building,
+      section: "Materiais e Patrimônio",
+    });
+  if (hasTenantPermission("assets.read"))
+    items.push({
+      to: "/frotas",
+      label: "Frotas",
+      icon: Car,
+      section: "Materiais e Patrimônio",
+    });
+  if (hasTenantPermission("protocol.read"))
+    items.push({
+      to: "/protocolo",
+      label: "Protocolo",
+      icon: FileStack,
+      section: "Controle e Transparência",
+    });
+  if (hasTenantPermission("protocol.read"))
+    items.push({
+      to: "/ouvidoria",
+      label: "Ouvidoria",
+      icon: MessageSquareWarning,
+      section: "Controle e Transparência",
+    });
+  if (hasTenantPermission("protocol.read"))
+    items.push({
+      to: "/esic",
+      label: "e-SIC",
+      icon: FileSearch,
+      section: "Controle e Transparência",
+    });
+  if (hasTenantPermission("protocol.read"))
+    items.push({
+      to: "/carta-servicos",
+      label: "Carta de Serviços",
+      icon: BookOpen,
+      section: "Controle e Transparência",
+    });
+  if (hasTenantPermission("analytics.read"))
+    items.push({
+      to: "/controle-interno",
+      label: "Controle interno",
+      icon: ShieldAlert,
+      section: "Controle e Transparência",
+    });
   if (hasTenantPermission("manager.dashboard.read"))
     items.push({
       to: "/gestor",

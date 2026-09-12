@@ -24,6 +24,11 @@ import {
   adminUpdateUserEmail,
 } from "@/lib/admin-users.functions";
 import { rhUploadEmployeeDocument } from "@/lib/data.functions";
+import {
+  registerManualTimeEntry,
+  updateManualTimeEntry,
+  softDeleteTimeEntry,
+} from "@/lib/timesheet.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
@@ -1346,7 +1351,7 @@ function Content() {
         </TabsContent>
 
         <TabsContent value="ponto" className="mt-6">
-          <PontoPanel userId={id} actorId={user?.id ?? ""} />
+          <PontoPanel userId={id} />
         </TabsContent>
 
         <TabsContent value="documentos" className="mt-6">
@@ -1496,6 +1501,7 @@ type PontoEntry = TimeEntry & {
   observacao: string | null;
   origem: string | null;
 };
+type EntryTipo = "entrada" | "saida_almoco" | "volta_almoco" | "saida";
 type EntryEdit = {
   id?: string;
   entry_local: string;
@@ -1503,14 +1509,19 @@ type EntryEdit = {
   observacao: string;
 };
 
-function PontoPanel({ userId, actorId }: { userId: string; actorId: string }) {
+function PontoPanel({ userId }: { userId: string }) {
   const qc = useQueryClient();
+  const { activeTenant } = useAuth();
+  const registerEntry = useServerFn(registerManualTimeEntry);
+  const updateEntry = useServerFn(updateManualTimeEntry);
+  const softDeleteEntry = useServerFn(softDeleteTimeEntry);
   const [refMonth, setRefMonth] = useState(() =>
     new Date().toISOString().slice(0, 7),
   );
   const [edit, setEdit] = useState<EntryEdit | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmDel, setConfirmDel] = useState<PontoEntry | null>(null);
+  const [delReason, setDelReason] = useState("");
 
   const monthStart = new Date(refMonth + "-01T00:00:00");
   const monthEnd = new Date(monthStart);
@@ -1562,28 +1573,32 @@ function PontoPanel({ userId, actorId }: { userId: string; actorId: string }) {
       toast.error("Data/hora inválida");
       return;
     }
+    if (!activeTenant) {
+      toast.error("Selecione uma entidade ativa");
+      return;
+    }
     setBusy(true);
     try {
       if (edit.id) {
-        const { error } = await supabase
-          .from("time_entries")
-          .update({
-            tipo: edit.tipo,
+        await updateEntry({
+          data: {
+            tenant_id: activeTenant.id,
+            id: edit.id,
+            tipo: edit.tipo as EntryTipo,
             entry_at: dt.toISOString(),
             observacao: edit.observacao || null,
-          })
-          .eq("id", edit.id);
-        if (error) throw new Error(error.message);
-      } else {
-        const { error } = await supabase.from("time_entries").insert({
-          user_id: userId,
-          tipo: edit.tipo,
-          entry_at: dt.toISOString(),
-          origem: "manual",
-          observacao: edit.observacao || null,
-          created_by: actorId || null,
+          },
         });
-        if (error) throw new Error(error.message);
+      } else {
+        await registerEntry({
+          data: {
+            tenant_id: activeTenant.id,
+            user_id: userId,
+            tipo: edit.tipo as EntryTipo,
+            entry_at: dt.toISOString(),
+            observacao: edit.observacao || null,
+          },
+        });
       }
       toast.success(edit.id ? "Batida atualizada" : "Batida inserida");
       setEdit(null);
@@ -1597,15 +1612,26 @@ function PontoPanel({ userId, actorId }: { userId: string; actorId: string }) {
 
   const excluir = async () => {
     if (!confirmDel) return;
+    if (!activeTenant) {
+      toast.error("Selecione uma entidade ativa");
+      return;
+    }
+    if (delReason.trim().length < 5) {
+      toast.error("Informe o motivo da exclusão (mín. 5 caracteres)");
+      return;
+    }
     setBusy(true);
     try {
-      const { error } = await supabase
-        .from("time_entries")
-        .delete()
-        .eq("id", confirmDel.id);
-      if (error) throw new Error(error.message);
+      await softDeleteEntry({
+        data: {
+          tenant_id: activeTenant.id,
+          id: confirmDel.id,
+          reason: delReason.trim(),
+        },
+      });
       toast.success("Batida excluída");
       setConfirmDel(null);
+      setDelReason("");
       qc.invalidateQueries({ queryKey: ["ponto-rh", userId] });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao excluir");
@@ -1816,7 +1842,12 @@ function PontoPanel({ userId, actorId }: { userId: string; actorId: string }) {
 
       <Dialog
         open={!!confirmDel}
-        onOpenChange={(o) => !o && setConfirmDel(null)}
+        onOpenChange={(o) => {
+          if (!o) {
+            setConfirmDel(null);
+            setDelReason("");
+          }
+        }}
       >
         <DialogContent>
           <DialogHeader>
@@ -1829,8 +1860,19 @@ function PontoPanel({ userId, actorId }: { userId: string; actorId: string }) {
               {confirmDel &&
                 new Date(confirmDel.entry_at).toLocaleString("pt-BR")}
             </strong>
-            ? Esta ação é permanente.
+            ? A batida sai da apuração, mas o registro e o motivo ficam na
+            trilha de auditoria.
           </p>
+          <div className="space-y-1.5">
+            <Label htmlFor="del-reason">Motivo da exclusão</Label>
+            <Textarea
+              id="del-reason"
+              value={delReason}
+              onChange={(e) => setDelReason(e.target.value)}
+              placeholder="Ex.: batida duplicada por falha de rede"
+              rows={2}
+            />
+          </div>
           <DialogFooter>
             <Button
               variant="outline"

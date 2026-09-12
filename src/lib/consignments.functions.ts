@@ -1,0 +1,386 @@
+// O1-09 — Consignações em folha e margem consignável (Onda 1, Lei 10.820/2003 e
+// regime do servidor). Descontos consignados (empréstimo, sindicato, plano de
+// saúde, pensão) têm de caber na MARGEM CONSIGNÁVEL: teto legal (padrão 35% da
+// remuneração de base) sobre a soma das parcelas ativas. A margem é conferida na
+// inclusão — uma consignação nova só entra se couber. Reusa people.*.
+import { createServerFn } from "@tanstack/react-start";
+import { randomUUID } from "node:crypto";
+import { z } from "zod";
+import { query, withTransaction } from "./db.server";
+import { requireAuth } from "./data.functions";
+import { recordAudit } from "./audit.server";
+import {
+  loadTenantAccess,
+  requireTenantPermission,
+} from "./tenant-access.server";
+
+// Margem consignável legal padrão: 35% da remuneração de base.
+const MARGEM_PADRAO = 0.35;
+
+const MarginInput = z.object({
+  tenant_id: z.string().uuid(),
+  employment_link_id: z.string().uuid(),
+  margem_percent: z.number().positive().max(1).optional(),
+});
+
+const SummaryInput = z.object({ tenant_id: z.string().uuid() });
+
+// O1-09b — Resumo das consignações ATIVAS por tipo (emprestimo/sindicato/plano_saude/
+// pensao/outro): quantidade e soma das parcelas mensais, ordenado do maior comprometido ao
+// menor, com o total geral. Só consignação `ativa` compromete margem. Reusa people.read.
+export const getConsignmentsSummary = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => SummaryInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "people.read");
+    const rows = await query<{
+      tipo: string;
+      quantidade: string;
+      total_parcela: string;
+    }>(
+      `select tipo, count(*)::text as quantidade,
+         coalesce(sum(valor_parcela),0)::text as total_parcela
+       from public.payroll_consignments
+       where tenant_id = $1 and status = 'ativa'
+       group by tipo
+       order by sum(valor_parcela) desc, tipo`,
+      [data.tenant_id],
+    );
+    const round2 = (v: number) => Number(v.toFixed(2));
+    const tipos = rows.map((r) => ({
+      tipo: r.tipo,
+      quantidade: Number(r.quantidade),
+      total_parcela: round2(Number(r.total_parcela)),
+    }));
+    return {
+      tipos,
+      totalParcela: round2(tipos.reduce((s, t) => s + t.total_parcela, 0)),
+      totalConsignacoes: tipos.reduce((s, t) => s + t.quantidade, 0),
+    };
+  });
+
+// Consulta a margem: remuneração de base, teto, comprometido e disponível, com as
+// consignações ativas.
+export const getConsignmentMargin = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => MarginInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "people.read");
+    const link = (
+      await query<{ base_salary: string | null }>(
+        `select base_salary::text from public.employment_links
+         where id=$1 and tenant_id=$2`,
+        [data.employment_link_id, data.tenant_id],
+      )
+    )[0];
+    if (!link) throw new Error("Vínculo não encontrado");
+    const ativas = await query<{
+      id: string;
+      tipo: string;
+      consignatario: string;
+      valor_parcela: string;
+      parcelas_total: number;
+      parcelas_pagas: number;
+    }>(
+      `select id, tipo, consignatario, valor_parcela::text, parcelas_total,
+         parcelas_pagas
+       from public.payroll_consignments
+       where tenant_id=$1 and employment_link_id=$2 and status='ativa'
+       order by created_at`,
+      [data.tenant_id, data.employment_link_id],
+    );
+    const base = Number(link.base_salary ?? 0);
+    const margem = Number(
+      (base * (data.margem_percent ?? MARGEM_PADRAO)).toFixed(2),
+    );
+    const comprometido = Number(
+      ativas.reduce((s, c) => s + Number(c.valor_parcela), 0).toFixed(2),
+    );
+    return {
+      base_salary: base,
+      margem,
+      comprometido,
+      disponivel: Number((margem - comprometido).toFixed(2)),
+      consignments: ativas,
+      canManage: access.permissions.includes("people.manage"),
+    };
+  });
+
+const RegisterInput = z.object({
+  tenant_id: z.string().uuid(),
+  employment_link_id: z.string().uuid(),
+  tipo: z.enum(["emprestimo", "sindicato", "plano_saude", "pensao", "outro"]),
+  consignatario: z.string().trim().min(2).max(200),
+  valor_parcela: z.number().positive().max(1_000_000),
+  parcelas_total: z.number().int().min(1).max(120),
+  inicio: z.string().date(),
+  margem_percent: z.number().positive().max(1).optional(),
+});
+
+// Inclui uma consignação: só entra se couber na margem consignável disponível.
+export const registerConsignment = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => RegisterInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "people.manage");
+    return withTransaction(async (client) => {
+      const link = (
+        await client.query<{ base_salary: string | null; status: string }>(
+          `select base_salary::text, status from public.employment_links
+           where id=$1 and tenant_id=$2 for update`,
+          [data.employment_link_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!link) throw new Error("Vínculo não encontrado");
+      if (link.status === "desligado")
+        throw new Error("Vínculo desligado não recebe consignação");
+      const base = Number(link.base_salary ?? 0);
+      if (base <= 0)
+        throw new Error(
+          "Vínculo sem remuneração de base para calcular a margem",
+        );
+      const margem = Number(
+        (base * (data.margem_percent ?? MARGEM_PADRAO)).toFixed(2),
+      );
+      const comprometido = Number(
+        (
+          await client.query<{ soma: string }>(
+            `select coalesce(sum(valor_parcela),0)::text as soma
+             from public.payroll_consignments
+             where tenant_id=$1 and employment_link_id=$2 and status='ativa'`,
+            [data.tenant_id, data.employment_link_id],
+          )
+        ).rows[0].soma,
+      );
+      const disponivel = Number((margem - comprometido).toFixed(2));
+      if (data.valor_parcela > disponivel + 0.005)
+        throw new Error(
+          `Parcela (${data.valor_parcela.toFixed(2)}) excede a margem consignável disponível (${disponivel.toFixed(2)})`,
+        );
+      const id = randomUUID();
+      await client.query(
+        `insert into public.payroll_consignments
+           (id, tenant_id, employment_link_id, tipo, consignatario, valor_parcela,
+            parcelas_total, inicio, created_by)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        [
+          id,
+          data.tenant_id,
+          data.employment_link_id,
+          data.tipo,
+          data.consignatario,
+          data.valor_parcela,
+          data.parcelas_total,
+          data.inicio,
+          context.userId,
+        ],
+      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "consignar",
+        resource: "payroll_consignments",
+        recordId: id,
+        after: {
+          tipo: data.tipo,
+          valor_parcela: data.valor_parcela,
+          parcelas_total: data.parcelas_total,
+        },
+      });
+      return {
+        id,
+        margem,
+        comprometido: Number((comprometido + data.valor_parcela).toFixed(2)),
+        disponivel: Number((disponivel - data.valor_parcela).toFixed(2)),
+      };
+    });
+  });
+
+const DepositInput = z.object({
+  tenant_id: z.string().uuid(),
+  employment_link_id: z.string().uuid(),
+  reference_month: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/, "reference_month deve ser AAAA-MM"),
+  // Rubrica de desconto na qual o total consignado do mês é lançado.
+  rubric_id: z.string().uuid(),
+});
+
+// Deposita o total das parcelas consignadas ativas do vínculo como um desconto na
+// folha da competência (idempotente: re-depositar substitui). Não amortiza as
+// parcelas — o avanço de parcelas_pagas/quitação ocorre no fechamento do ciclo.
+export const depositConsignmentsToPayroll = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => DepositInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "people.manage");
+    const rubric = (
+      await query<{ id: string; nature: string }>(
+        `select id, nature from public.payroll_rubrics
+         where id=$1 and tenant_id=$2`,
+        [data.rubric_id, data.tenant_id],
+      )
+    )[0];
+    if (!rubric) throw new Error("Rubrica inválida para esta entidade");
+    if (rubric.nature !== "desconto")
+      throw new Error("A rubrica de consignação deve ser de desconto");
+    const referenceDate = `${data.reference_month}-01`;
+    return withTransaction(async (client) => {
+      // Soma as parcelas ativas ainda devidas (parcelas_pagas < parcelas_total).
+      const total = Number(
+        (
+          await client.query<{ soma: string }>(
+            `select coalesce(sum(valor_parcela),0)::text as soma
+             from public.payroll_consignments
+             where tenant_id=$1 and employment_link_id=$2 and status='ativa'
+               and parcelas_pagas < parcelas_total`,
+            [data.tenant_id, data.employment_link_id],
+          )
+        ).rows[0].soma,
+      );
+      // Re-depositar substitui a competência (apaga-e-insere; source_batch_id nulo).
+      await client.query(
+        `delete from public.payroll_monthly_variables
+         where tenant_id=$1 and employment_link_id=$2 and rubric_id=$3
+           and reference_month=$4 and source_batch_id is null`,
+        [
+          data.tenant_id,
+          data.employment_link_id,
+          data.rubric_id,
+          referenceDate,
+        ],
+      );
+      if (total > 0)
+        await client.query(
+          `insert into public.payroll_monthly_variables
+             (tenant_id, employment_link_id, rubric_id, reference_month, amount,
+              installment_number, installments_total)
+           values ($1,$2,$3,$4,$5,1,1)`,
+          [
+            data.tenant_id,
+            data.employment_link_id,
+            data.rubric_id,
+            referenceDate,
+            total,
+          ],
+        );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "deposit",
+        resource: "payroll_monthly_variables",
+        recordId: data.employment_link_id,
+        after: {
+          reference_month: referenceDate,
+          total,
+          rubric_id: data.rubric_id,
+        },
+      });
+      return { reference_month: referenceDate, total };
+    });
+  });
+
+const CancelInput = z.object({
+  tenant_id: z.string().uuid(),
+  consignment_id: z.string().uuid(),
+});
+
+// Cancela uma consignação ativa, liberando a margem. Só uma ativa cancela.
+export const cancelConsignment = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => CancelInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "people.manage");
+    return withTransaction(async (client) => {
+      const c = (
+        await client.query<{ status: string }>(
+          `select status from public.payroll_consignments
+           where id=$1 and tenant_id=$2 for update`,
+          [data.consignment_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!c) throw new Error("Consignação não encontrada");
+      if (c.status !== "ativa")
+        throw new Error("Só uma consignação ativa pode ser cancelada");
+      await client.query(
+        `update public.payroll_consignments set status='cancelada', updated_at=now()
+         where id=$1 and tenant_id=$2`,
+        [data.consignment_id, data.tenant_id],
+      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "cancelar",
+        resource: "payroll_consignments",
+        recordId: data.consignment_id,
+        after: { status: "cancelada" },
+      });
+      return { id: data.consignment_id, status: "cancelada" };
+    });
+  });
+
+const AmortizeInput = z.object({
+  tenant_id: z.string().uuid(),
+  consignment_id: z.string().uuid(),
+  parcelas: z.number().int().min(1).max(600).default(1),
+});
+
+// O1-09c — Amortiza parcelas de uma consignação ativa. Avança `parcelas_pagas` sem passar
+// do total; quando alcança o total, a consignação é quitada (libera a margem, pois só as
+// ativas comprometem). Não amortiza consignação já quitada/cancelada.
+export const amortizeConsignment = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => AmortizeInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "people.manage");
+    return withTransaction(async (client) => {
+      const c = (
+        await client.query<{
+          parcelas_total: number;
+          parcelas_pagas: number;
+          status: string;
+        }>(
+          `select parcelas_total, parcelas_pagas, status
+           from public.payroll_consignments
+           where id=$1 and tenant_id=$2 for update`,
+          [data.consignment_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!c) throw new Error("Consignação não encontrada");
+      if (c.status !== "ativa")
+        throw new Error("Só uma consignação ativa pode ser amortizada");
+      const novasPagas = c.parcelas_pagas + data.parcelas;
+      if (novasPagas > c.parcelas_total)
+        throw new Error(
+          `Amortização (${data.parcelas}) excede as parcelas restantes (${c.parcelas_total - c.parcelas_pagas})`,
+        );
+      const quitada = novasPagas >= c.parcelas_total;
+      await client.query(
+        `update public.payroll_consignments
+         set parcelas_pagas=$3,
+             status=case when $4 then 'quitada' else status end,
+             updated_at=now()
+         where id=$1 and tenant_id=$2`,
+        [data.consignment_id, data.tenant_id, novasPagas, quitada],
+      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "amortizar",
+        resource: "payroll_consignments",
+        recordId: data.consignment_id,
+        after: { parcelas_pagas: novasPagas, quitada },
+      });
+      return {
+        id: data.consignment_id,
+        parcelas_pagas: novasPagas,
+        quitada,
+      };
+    });
+  });

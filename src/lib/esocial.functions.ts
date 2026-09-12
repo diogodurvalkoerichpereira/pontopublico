@@ -1,8 +1,28 @@
+/**
+ * Fila de eventos do eSocial.
+ *
+ * ATENÇÃO — a assinatura e a transmissão NÃO estão implementadas. O XML não é
+ * gerado a partir dos dados da folha: ele chega pronto de fora e a validação se
+ * resume a conferir que o texto começa com "<" e cita o tipo do evento.
+ *
+ * Até a Sprint 20, `processEsocialQueue` marcava os eventos como `assinado` sem
+ * executar nenhuma operação criptográfica, registrando a tentativa com a nota
+ * "Assinatura delegada ao adaptador seguro" — adaptador que não existe neste
+ * repositório. Isso produzia um estado de sucesso que não correspondia ao que
+ * havia acontecido, e faria uma prova de conceito exibir um evento "assinado"
+ * que nunca foi assinado.
+ *
+ * A função agora falha de forma explícita. Voltará a operar quando existirem:
+ * geração de XML a partir da folha, assinatura XMLDSig com certificado A1/A3 e
+ * transmissão com tratamento de protocolo e recibo. Ver src/lib/conformance.ts.
+ */
 import { createHash, randomUUID } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { query, withTransaction } from "./db.server";
+import { query } from "./db.server";
 import { requireAuth } from "./data.functions";
+import { recordAuditQ } from "./audit.server";
+import { conformanceOf, NotImplementedConformanceError } from "./conformance";
 import {
   loadTenantAccess,
   requireTenantPermission,
@@ -38,6 +58,19 @@ export const enqueueEsocialEvent = createServerFn({ method: "POST" })
         context.userId,
       ],
     );
+    // Trilha de auditoria do ato de saída de dados (enfileiramento eSocial).
+    await recordAuditQ({
+      tenantId: data.tenant_id,
+      actorId: context.userId,
+      action: "esocial.enfileirar",
+      resource: "esocial_events",
+      recordId: id,
+      after: {
+        event_type: data.event_type,
+        external_id: data.external_id,
+        payload_sha256: hash,
+      },
+    });
     return { id, hash };
   });
 export const processEsocialQueue = createServerFn({ method: "POST" })
@@ -48,31 +81,29 @@ export const processEsocialQueue = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const a = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(a, "esocial.manage");
-    return withTransaction(async (c) => {
-      const cert = (
-        await c.query<any>(
-          `select * from public.esocial_certificates where tenant_id=$1 and active and valid_from<=now() and valid_to>now() order by valid_to desc limit 1`,
-          [data.tenant_id],
-        )
-      ).rows[0];
-      if (!cert) throw new Error("Certificado A1/A3 válido não configurado");
-      const events = (
-        await c.query<any>(
-          `select * from public.esocial_events where tenant_id=$1 and status in('validado','erro') and next_attempt_at<=now() order by created_at limit 100 for update skip locked`,
-          [data.tenant_id],
-        )
-      ).rows;
-      for (const e of events) {
-        const attempt = e.attempts + 1;
-        await c.query(
-          `update public.esocial_events set status='assinado',attempts=$2,updated_at=now(),last_error=null where id=$1`,
-          [e.id, attempt],
-        );
-        await c.query(
-          `insert into public.esocial_event_attempts(tenant_id,event_id,attempt_number,request_sha256,response_code,response_excerpt)values($1,$2,$3,$4,'AGUARDANDO_TRANSMISSAO','Assinatura delegada ao adaptador seguro')`,
-          [data.tenant_id, e.id, attempt, e.payload_sha256],
-        );
-      }
-      return { processed: events.length, certificate: cert.serial_number };
-    });
+    // Não há assinador nem transmissor. Marcar os eventos como `assinado` aqui
+    // registraria um fato que não ocorreu, então a operação falha explicitamente.
+    throw new NotImplementedConformanceError("esocial-transmissao");
+  });
+
+/**
+ * Situação da fila do eSocial: contagem por status e o estado de conformidade
+ * da integração. Substitui o uso de `processEsocialQueue` como se ela fosse
+ * capaz de avançar a fila.
+ */
+export const getEsocialQueueStatus = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((v: unknown) =>
+    z.object({ tenant_id: z.string().uuid() }).parse(v),
+  )
+  .handler(async ({ data, context }) => {
+    const a = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(a, "esocial.read");
+    return {
+      porStatus: await query<{ status: string; total: string }>(
+        `select status,count(*)::text total from public.esocial_events where tenant_id=$1 group by status order by status`,
+        [data.tenant_id],
+      ),
+      conformidade: conformanceOf("esocial-transmissao"),
+    };
   });

@@ -11,15 +11,12 @@
 //
 // Roda sem Docker e sem banco. É o gate de qualquer mudança em supabase/migrations.
 
-import { readFileSync, readdirSync, existsSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { readFileSync } from "node:fs";
+import { basename } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
-
-const ROOT = resolve(import.meta.dirname, "..");
-const DIRS = [
-  join(ROOT, "db", "bootstrap"),
-  join(ROOT, "supabase", "migrations"),
-];
+// Lista/ordem dos arquivos vem do helper de teste — fonte única, para o gate e os
+// testes não divergirem (O0-12).
+import { migrationFiles } from "../tests/helpers/pglite.mjs";
 
 const db = new PGlite();
 const falhas = [];
@@ -27,24 +24,20 @@ let total = 0;
 
 const primeiraLinha = (e) => String(e?.message ?? e).split("\n")[0];
 
-for (const dir of DIRS) {
-  if (!existsSync(dir)) continue;
-  for (const f of readdirSync(dir)
-    .filter((x) => x.endsWith(".sql"))
-    .sort()) {
-    total++;
+for (const path of migrationFiles()) {
+  const f = basename(path);
+  total++;
+  try {
+    await db.exec(readFileSync(path, "utf8"));
+    console.log(`OK    ${f}`);
+  } catch (e) {
+    falhas.push({ f, msg: primeiraLinha(e) });
+    console.log(`FALHA ${f}  ->  ${primeiraLinha(e)}`);
+    // um arquivo com begin; deixa a transação aberta e abortada
     try {
-      await db.exec(readFileSync(join(dir, f), "utf8"));
-      console.log(`OK    ${f}`);
-    } catch (e) {
-      falhas.push({ f, msg: primeiraLinha(e) });
-      console.log(`FALHA ${f}  ->  ${primeiraLinha(e)}`);
-      // um arquivo com begin; deixa a transação aberta e abortada
-      try {
-        await db.exec("rollback");
-      } catch {
-        /* não havia transação aberta */
-      }
+      await db.exec("rollback");
+    } catch {
+      /* não havia transação aberta */
     }
   }
 }

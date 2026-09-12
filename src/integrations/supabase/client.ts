@@ -11,6 +11,17 @@ import {
 import type { QueryReq, QueryFilter } from "@/lib/pgrest-types";
 
 const SESSION_KEY = "attestado.session";
+// Mesma chave que src/lib/auth-context.tsx grava em setActiveTenant/loadTenantContext.
+const ACTIVE_TENANT_KEY = "meuponto.activeTenantId";
+
+function readActiveTenantId(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return localStorage.getItem(ACTIVE_TENANT_KEY);
+  } catch {
+    return null;
+  }
+}
 
 export interface AppSession {
   access_token: string;
@@ -136,6 +147,12 @@ class QueryBuilder implements PromiseLike<{
   }
   private async exec() {
     try {
+      // Anexa o tenant ativo (persistido por auth-context.tsx) para que o
+      // compilador de query isole as tabelas legadas por ente. O servidor
+      // revalida contra tenant_memberships; aqui é só transporte. A chave é a
+      // mesma de ACTIVE_TENANT_KEY em src/lib/auth-context.tsx.
+      const activeTenant = readActiveTenantId();
+      if (activeTenant) this.req.tenant_id = activeTenant;
       return await dbQuery({ data: this.req });
     } catch (e) {
       return {
