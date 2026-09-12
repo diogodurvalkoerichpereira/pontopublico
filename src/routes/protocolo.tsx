@@ -23,6 +23,7 @@ import {
   recordProtocolMovement,
   getProtocolMovements,
   archiveProtocolProcess,
+  getProtocolSummary,
 } from "@/lib/protocol.functions";
 
 export const Route = createFileRoute("/protocolo")({ component: Page });
@@ -75,6 +76,7 @@ function Content() {
   const move = useServerFn(recordProtocolMovement);
   const loadMovements = useServerFn(getProtocolMovements);
   const archive = useServerFn(archiveProtocolProcess);
+  const loadSummary = useServerFn(getProtocolSummary);
   const qc = useQueryClient();
 
   const [openDialog, setOpenDialog] = useState(false);
@@ -100,8 +102,16 @@ function Content() {
   const items = (data?.processes ?? []) as ProtocolProcess[];
   const canManage = data?.canManage ?? false;
 
-  const refresh = () =>
+  const { data: summary } = useQuery({
+    queryKey: ["protocol-summary", activeTenant?.id],
+    enabled: Boolean(activeTenant),
+    queryFn: () => loadSummary({ data: { tenant_id: activeTenant!.id } }),
+  });
+
+  const refresh = () => {
     qc.invalidateQueries({ queryKey: ["protocol", activeTenant?.id] });
+    qc.invalidateQueries({ queryKey: ["protocol-summary", activeTenant?.id] });
+  };
 
   const submitNew = async () => {
     if (!activeTenant) return;
@@ -210,6 +220,27 @@ function Content() {
           </Button>
         )}
       </div>
+
+      {summary && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="rounded-xl border bg-card p-4">
+            <div className="text-sm text-muted-foreground">Total</div>
+            <div className="text-2xl font-bold">{summary.total}</div>
+          </div>
+          <div className="rounded-xl border bg-card p-4">
+            <div className="text-sm text-muted-foreground">Em tramitação</div>
+            <div className="text-2xl font-bold">{summary.emTramitacao}</div>
+          </div>
+          <div className="rounded-xl border bg-card p-4">
+            <div className="text-sm text-muted-foreground">Concluídos</div>
+            <div className="text-2xl font-bold">{summary.concluidos}</div>
+          </div>
+          <div className="rounded-xl border bg-card p-4">
+            <div className="text-sm text-muted-foreground">Arquivados</div>
+            <div className="text-2xl font-bold">{summary.arquivados}</div>
+          </div>
+        </div>
+      )}
 
       <div className="rounded-xl border bg-card overflow-x-auto">
         <table className="w-full text-sm">

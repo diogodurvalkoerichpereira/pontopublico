@@ -46,6 +46,40 @@ export const getProtocolProcesses = createServerFn({ method: "POST" })
     };
   });
 
+const SummaryInput = z.object({ tenant_id: z.string().uuid() });
+
+// O5-01d — Resumo do protocolo: contagem de processos por situação (em tramitação,
+// concluído, arquivado) e total. Reusa protocol.read.
+export const getProtocolSummary = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => SummaryInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "protocol.read");
+    const row = (
+      await query<{
+        em_tramitacao: string;
+        concluido: string;
+        arquivado: string;
+        total: string;
+      }>(
+        `select
+           count(*) filter (where status='em_tramitacao')::text as em_tramitacao,
+           count(*) filter (where status='concluido')::text as concluido,
+           count(*) filter (where status='arquivado')::text as arquivado,
+           count(*)::text as total
+         from public.protocol_processes where tenant_id = $1`,
+        [data.tenant_id],
+      )
+    )[0];
+    return {
+      emTramitacao: Number(row.em_tramitacao),
+      concluidos: Number(row.concluido),
+      arquivados: Number(row.arquivado),
+      total: Number(row.total),
+    };
+  });
+
 const DetailInput = z.object({
   tenant_id: z.string().uuid(),
   process_id: z.string().uuid(),
