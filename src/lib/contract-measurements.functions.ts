@@ -139,3 +139,51 @@ export const recordContractMeasurement = createServerFn({ method: "POST" })
       return { id, numero, valor_executado: novoExecutado };
     });
   });
+
+const AttestInput = z.object({
+  tenant_id: z.string().uuid(),
+  measurement_id: z.string().uuid(),
+  observacao: z.string().trim().max(500).optional(),
+});
+
+// O3-14b — Recebimento definitivo da medição (Lei 14.133 art. 140, I). O recebimento
+// **provisório** é o registro da entrega; o **definitivo** é o atesto, após a verificação
+// de qualidade/quantidade, que autoriza o pagamento. Só uma medição provisória pode ser
+// atestada; definitiva é terminal (não reabre). Reusa contracts.manage.
+export const attestContractMeasurement = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => AttestInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "contracts.manage");
+    return withTransaction(async (client) => {
+      const medicao = (
+        await client.query<{ recebimento: string; numero: number }>(
+          `select recebimento, numero from public.contract_measurements
+           where id=$1 and tenant_id=$2 for update`,
+          [data.measurement_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!medicao) throw new Error("Medição não encontrada");
+      if (medicao.recebimento === "definitivo")
+        throw new Error("Medição já recebida em definitivo");
+      await client.query(
+        `update public.contract_measurements set recebimento='definitivo'
+         where id=$1 and tenant_id=$2`,
+        [data.measurement_id, data.tenant_id],
+      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "receber_definitivo_medicao",
+        resource: "contract_measurements",
+        recordId: data.measurement_id,
+        before: { recebimento: medicao.recebimento },
+        after: {
+          recebimento: "definitivo",
+          observacao: data.observacao ?? null,
+        },
+      });
+      return { id: data.measurement_id, recebimento: "definitivo" };
+    });
+  });

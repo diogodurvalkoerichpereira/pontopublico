@@ -899,6 +899,14 @@ lista. Migration `..._o3_14_contract_measurements.sql` (ALTER aditivo + tabela),
 `contracts.*`. Teste `tests/sprint-contract-measurements.test.mjs` verificado por mutação
 (usar o valor total em vez do empenhado no teto derruba).
 
+**O3-14b — Recebimento definitivo da medição (Lei 14.133 art. 140) ✅.**
+`attestContractMeasurement` move uma medição **provisória** para `definitivo` — o atesto
+que, após a verificação de qualidade/quantidade, autoriza o pagamento; definitiva é
+terminal (não reabre). Reusa `contracts.manage`, sem migration (coluna `recebimento` e
+grant UPDATE já existiam); `/contratos` ganha a ação "Receber definitivo" por medição
+provisória. Teste `tests/sprint-contract-measurement-attest.test.mjs` verificado por
+mutação (remover a guarda de estado deixa atestar duas vezes — derruba).
+
 **O3-15 — Medições no painel de contratos (UI) ✅.** No `/contratos`, cada contrato
 expande as suas medições (nº, competência, descrição, valor, recebimento) e tem a ação
 "Medir" (contrato vigente) que registra uma medição respeitando o teto do empenhado.

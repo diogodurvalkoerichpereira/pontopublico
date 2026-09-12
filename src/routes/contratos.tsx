@@ -33,6 +33,7 @@ import {
 import {
   getContractMeasurements,
   recordContractMeasurement,
+  attestContractMeasurement,
 } from "@/lib/contract-measurements.functions";
 
 export const Route = createFileRoute("/contratos")({ component: Page });
@@ -92,6 +93,7 @@ function Content() {
   const save = useServerFn(saveContract);
   const loadMeasurements = useServerFn(getContractMeasurements);
   const measure = useServerFn(recordContractMeasurement);
+  const attest = useServerFn(attestContractMeasurement);
   const transition = useServerFn(transitionContract);
   const qc = useQueryClient();
 
@@ -189,6 +191,25 @@ function Content() {
       toast.error(
         error instanceof Error ? error.message : "Falha na transição",
       );
+    }
+  };
+
+  const doAttest = async (measurementId: string) => {
+    if (!activeTenant) return;
+    if (
+      !window.confirm(
+        "Receber a medição em definitivo? O atesto autoriza o pagamento e é irreversível.",
+      )
+    )
+      return;
+    try {
+      await attest({
+        data: { tenant_id: activeTenant.id, measurement_id: measurementId },
+      });
+      toast.success("Medição recebida em definitivo");
+      refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha no atesto");
     }
   };
 
@@ -458,6 +479,9 @@ function Content() {
                 <th className="p-3 font-semibold">Descrição</th>
                 <th className="p-3 font-semibold text-right">Valor</th>
                 <th className="p-3 font-semibold">Recebimento</th>
+                {measurements?.canManage && (
+                  <th className="p-3 font-semibold">Ações</th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -470,12 +494,25 @@ function Content() {
                     {brl(m.valor)}
                   </td>
                   <td className="p-3 capitalize">{m.recebimento}</td>
+                  {measurements?.canManage && (
+                    <td className="p-3">
+                      {m.recebimento === "provisorio" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => doAttest(m.id)}
+                        >
+                          Receber definitivo
+                        </Button>
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))}
               {(measurements?.measurements ?? []).length === 0 && (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={measurements?.canManage ? 6 : 5}
                     className="p-6 text-center text-muted-foreground"
                   >
                     Nenhuma medição registrada.
