@@ -235,3 +235,46 @@ export const recordProtocolMovement = createServerFn({ method: "POST" })
       return { id, concluido: data.concluir };
     });
   });
+
+const ArchiveInput = z.object({
+  tenant_id: z.string().uuid(),
+  process_id: z.string().uuid(),
+  motivo: z.string().trim().min(3).max(500),
+});
+
+// O5-01c — Arquivamento do processo. Só um processo **concluído** pode ser arquivado
+// (em tramitação precisa concluir antes); arquivar é terminal. Reusa protocol.manage.
+export const archiveProtocolProcess = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => ArchiveInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "protocol.manage");
+    return withTransaction(async (client) => {
+      const process = (
+        await client.query<{ status: string }>(
+          `select status from public.protocol_processes
+           where id=$1 and tenant_id=$2 for update`,
+          [data.process_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!process) throw new Error("Processo não encontrado");
+      if (process.status !== "concluido")
+        throw new Error("Só um processo concluído pode ser arquivado");
+      await client.query(
+        `update public.protocol_processes
+         set status='arquivado', updated_at=now()
+         where id=$1 and tenant_id=$2`,
+        [data.process_id, data.tenant_id],
+      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "archive",
+        resource: "protocol_processes",
+        recordId: data.process_id,
+        after: { status: "arquivado", motivo: data.motivo },
+      });
+      return { id: data.process_id, status: "arquivado" };
+    });
+  });

@@ -1026,6 +1026,12 @@ migration; `/controle-interno` ganha os cartões (total, em curso, implementados
 vencido em destaque). Teste `tests/sprint-internal-control-summary.test.mjs` verificado
 por mutação (contar encerrado vencido, ou ignorar o prazo, derruba).
 
+**O5-01c — Arquivamento do processo ✅.** `archiveProtocolProcess` move um processo
+**concluído** para `arquivado` (em tramitação precisa concluir antes; arquivado é
+terminal). Reusa `protocol.manage`, sem migration; `/protocolo` ganha a ação Arquivar nos
+concluídos. Teste `tests/sprint-protocol-archive.test.mjs` verificado por mutação (arquivar
+um em tramitação derruba).
+
 **O5-01b — Histórico de tramitação do processo ✅.** `getProtocolMovements` devolve o
 cabeçalho do processo e o trilho de movimentações em ordem cronológica (mais antiga →
 mais recente), com o nome das unidades de origem/destino, e **só do processo pedido**

@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { FileStack, Plus, Send, History } from "lucide-react";
+import { FileStack, Plus, Send, History, Archive } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ import {
   openProtocolProcess,
   recordProtocolMovement,
   getProtocolMovements,
+  archiveProtocolProcess,
 } from "@/lib/protocol.functions";
 
 export const Route = createFileRoute("/protocolo")({ component: Page });
@@ -73,6 +74,7 @@ function Content() {
   const openProc = useServerFn(openProtocolProcess);
   const move = useServerFn(recordProtocolMovement);
   const loadMovements = useServerFn(getProtocolMovements);
+  const archive = useServerFn(archiveProtocolProcess);
   const qc = useQueryClient();
 
   const [openDialog, setOpenDialog] = useState(false);
@@ -130,6 +132,23 @@ function Content() {
     setDespacho("");
     setConcluir(false);
     setMoveOpen(true);
+  };
+
+  const doArchive = async (p: ProtocolProcess) => {
+    if (!activeTenant) return;
+    try {
+      await archive({
+        data: {
+          tenant_id: activeTenant.id,
+          process_id: p.id,
+          motivo: "Encerramento do trâmite",
+        },
+      });
+      toast.success("Processo arquivado");
+      refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao arquivar");
+    }
   };
 
   const openHistory = async (p: ProtocolProcess) => {
@@ -236,6 +255,15 @@ function Content() {
                         onClick={() => openMove(p)}
                       >
                         <Send className="size-4" /> Tramitar
+                      </Button>
+                    )}
+                    {canManage && p.status === "concluido" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => doArchive(p)}
+                      >
+                        <Archive className="size-4" /> Arquivar
                       </Button>
                     )}
                   </div>
