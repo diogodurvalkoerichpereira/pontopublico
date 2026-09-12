@@ -2,7 +2,14 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Boxes, Plus, ArrowDownUp, ScrollText, Landmark } from "lucide-react";
+import {
+  Boxes,
+  Plus,
+  ArrowDownUp,
+  ScrollText,
+  Landmark,
+  ClipboardCheck,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,6 +37,7 @@ import {
   getMaterialInventory,
   getMaterialLedger,
   getMaterialMovementSummary,
+  adjustMaterialInventory,
 } from "@/lib/materials.functions";
 import { incorporateMaterialAsset } from "@/lib/assets.functions";
 
@@ -93,7 +101,12 @@ function Content() {
   const loadLedger = useServerFn(getMaterialLedger);
   const incorporate = useServerFn(incorporateMaterialAsset);
   const loadMovSummary = useServerFn(getMaterialMovementSummary);
+  const adjust = useServerFn(adjustMaterialInventory);
   const qc = useQueryClient();
+
+  const [adjItem, setAdjItem] = useState<Item | null>(null);
+  const [adjContada, setAdjContada] = useState("");
+  const [adjHistorico, setAdjHistorico] = useState("");
 
   const monthStart = new Date().toISOString().slice(0, 8) + "01";
   const [periodo, setPeriodo] = useState({ from: monthStart, to: hoje() });
@@ -170,6 +183,38 @@ function Content() {
     qc.invalidateQueries({
       queryKey: ["material-inventory", activeTenant?.id],
     });
+    qc.invalidateQueries({
+      queryKey: ["material-mov-summary", activeTenant?.id],
+    });
+  };
+
+  const openAdjust = (item: Item) => {
+    setAdjItem(item);
+    setAdjContada(item.saldo_quantidade);
+    setAdjHistorico("");
+  };
+
+  const submitAdjust = async () => {
+    if (!activeTenant || !adjItem) return;
+    setBusy(true);
+    try {
+      const r = await adjust({
+        data: {
+          tenant_id: activeTenant.id,
+          item_id: adjItem.id,
+          quantidade_contada: Number(adjContada),
+          data_ajuste: hoje(),
+          historico: adjHistorico.trim(),
+        },
+      });
+      toast.success(`Ajuste de ${r.tipo} — saldo: ${r.saldo_quantidade} un`);
+      setAdjItem(null);
+      refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha no ajuste");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const submitItem = async () => {
@@ -439,6 +484,16 @@ function Content() {
                     >
                       <ScrollText className="size-4" />
                     </Button>
+                    {canManage && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        title="Ajustar inventário"
+                        onClick={() => openAdjust(i)}
+                      >
+                        <ClipboardCheck className="size-4" />
+                      </Button>
+                    )}
                     {canManage &&
                       i.categoria === "permanente" &&
                       Number(i.saldo_quantidade) > 0 && (
@@ -589,6 +644,52 @@ function Content() {
           <DialogFooter>
             <Button onClick={submitMove} disabled={busy}>
               Registrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Ajuste de inventário */}
+      <Dialog
+        open={Boolean(adjItem)}
+        onOpenChange={(o) => !o && setAdjItem(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Ajuste de inventário — {adjItem?.codigo} {adjItem?.nome}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Saldo no sistema: {adjItem?.saldo_quantidade} un. Informe a
+              quantidade contada; a diferença gera um ajuste ao custo médio.
+            </p>
+            <div>
+              <Label>Quantidade contada</Label>
+              <Input
+                type="number"
+                step="0.001"
+                value={adjContada}
+                onChange={(e) => setAdjContada(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Histórico</Label>
+              <Input
+                value={adjHistorico}
+                onChange={(e) => setAdjHistorico(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={submitAdjust}
+              disabled={
+                busy || adjContada === "" || adjHistorico.trim().length < 3
+              }
+            >
+              Ajustar
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -826,6 +826,14 @@ Incorporar nos itens permanentes. Teste `tests/sprint-material-asset-incorporati
 verificado por mutação (usar o saldo total em vez de custo médio × quantidade, ou
 incorporar material de consumo, derruba).
 
+**O3-02c — Ajuste de inventário (acerto físico) ✅.** `adjustMaterialInventory` concilia o
+saldo do sistema à quantidade **contada**: apura a diferença e registra um movimento de
+ajuste — **entrada** quando falta no sistema, **saída** quando sobra — valorado ao custo
+médio do saldo; o saldo passa a ser exatamente o contado. Sem diferença, recusa. Reusa
+`materials.manage`, sem migration; `/almoxarifado` ganha a ação Ajustar por item. Teste
+`tests/sprint-material-inventory-adjust.test.mjs` verificado por mutação (inverter o sinal
+da diferença, ou não fixar o saldo no contado, derruba).
+
 **O3-02b — Consolidação de movimentação de material por período ✅.**
 `getMaterialMovementSummary` soma as entradas e as saídas (quantidade e valor = quantidade
 × valor unitário) das movimentações no intervalo [from, to]; movimento fora do período não

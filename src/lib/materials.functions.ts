@@ -356,3 +356,97 @@ export const getMaterialInventory = createServerFn({ method: "POST" })
     };
     return { categorias, total };
   });
+
+const AdjustInput = z.object({
+  tenant_id: z.string().uuid(),
+  item_id: z.string().uuid(),
+  quantidade_contada: z.number().min(0).max(1_000_000_000),
+  data_ajuste: z.string().date(),
+  historico: z.string().trim().min(3).max(500),
+});
+
+// O3-02c — Ajuste de inventário (acerto físico). Concilia o saldo do sistema à quantidade
+// contada no inventário: apura a diferença e registra uma movimentação de ajuste
+// (entrada quando falta no sistema, saída quando sobra), valorada ao custo médio do saldo;
+// o saldo passa a ser exatamente o contado. Sem diferença, nada a ajustar. Reusa
+// materials.manage.
+export const adjustMaterialInventory = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => AdjustInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "materials.manage");
+    return withTransaction(async (client) => {
+      const item = (
+        await client.query<{
+          saldo_quantidade: string;
+          saldo_valor: string;
+        }>(
+          `select saldo_quantidade::text, saldo_valor::text
+           from public.material_items where id=$1 and tenant_id=$2 for update`,
+          [data.item_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!item) throw new Error("Material não encontrado");
+      const saldoQtd = Number(item.saldo_quantidade);
+      const saldoValor = Number(item.saldo_valor);
+      const contada = data.quantidade_contada;
+      const diferenca = round3(contada - saldoQtd);
+      if (diferenca === 0)
+        throw new Error("Quantidade contada igual ao saldo — nada a ajustar");
+      const custoMedio = saldoQtd > 0 ? saldoValor / saldoQtd : 0;
+      const tipo = diferenca > 0 ? "entrada" : "saida";
+      const quantidade = Math.abs(diferenca);
+      const novaQtd = round3(contada);
+      // Ajuste valorado ao custo médio; nunca deixa o valor negativo.
+      const novoValor = Math.max(
+        0,
+        round2(saldoValor + custoMedio * diferenca),
+      );
+
+      const id = randomUUID();
+      await client.query(
+        `insert into public.material_movements
+           (id, tenant_id, item_id, tipo, quantidade, valor_unitario,
+            data_movimento, historico, created_by)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        [
+          id,
+          data.tenant_id,
+          data.item_id,
+          tipo,
+          quantidade,
+          round2(custoMedio),
+          data.data_ajuste,
+          `Ajuste de inventario: ${data.historico}`,
+          context.userId,
+        ],
+      );
+      await client.query(
+        `update public.material_items
+         set saldo_quantidade=$3, saldo_valor=$4, updated_at=now()
+         where id=$1 and tenant_id=$2`,
+        [data.item_id, data.tenant_id, novaQtd, novoValor],
+      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "ajuste_inventario",
+        resource: "material_items",
+        recordId: data.item_id,
+        after: {
+          tipo,
+          diferenca,
+          saldo_quantidade: novaQtd,
+          saldo_valor: novoValor,
+        },
+      });
+      return {
+        id,
+        tipo,
+        diferenca,
+        saldo_quantidade: novaQtd,
+        saldo_valor: novoValor,
+      };
+    });
+  });
