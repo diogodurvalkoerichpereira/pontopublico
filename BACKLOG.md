@@ -393,12 +393,22 @@ feriado vira extra). `getTimeApuracao` puxa a jornada semanal do vínculo
 `weekly_hours` distribuído seg-sex (`defaultExpectedByWeekday`). Sem migration.
 Teste `tests/sprint-time-apuracao.test.mjs`, verificado por mutação.
 
-### O1-03f — Escala diária customizada + banco de horas persistente
+### O1-03f — Banco de horas persistente ✅ (escala diária segue pendente)
 
-P1. Modelar a **escala diária** (rotativa, sábado, turnos) sobre `work_schedules`
-— hoje o previsto é `weekly_hours` distribuído seg-sex. E o **banco de horas**
-como saldo acumulado (persistente) dos extras/faltas apurados. Aposentar a leitura
-user-scoped de `time_entries` em favor das marcações multi-tenant.
+P1. **Banco de horas feito.** `time_bank_entries` (migration
+`20260909590000_o1_03f_time_bank.sql`) é o razão do saldo do ponto por vínculo e
+competência: `minutes` (saldo do mês, com sinal) e `balance_after` (acumulado após
+a competência). `postTimeBankEntry`/`getTimeBank` (`time-bank.functions.ts`,
+`people.manage`/`people.read`): o saldo do mês é um lançamento gerencial do RH
+(pré-preenchido pela apuração O1-03g, decidido pelo RH — ex.: após corrigir as
+marcações inconsistentes de O1-03h), e o **acumulado é sempre recalculado pelo
+servidor em ordem de competência**, sob `FOR UPDATE`, de modo que lançar/retificar
+um mês no meio reordena os seguintes. Tela **/rh/banco-horas** (lançar + razão por
+servidor) e item de nav. Teste `tests/sprint-time-bank.test.mjs` verificado por
+mutação (recalcular fora de ordem, ou não recalcular após retificar, derruba).
+**Pendente nesta linha** (registrado): **escala diária customizada** (rotativa,
+sábado, turnos) sobre `work_schedules` — hoje o previsto é `weekly_hours`
+distribuído seg-sex; e aposentar a leitura user-scoped de `time_entries`.
 
 ### O1-03g — Resumo mensal da apuração de ponto por servidor ✅
 

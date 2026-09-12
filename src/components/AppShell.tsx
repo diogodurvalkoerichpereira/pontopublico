@@ -8,6 +8,7 @@ import {
   Users,
   FolderOpen,
   Clock,
+  Hourglass,
   Calendar,
   UserCog,
   Menu,
@@ -229,6 +230,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       to: "/rh/apuracao",
       label: "Apuração de ponto",
       icon: Clock,
+      section: "Recursos Humanos",
+    });
+  }
+  if (hasTenantPermission("people.read")) {
+    items.push({
+      to: "/rh/banco-horas",
+      label: "Banco de horas",
+      icon: Hourglass,
       section: "Recursos Humanos",
     });
   }
