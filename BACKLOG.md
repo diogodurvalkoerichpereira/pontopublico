@@ -913,6 +913,15 @@ Migration `..._o3_12_price_registration.sql` (2 tabelas), reusa `contracts.*`. T
 `tests/sprint-price-registration.test.mjs` verificado por mutação (inverter o teste de
 saldo no consumo derruba).
 
+**O3-12b — Encerramento/cancelamento da ata (SRP, Lei 14.133 art. 82-86) ✅.**
+`closePriceRegistration` move uma ata **vigente** para `encerrada` (fim natural da
+vigência/exaustão) ou `cancelada` (art. 86); ambos os estados são **terminais** e fecham
+novos consumos — `drawFromPriceRegistration` já recusa ata não vigente, mas até aqui
+**nada** transicionava o status (a guarda era inalcançável). Reusa `contracts.manage`, sem
+migration (status e `updated_at` já existiam); `/atas` ganha as ações Encerrar/Cancelar por
+ata vigente. Teste `tests/sprint-price-registration-close.test.mjs` verificado por mutação
+(remover a guarda de estado de origem deixa encerrar uma ata já encerrada — derruba).
+
 **O3-13 — Painel de Registro de Preços (UI) ✅.** Rota `/atas` dá cara ao O3-12: lista as
 atas com seus itens (registrada × consumida × saldo), ação "Consumir" por item (respeita o
 saldo e a vigência) e "Nova ata" a partir de uma licitação homologada. Reusa

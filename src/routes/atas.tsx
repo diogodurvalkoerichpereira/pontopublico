@@ -2,7 +2,13 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ClipboardList, Plus, PackageMinus } from "lucide-react";
+import {
+  ClipboardList,
+  Plus,
+  PackageMinus,
+  CircleSlash,
+  Ban,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,6 +33,7 @@ import {
   getPriceRegistrations,
   createPriceRegistration,
   drawFromPriceRegistration,
+  closePriceRegistration,
 } from "@/lib/price-registration.functions";
 import { getProcurementProcesses } from "@/lib/procurement.functions";
 
@@ -71,6 +78,7 @@ function Content() {
   const loadProcesses = useServerFn(getProcurementProcesses);
   const create = useServerFn(createPriceRegistration);
   const draw = useServerFn(drawFromPriceRegistration);
+  const close = useServerFn(closePriceRegistration);
   const qc = useQueryClient();
 
   const [open, setOpen] = useState(false);
@@ -159,6 +167,36 @@ function Content() {
     }
   };
 
+  const submitClose = async (
+    ata: Registration,
+    acao: "encerrar" | "cancelar",
+  ) => {
+    if (!activeTenant) return;
+    const rotulo = acao === "encerrar" ? "Encerrar" : "Cancelar";
+    if (
+      !window.confirm(
+        `${rotulo} a ata ${ata.numero}/${ata.ano}? A ação é definitiva e fecha novos consumos.`,
+      )
+    )
+      return;
+    setBusy(true);
+    try {
+      await close({
+        data: {
+          tenant_id: activeTenant.id,
+          registration_id: ata.id,
+          acao,
+        },
+      });
+      toast.success(acao === "encerrar" ? "Ata encerrada" : "Ata cancelada");
+      refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha na ação");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const submitDraw = async () => {
     if (!activeTenant || !drawItem) return;
     setBusy(true);
@@ -222,6 +260,26 @@ function Content() {
               >
                 {ata.status}
               </Badge>
+              {canManage && ata.status === "vigente" && (
+                <div className="flex items-center gap-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => submitClose(ata, "encerrar")}
+                  >
+                    <CircleSlash className="size-4" /> Encerrar
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => submitClose(ata, "cancelar")}
+                  >
+                    <Ban className="size-4" /> Cancelar
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
           <table className="w-full text-sm">

@@ -232,3 +232,55 @@ export const drawFromPriceRegistration = createServerFn({ method: "POST" })
       };
     });
   });
+
+const CloseInput = z.object({
+  tenant_id: z.string().uuid(),
+  registration_id: z.string().uuid(),
+  acao: z.enum(["encerrar", "cancelar"]),
+  motivo: z.string().trim().max(500).optional(),
+});
+
+// Desfecho por ação. 'encerrada'/'cancelada' são terminais.
+const DESFECHO: Record<string, string> = {
+  encerrar: "encerrada",
+  cancelar: "cancelada",
+};
+
+// O3-12b — Encerra ou cancela a ata de registro de preços (SRP, Lei 14.133 art. 82-86).
+// Só uma ata **vigente** admite o encerramento (fim natural da vigência/exaustão) ou o
+// cancelamento (art. 86); ambos os estados são terminais e fecham novos consumos — o
+// `drawFromPriceRegistration` já recusa ata não vigente. Reusa contracts.manage.
+export const closePriceRegistration = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => CloseInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "contracts.manage");
+    return withTransaction(async (client) => {
+      const ata = (
+        await client.query<{ status: string }>(
+          `select status from public.price_registrations
+           where id=$1 and tenant_id=$2 for update`,
+          [data.registration_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!ata) throw new Error("Ata não encontrada");
+      if (ata.status !== "vigente")
+        throw new Error(`Ata '${ata.status}' não admite a ação`);
+      const novo = DESFECHO[data.acao];
+      await client.query(
+        `update public.price_registrations set status=$3, updated_at=now()
+         where id=$1 and tenant_id=$2`,
+        [data.registration_id, data.tenant_id, novo],
+      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: `price_registration_${data.acao}`,
+        resource: "price_registrations",
+        recordId: data.registration_id,
+        after: { status: novo, motivo: data.motivo ?? null },
+      });
+      return { id: data.registration_id, status: novo };
+    });
+  });
