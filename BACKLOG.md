@@ -712,6 +712,17 @@ Próximo: balanço financeiro completo (com receita/despesa orçamentária e
 extraorçamentária) e patrimonial, demonstração das variações patrimoniais
 (DCASP); ordem bancária (OB) e MSC-SICONFI.
 
+**O2-08b — Extrato de arrecadação + painel de receitas (UI) ✅.** `getRevenueCollections`
+detalha as arrecadações de **uma** receita (data, valor, histórico) em ordem cronológica,
+com o total — o razão que compõe o `valor_arrecadado` agregado, isolado por `revenue_id`
+(não vaza a arrecadação de outra receita). Read-only, reusa `budget.read`, sem migration.
+Ativa o módulo de receita na interface: nova rota `/receitas` (cartões previsto/arrecadado/%
+realização, cadastro de receita, "Arrecadar" por receita ativa e o extrato por receita),
+reusando `getBudgetRevenues`/`saveBudgetRevenue`/`recordRevenueCollection` — que existiam no
+backend (O2-08) mas não tinham tela. Item de menu "Receitas" em Contabilidade e Finanças.
+Teste `tests/sprint-revenue-collections.test.mjs` verificado por mutação (vazar o extrato de
+outra receita, ou remover a ordenação por data, derruba).
+
 **O2-15 — Conciliação bancária ✅.** `reconcileTreasuryAccount` compara o saldo
 contábil (livro) de uma conta de tesouraria com o saldo do extrato numa data e
 registra a diferença (extrato − livro), uma por conta/data; `getTreasuryReconciliations`

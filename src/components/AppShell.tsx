@@ -367,6 +367,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       icon: ReceiptText,
       section: "Contabilidade e Finanças",
     });
+  if (hasTenantPermission("budget.read"))
+    items.push({
+      to: "/receitas",
+      label: "Receitas",
+      icon: BadgeDollarSign,
+      section: "Contabilidade e Finanças",
+    });
   if (hasTenantPermission("accounting.read"))
     items.push({
       to: "/tesouraria",

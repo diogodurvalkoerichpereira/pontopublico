@@ -196,3 +196,34 @@ export const recordRevenueCollection = createServerFn({ method: "POST" })
       return { id };
     });
   });
+
+const CollectionsInput = z.object({
+  tenant_id: z.string().uuid(),
+  revenue_id: z.string().uuid(),
+});
+
+// O2-08b — Extrato de arrecadação de uma receita. Detalha as arrecadações lançadas na
+// receita (data, valor, histórico) em ordem cronológica — o razão que compõe o
+// `valor_arrecadado` agregado, para conferência e auditoria. Isolado por `revenue_id` (não
+// vaza a arrecadação de outra receita). Read-only, reusa budget.read.
+export const getRevenueCollections = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => CollectionsInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "budget.read");
+    const collections = await query<{
+      id: string;
+      data_arrecadacao: string;
+      valor: string;
+      historico: string;
+    }>(
+      `select id, data_arrecadacao::text, valor::text, historico
+       from public.revenue_collections
+       where tenant_id = $1 and revenue_id = $2
+       order by data_arrecadacao, id`,
+      [data.tenant_id, data.revenue_id],
+    );
+    const total = collections.reduce((s, c) => s + Number(c.valor), 0);
+    return { collections, total: Number(total.toFixed(2)) };
+  });
