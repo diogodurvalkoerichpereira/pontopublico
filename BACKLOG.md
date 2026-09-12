@@ -922,6 +922,14 @@ migration (status e `updated_at` já existiam); `/atas` ganha as ações Encerra
 ata vigente. Teste `tests/sprint-price-registration-close.test.mjs` verificado por mutação
 (remover a guarda de estado de origem deixa encerrar uma ata já encerrada — derruba).
 
+**O3-12c — Resumo do registro de preços ✅.** `getPriceRegistrationSummary` consolida a
+contagem de atas por situação (vigente/encerrada/cancelada) e, das atas **vigentes**, o
+valor financeiro registrado (Σ quantidade_registrada × preço), o já consumido (Σ
+quantidade_consumida × preço) e o saldo a consumir — o comprometimento vivo do SRP.
+Read-only, reusa `contracts.read`, sem migration; `/atas` ganha os cartões. Teste
+`tests/sprint-price-registration-summary.test.mjs` verificado por mutação (usar a
+quantidade registrada no lugar da consumida no valor consumido derruba).
+
 **O3-13 — Painel de Registro de Preços (UI) ✅.** Rota `/atas` dá cara ao O3-12: lista as
 atas com seus itens (registrada × consumida × saldo), ação "Consumir" por item (respeita o
 saldo e a vigência) e "Nova ata" a partir de uma licitação homologada. Reusa

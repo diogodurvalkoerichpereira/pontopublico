@@ -34,6 +34,7 @@ import {
   createPriceRegistration,
   drawFromPriceRegistration,
   closePriceRegistration,
+  getPriceRegistrationSummary,
 } from "@/lib/price-registration.functions";
 import { getProcurementProcesses } from "@/lib/procurement.functions";
 
@@ -79,6 +80,7 @@ function Content() {
   const create = useServerFn(createPriceRegistration);
   const draw = useServerFn(drawFromPriceRegistration);
   const close = useServerFn(closePriceRegistration);
+  const loadSummary = useServerFn(getPriceRegistrationSummary);
   const qc = useQueryClient();
 
   const [open, setOpen] = useState(false);
@@ -110,6 +112,11 @@ function Content() {
     enabled: Boolean(activeTenant),
     queryFn: () => loadProcesses({ data: { tenant_id: activeTenant!.id } }),
   });
+  const { data: summary } = useQuery({
+    queryKey: ["price-registration-summary", activeTenant?.id],
+    enabled: Boolean(activeTenant),
+    queryFn: () => loadSummary({ data: { tenant_id: activeTenant!.id } }),
+  });
 
   const registrations = (data?.registrations ?? []) as Registration[];
   const items = (data?.items ?? []) as Item[];
@@ -127,10 +134,17 @@ function Content() {
     [processData],
   );
 
-  const refresh = () =>
+  const refresh = () => {
     qc.invalidateQueries({
       queryKey: ["price-registrations", activeTenant?.id],
     });
+    qc.invalidateQueries({
+      queryKey: ["price-registration-summary", activeTenant?.id],
+    });
+  };
+
+  const brl = (n: number) =>
+    n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
   const submitCreate = async () => {
     if (!activeTenant || !form.process_id) return;
@@ -244,6 +258,43 @@ function Content() {
           </Button>
         )}
       </div>
+
+      {summary && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-xl border bg-card p-4">
+            <div className="text-xs text-muted-foreground">Atas vigentes</div>
+            <div className="text-2xl font-bold tabular-nums">
+              {summary.porStatus.vigente}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {summary.porStatus.encerrada} encerradas ·{" "}
+              {summary.porStatus.cancelada} canceladas
+            </div>
+          </div>
+          <div className="rounded-xl border bg-card p-4">
+            <div className="text-xs text-muted-foreground">
+              Valor registrado (vigentes)
+            </div>
+            <div className="text-2xl font-bold tabular-nums">
+              {brl(summary.valorRegistrado)}
+            </div>
+          </div>
+          <div className="rounded-xl border bg-card p-4">
+            <div className="text-xs text-muted-foreground">Já consumido</div>
+            <div className="text-2xl font-bold tabular-nums">
+              {brl(summary.valorConsumido)}
+            </div>
+          </div>
+          <div className="rounded-xl border bg-card p-4">
+            <div className="text-xs text-muted-foreground">
+              Saldo a consumir
+            </div>
+            <div className="text-2xl font-bold tabular-nums text-primary">
+              {brl(summary.saldoAConsumir)}
+            </div>
+          </div>
+        </div>
+      )}
 
       {registrations.map((ata) => (
         <div key={ata.id} className="rounded-xl border bg-card overflow-x-auto">

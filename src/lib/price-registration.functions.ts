@@ -284,3 +284,57 @@ export const closePriceRegistration = createServerFn({ method: "POST" })
       return { id: data.registration_id, status: novo };
     });
   });
+
+const SummaryInput = z.object({ tenant_id: z.string().uuid() });
+
+// O3-12c — Resumo do registro de preços. Consolida a contagem de atas por situação e, das
+// atas **vigentes**, o valor financeiro registrado (Σ quantidade_registrada × preço), o
+// já consumido (Σ quantidade_consumida × preço) e o saldo a consumir (registrado −
+// consumido) — o comprometimento vivo do SRP. Read-only, reusa contracts.read.
+export const getPriceRegistrationSummary = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => SummaryInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "contracts.read");
+    const status = (
+      await query<{
+        vigentes: string;
+        encerradas: string;
+        canceladas: string;
+      }>(
+        `select
+           count(*) filter (where status='vigente')::text as vigentes,
+           count(*) filter (where status='encerrada')::text as encerradas,
+           count(*) filter (where status='cancelada')::text as canceladas
+         from public.price_registrations
+         where tenant_id = $1`,
+        [data.tenant_id],
+      )
+    )[0];
+    const fin = (
+      await query<{ registrado: string; consumido: string }>(
+        `select
+           coalesce(sum(i.quantidade_registrada * i.preco_unitario)
+             filter (where r.status='vigente'),0)::text as registrado,
+           coalesce(sum(i.quantidade_consumida * i.preco_unitario)
+             filter (where r.status='vigente'),0)::text as consumido
+         from public.price_registration_items i
+         join public.price_registrations r on r.id = i.registration_id
+         where i.tenant_id = $1`,
+        [data.tenant_id],
+      )
+    )[0];
+    const valorRegistrado = Number(Number(fin.registrado).toFixed(2));
+    const valorConsumido = Number(Number(fin.consumido).toFixed(2));
+    return {
+      porStatus: {
+        vigente: Number(status.vigentes),
+        encerrada: Number(status.encerradas),
+        cancelada: Number(status.canceladas),
+      },
+      valorRegistrado,
+      valorConsumido,
+      saldoAConsumir: Number((valorRegistrado - valorConsumido).toFixed(2)),
+    };
+  });
