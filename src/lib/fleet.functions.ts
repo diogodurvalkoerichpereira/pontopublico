@@ -163,3 +163,89 @@ export const recordFleetEvent = createServerFn({ method: "POST" })
       return { id, odometro_atual: data.odometro };
     });
   });
+
+const round2 = (n: number) => Number(n.toFixed(2));
+
+const ConsumptionInput = z.object({
+  tenant_id: z.string().uuid(),
+  vehicle_id: z.string().uuid(),
+  from: z.string().date().optional(),
+  to: z.string().date().optional(),
+});
+
+// O3-05b — Consumo e custo por veículo (controle de frota). O consumo médio (km/l) segue o
+// método "de tanque a tanque": os litros do PRIMEIRO abastecimento da janela enchem o
+// tanque no odômetro inicial e não se sabe a quilometragem que os gastou, então só os
+// litros dos abastecimentos seguintes são atribuídos à distância percorrida entre o
+// primeiro e o último abastecimento. Custo por km usa o gasto com combustível JÁ consumido
+// (exclui o primeiro abastecimento), coerente com o consumo. Precisa de ≥2 abastecimentos;
+// senão consumo/custo ficam nulos. Read-only, reusa assets.read.
+export const getFleetConsumption = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => ConsumptionInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "assets.read");
+    const vehicle = await queryOne<{ id: string }>(
+      "select id from public.fleet_vehicles where id=$1 and tenant_id=$2",
+      [data.vehicle_id, data.tenant_id],
+    );
+    if (!vehicle) throw new Error("Veículo não encontrado");
+    const fuel = await query<{
+      odometro: string;
+      litros: string | null;
+      valor: string;
+    }>(
+      `select odometro::text, litros::text, valor::text
+       from public.fleet_events
+       where tenant_id=$1 and vehicle_id=$2 and tipo='abastecimento'
+         and ($3::date is null or data_evento >= $3)
+         and ($4::date is null or data_evento <= $4)
+       order by odometro, data_evento`,
+      [data.tenant_id, data.vehicle_id, data.from ?? null, data.to ?? null],
+    );
+    const manut = await queryOne<{ s: string }>(
+      `select coalesce(sum(valor),0)::text as s from public.fleet_events
+       where tenant_id=$1 and vehicle_id=$2 and tipo='manutencao'
+         and ($3::date is null or data_evento >= $3)
+         and ($4::date is null or data_evento <= $4)`,
+      [data.tenant_id, data.vehicle_id, data.from ?? null, data.to ?? null],
+    );
+
+    const litrosAbastecidos = round2(
+      fuel.reduce((s, f) => s + Number(f.litros ?? 0), 0),
+    );
+    const gastoCombustivel = round2(
+      fuel.reduce((s, f) => s + Number(f.valor), 0),
+    );
+    const gastoManutencao = Number(manut?.s ?? 0);
+
+    let kmPercorridos: number | null = null;
+    let consumoMedio: number | null = null;
+    let custoPorKm: number | null = null;
+    if (fuel.length >= 2) {
+      const primeiro = fuel[0];
+      const ultimo = fuel[fuel.length - 1];
+      kmPercorridos = round2(
+        Number(ultimo.odometro) - Number(primeiro.odometro),
+      );
+      // Só os litros/custo APÓS o primeiro abastecimento foram gastos no percurso.
+      const litrosConsumidos = round2(
+        litrosAbastecidos - Number(primeiro.litros ?? 0),
+      );
+      const gastoConsumido = round2(gastoCombustivel - Number(primeiro.valor));
+      if (kmPercorridos > 0 && litrosConsumidos > 0) {
+        consumoMedio = round2(kmPercorridos / litrosConsumidos);
+        custoPorKm = round2(gastoConsumido / kmPercorridos);
+      }
+    }
+    return {
+      abastecimentos: fuel.length,
+      litrosAbastecidos,
+      gastoCombustivel,
+      gastoManutencao,
+      kmPercorridos,
+      consumoMedio,
+      custoPorKm,
+    };
+  });

@@ -921,6 +921,16 @@ expande as suas medições (nº, competência, descrição, valor, recebimento) 
 "Medir" (contrato vigente) que registra uma medição respeitando o teto do empenhado.
 Reusa `getContractMeasurements` e `recordContractMeasurement`. Sem novo backend.
 
+**O3-05b — Consumo e custo por veículo da frota ✅.** `getFleetConsumption` calcula, por
+veículo e período, o consumo médio (km/L) pelo método **de tanque a tanque** — os litros
+do primeiro abastecimento da janela não entram (encheram o tanque no odômetro inicial; a
+quilometragem que os gastou é desconhecida), só os seguintes são atribuídos à distância
+entre o primeiro e o último abastecimento — além do custo por km (gasto com combustível já
+consumido ÷ km), litros abastecidos e gasto com manutenção. Precisa de ≥2 abastecimentos.
+Read-only, reusa `assets.read`, sem migration; `/frotas` ganha o diálogo "Consumo" por
+veículo. Teste `tests/sprint-fleet-consumption.test.mjs` verificado por mutação (não
+excluir o primeiro abastecimento do denominador derruba).
+
 **O3-12 — Ata de Registro de Preços (SRP, Lei 14.133 art. 82-86) ✅.**
 `createPriceRegistration` forma a ata a partir de uma licitação **homologada**, com itens
 (unidade, quantidade registrada, preço) e **vigência de até 1 ano** (art. 84);

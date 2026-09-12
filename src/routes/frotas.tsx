@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Car, Plus, Fuel } from "lucide-react";
+import { Car, Plus, Fuel, Gauge } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,7 @@ import {
   getFleetVehicles,
   saveFleetVehicle,
   recordFleetEvent,
+  getFleetConsumption,
 } from "@/lib/fleet.functions";
 
 export const Route = createFileRoute("/frotas")({ component: Page });
@@ -69,7 +70,12 @@ function Content() {
   const load = useServerFn(getFleetVehicles);
   const saveVehicle = useServerFn(saveFleetVehicle);
   const recordEvent = useServerFn(recordFleetEvent);
+  const loadConsumption = useServerFn(getFleetConsumption);
   const qc = useQueryClient();
+
+  const [consumptionVehicle, setConsumptionVehicle] = useState<Vehicle | null>(
+    null,
+  );
 
   const [vehicleOpen, setVehicleOpen] = useState(false);
   const [eventOpen, setEventOpen] = useState(false);
@@ -95,6 +101,18 @@ function Content() {
   });
   const vehicles = (data?.vehicles ?? []) as Vehicle[];
   const canManage = data?.canManage ?? false;
+
+  const { data: consumption } = useQuery({
+    queryKey: ["fleet-consumption", activeTenant?.id, consumptionVehicle?.id],
+    enabled: Boolean(activeTenant) && Boolean(consumptionVehicle),
+    queryFn: () =>
+      loadConsumption({
+        data: {
+          tenant_id: activeTenant!.id,
+          vehicle_id: consumptionVehicle!.id,
+        },
+      }),
+  });
 
   const refresh = () =>
     qc.invalidateQueries({ queryKey: ["fleet", activeTenant?.id] });
@@ -195,6 +213,7 @@ function Content() {
               <th className="p-3 font-semibold">Ano</th>
               <th className="p-3 font-semibold text-right">Hodômetro</th>
               <th className="p-3 font-semibold">Situação</th>
+              <th className="p-3 font-semibold">Consumo</th>
             </tr>
           </thead>
           <tbody>
@@ -211,12 +230,21 @@ function Content() {
                     {v.status}
                   </Badge>
                 </td>
+                <td className="p-3">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setConsumptionVehicle(v)}
+                  >
+                    <Gauge className="size-4" /> Consumo
+                  </Button>
+                </td>
               </tr>
             ))}
             {vehicles.length === 0 && (
               <tr>
                 <td
-                  colSpan={5}
+                  colSpan={6}
                   className="p-6 text-center text-muted-foreground"
                 >
                   Nenhum veículo cadastrado.
@@ -345,6 +373,82 @@ function Content() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Consumo / custo */}
+      <Dialog
+        open={Boolean(consumptionVehicle)}
+        onOpenChange={(o) => !o && setConsumptionVehicle(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Consumo — {consumptionVehicle?.placa} (
+              {consumptionVehicle?.modelo})
+            </DialogTitle>
+          </DialogHeader>
+          {consumption ? (
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <Metric
+                label="Abastecimentos"
+                value={consumption.abastecimentos}
+              />
+              <Metric
+                label="Litros abastecidos"
+                value={`${consumption.litrosAbastecidos} L`}
+              />
+              <Metric
+                label="Gasto combustível"
+                value={brl(consumption.gastoCombustivel)}
+              />
+              <Metric
+                label="Gasto manutenção"
+                value={brl(consumption.gastoManutencao)}
+              />
+              <Metric
+                label="Km percorridos"
+                value={
+                  consumption.kmPercorridos == null
+                    ? "—"
+                    : `${consumption.kmPercorridos} km`
+                }
+              />
+              <Metric
+                label="Consumo médio"
+                value={
+                  consumption.consumoMedio == null
+                    ? "—"
+                    : `${consumption.consumoMedio} km/L`
+                }
+              />
+              <Metric
+                label="Custo por km"
+                value={
+                  consumption.custoPorKm == null
+                    ? "—"
+                    : brl(consumption.custoPorKm)
+                }
+              />
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Calculando…</p>
+          )}
+          {consumption && consumption.abastecimentos < 2 && (
+            <p className="text-xs text-muted-foreground">
+              O consumo médio precisa de ao menos dois abastecimentos (método de
+              tanque a tanque).
+            </p>
+          )}
+        </DialogContent>
+      </Dialog>
     </section>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-lg border bg-card p-3">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="text-lg font-bold tabular-nums">{value}</div>
+    </div>
   );
 }
