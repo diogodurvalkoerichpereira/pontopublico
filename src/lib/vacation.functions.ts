@@ -259,3 +259,58 @@ export const depositVacationToPayroll = createServerFn({ method: "POST" })
       bonus,
     };
   });
+
+const DeadlineInput = z.object({
+  tenant_id: z.string().uuid(),
+  data_referencia: z.string().date(),
+  dias_alerta: z.number().int().min(1).max(365).default(60),
+});
+
+// O1-05c — Alerta de limite do período concessivo de férias (CLT art. 134/137). Um período
+// aquisitivo ainda devido (dias não gozados) precisa ser concedido até o `concession_deadline`;
+// passar dessa data obriga o pagamento **em dobro** (art. 137) — passivo trabalhista. Lista
+// os períodos com saldo (`taken_days < entitled_days`) e obrigação viva
+// (disponivel/programado/em_gozo) cujo limite já venceu (`< data_referencia`) ou vence dentro
+// da janela de alerta, com quantos dias faltam (negativo = vencido). Read-only, reusa
+// vacation.read.
+export const getVacationDeadlineAlerts = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((v: unknown) => DeadlineInput.parse(v))
+  .handler(async ({ data, context }) => {
+    const a = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(a, "vacation.read");
+    const alerts = await query<{
+      id: string;
+      full_name: string;
+      registration_number: string;
+      accrual_start: string;
+      accrual_end: string;
+      concession_deadline: string;
+      entitled_days: number;
+      taken_days: number;
+      dias_para_limite: number;
+      vencido: boolean;
+    }>(
+      `select ap.id, p.full_name, l.registration_number,
+         ap.accrual_start::text, ap.accrual_end::text, ap.concession_deadline::text,
+         ap.entitled_days, ap.taken_days,
+         (ap.concession_deadline - $2::date)::int as dias_para_limite,
+         (ap.concession_deadline < $2::date) as vencido
+       from public.vacation_accrual_periods ap
+       join public.employment_links l on l.id = ap.employment_link_id
+       join public.persons p on p.id = l.person_id
+       where ap.tenant_id = $1
+         and ap.status in ('disponivel','programado','em_gozo')
+         and ap.taken_days < ap.entitled_days
+         and ap.concession_deadline <= ($2::date + ($3 || ' days')::interval)
+       order by ap.concession_deadline`,
+      [data.tenant_id, data.data_referencia, data.dias_alerta],
+    );
+    const vencidos = alerts.filter((r) => r.vencido).length;
+    return {
+      alerts,
+      vencidos,
+      aVencer: alerts.length - vencidos,
+      dias: data.dias_alerta,
+    };
+  });

@@ -449,6 +449,17 @@ laço ponto→folha do O1-04b. Teste `tests/sprint-ferias-folha.test.mjs` prova 
 recomposição (salário 3000 + férias 3000 → INSS 649,60, não 253,41 nem 506,82),
 verificado por mutação (remover a ordenação derruba).
 
+### O1-05c — Alerta do período concessivo de férias ✅
+
+`getVacationDeadlineAlerts` (`vacation.functions.ts`) lista os períodos aquisitivos ainda
+**devidos** (`taken_days < entitled_days`, status disponivel/programado/em_gozo) cujo
+`concession_deadline` já venceu (< referência → risco de pagamento **em dobro**, CLT
+art. 137) ou vence dentro da janela de alerta (padrão 60 dias), com quantos dias faltam
+(negativo = vencido) e a contagem de vencidos × a vencer. Read-only, reusa `vacation.read`,
+sem migration; `/rh/ferias` ganha o painel de alertas. Teste
+`tests/sprint-vacation-deadline.test.mjs` verificado por mutação (inverter a comparação do
+vencimento, ou remover o filtro de saldo devido, derruba).
+
 ### O1-06 — eSocial real
 
 P0 · 3-6 semanas · ⚠️ pode exigir HSM para A3. Geração de XML, assinatura

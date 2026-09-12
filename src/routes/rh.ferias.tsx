@@ -13,26 +13,53 @@ import {
   generateVacationPeriod,
   getVacationWorkspace,
   scheduleVacation,
+  getVacationDeadlineAlerts,
 } from "@/lib/vacation.functions";
+type VacationAlert = {
+  id: string;
+  full_name: string;
+  registration_number: string;
+  accrual_start: string;
+  accrual_end: string;
+  concession_deadline: string;
+  dias_para_limite: number;
+  vencido: boolean;
+};
+
 export const Route = createFileRoute("/rh/ferias")({ component: Page });
 function Page() {
   const { activeTenant } = useAuth(),
     load = useServerFn(getVacationWorkspace),
     gen = useServerFn(generateVacationPeriod),
     schedule = useServerFn(scheduleVacation),
+    loadAlerts = useServerFn(getVacationDeadlineAlerts),
     qc = useQueryClient();
   const { data } = useQuery({
     queryKey: ["vacations", activeTenant?.id],
     enabled: !!activeTenant,
     queryFn: () => load({ data: { tenant_id: activeTenant!.id } }),
   });
+  const { data: alerts } = useQuery({
+    queryKey: ["vacation-alerts", activeTenant?.id],
+    enabled: !!activeTenant,
+    queryFn: () =>
+      loadAlerts({
+        data: {
+          tenant_id: activeTenant!.id,
+          data_referencia: new Date().toISOString().slice(0, 10),
+          dias_alerta: 60,
+        },
+      }),
+  });
   const [link, setLink] = useState(""),
     [start, setStart] = useState(new Date().toISOString().slice(0, 10)),
     [period, setPeriod] = useState(""),
     [days, setDays] = useState("30");
   if (!activeTenant) return null;
-  const refresh = () =>
+  const refresh = () => {
     qc.invalidateQueries({ queryKey: ["vacations", activeTenant.id] });
+    qc.invalidateQueries({ queryKey: ["vacation-alerts", activeTenant.id] });
+  };
   return (
     <AppShell>
       <section className="space-y-6">
@@ -147,6 +174,34 @@ function Page() {
             </div>
           ))}
         </div>
+        {alerts && alerts.alerts.length > 0 && (
+          <div className="rounded-2xl border bg-card p-5">
+            <h2 className="mb-1 font-bold">
+              Limite do período concessivo (CLT art. 137)
+            </h2>
+            <p className="mb-3 text-sm text-muted-foreground">
+              {alerts.vencidos} vencido(s) · {alerts.aVencer} a vencer em{" "}
+              {alerts.dias} dias. Período vencido gera pagamento em dobro.
+            </p>
+            {alerts.alerts.map((a: VacationAlert) => (
+              <div
+                key={a.id}
+                className="flex flex-wrap justify-between gap-2 border-b py-2 text-sm"
+              >
+                <span>
+                  {a.registration_number} · {a.full_name} — período{" "}
+                  {a.accrual_start} a {a.accrual_end}
+                </span>
+                <b className={a.vencido ? "text-destructive" : "text-primary"}>
+                  {a.vencido
+                    ? `vencido há ${-a.dias_para_limite} dias`
+                    : `vence em ${a.dias_para_limite} dias`}{" "}
+                  ({a.concession_deadline})
+                </b>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="rounded-2xl border bg-card p-5">
           {data?.schedules.map((s: any) => (
             <div key={s.id} className="flex justify-between border-b py-3">
