@@ -340,3 +340,44 @@ export const savePensionBeneficiary = createServerFn({ method: "POST" })
     });
     return { id };
   });
+
+const ValidDependentsInput = z.object({
+  tenant_id: z.string().uuid(),
+  holder_person_id: z.string().uuid(),
+  data_referencia: z.string().date(),
+});
+
+// O1-10 — Dependentes válidos na competência. Conta os dependentes do titular **vigentes**
+// na data de referência (valid_from ≤ ref e (valid_to nulo ou ≥ ref)) separando os que têm
+// efeito de **IRRF** (dedução por dependente) e de **previdência/salário-família** — a base
+// que a folha usa para deduzir/pagar. Dependente fora da vigência não conta. Read-only,
+// reusa family.read (escopo por unidade via assertPersonScope).
+export const getValidDependents = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => ValidDependentsInput.parse(data))
+  .handler(async ({ data, context }) => {
+    await assertPersonScope(
+      data.tenant_id,
+      data.holder_person_id,
+      context.userId,
+      "family.read",
+    );
+    const row = (
+      await query<{ irrf: string; previdencia: string; total: string }>(
+        `select
+           count(*) filter (where income_tax_effect)::text as irrf,
+           count(*) filter (where social_security_effect)::text as previdencia,
+           count(*)::text as total
+         from public.person_dependents
+         where tenant_id = $1 and holder_person_id = $2
+           and valid_from <= $3::date
+           and (valid_to is null or valid_to >= $3::date)`,
+        [data.tenant_id, data.holder_person_id, data.data_referencia],
+      )
+    )[0];
+    return {
+      irrf: Number(row.irrf),
+      previdencia: Number(row.previdencia),
+      total: Number(row.total),
+    };
+  });

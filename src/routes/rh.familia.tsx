@@ -22,6 +22,7 @@ import {
   getFamilyWorkspace,
   saveDependent,
   savePensionBeneficiary,
+  getValidDependents,
 } from "@/lib/family.functions";
 import { getPeopleRegistry } from "@/lib/people.functions";
 
@@ -96,11 +97,28 @@ function Content() {
         data: { tenant_id: activeTenant!.id, holder_person_id: personId },
       }),
   });
+  const loadValid = useServerFn(getValidDependents);
+  const { data: valid } = useQuery({
+    queryKey: ["valid-dependents", activeTenant?.id, personId],
+    enabled: Boolean(activeTenant && personId),
+    queryFn: () =>
+      loadValid({
+        data: {
+          tenant_id: activeTenant!.id,
+          holder_person_id: personId,
+          data_referencia: new Date().toISOString().slice(0, 10),
+        },
+      }),
+  });
 
-  const refresh = () =>
+  const refresh = () => {
     qc.invalidateQueries({
       queryKey: ["family-workspace", activeTenant?.id, personId],
     });
+    qc.invalidateQueries({
+      queryKey: ["valid-dependents", activeTenant?.id, personId],
+    });
+  };
   const submitDependent = async () => {
     if (!activeTenant || !personId) return;
     try {
@@ -206,6 +224,11 @@ function Content() {
             <h2 className="flex items-center gap-2 font-bold">
               <Baby className="size-5" />
               Dependentes
+              {valid && (
+                <span className="text-xs font-normal text-muted-foreground">
+                  · válidos hoje: IRRF {valid.irrf} · prev. {valid.previdencia}
+                </span>
+              )}
             </h2>
             {data?.canManage && (
               <Button size="sm" onClick={() => setDependentOpen(true)}>

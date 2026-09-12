@@ -460,6 +460,17 @@ sem migration; `/rh/ferias` ganha o painel de alertas. Teste
 `tests/sprint-vacation-deadline.test.mjs` verificado por mutação (inverter a comparação do
 vencimento, ou remover o filtro de saldo devido, derruba).
 
+### O1-10 — Dependentes válidos na competência ✅
+
+`getValidDependents` (`family.functions.ts`) conta os dependentes do titular **vigentes** na
+data de referência (`valid_from ≤ ref` e `valid_to` nulo ou `≥ ref`), separando os que têm
+efeito de **IRRF** (dedução por dependente) e de **previdência/salário-família** — a base
+que a folha usa para deduzir/pagar; dependente fora da vigência não conta. Read-only, reusa
+`family.read` (escopo por unidade via `assertPersonScope`), sem migration; `/rh/familia`
+mostra "válidos hoje" no cabeçalho de Dependentes. Teste
+`tests/sprint-valid-dependents.test.mjs` verificado por mutação (ignorar o início ou o fim
+da vigência derruba).
+
 ### O1-06 — eSocial real
 
 P0 · 3-6 semanas · ⚠️ pode exigir HSM para A3. Geração de XML, assinatura
