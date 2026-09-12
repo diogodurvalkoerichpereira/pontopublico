@@ -849,6 +849,16 @@ status `cancelada` e o `grant update` já existiam). Teste
 `tests/sprint-bank-order-cancel.test.mjs` verificado por mutação (não devolver o valor
 à conta, ou não reverter o empenho a `liquidado`, derruba).
 
+**O2-17 — Posição de empenhos por credor ✅.** `getCommitmentsByCredor`
+(`budget.functions.ts`) consolida, por credor no exercício, o **empenhado** (não
+anulado) e o estágio da despesa: **a liquidar** (empenhado), **a pagar** (liquidado,
+pronto para OB) e **pago**, com quantidade e totais do ente — a visão do financeiro
+do quanto se deve a cada fornecedor, complementar ao balanço por natureza (O2-07).
+Empenho anulado não conta; credor sem saldo empenhado não aparece; ordena por a pagar
+desc. Read-only, reusa `budget.read`, sem migration; `/empenhos` ganha o painel
+"Posição por credor". Teste `tests/sprint-commitments-by-credor.test.mjs` verificado
+por mutação (incluir anulado no empenhado, ou trocar o estágio de "a pagar", derruba).
+
 **O2-18 — Balanço patrimonial + DVP (PCASP) ✅.** `getEquityStatement` classifica o
 razão (`accounting_entry_lines`) pela classe PCASP — 1 Ativo, 2 Passivo, 3 VPD, 4 VPA
 —, inverte o sinal das contas de natureza credora e apura Ativo, Passivo, Patrimônio

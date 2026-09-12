@@ -24,9 +24,19 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth-context";
 import {
   getBudgetCommitments,
+  getCommitmentsByCredor,
   transitionBudgetCommitment,
   partiallyCancelBudgetCommitment,
 } from "@/lib/budget.functions";
+
+type CredorPos = {
+  credor: string;
+  qtd: number;
+  empenhado: number;
+  a_liquidar: number;
+  a_pagar: number;
+  pago: number;
+};
 
 export const Route = createFileRoute("/empenhos")({ component: Page });
 
@@ -79,17 +89,28 @@ function Content() {
   const [pcMotivo, setPcMotivo] = useState("");
   const [busy, setBusy] = useState(false);
 
+  const loadByCredor = useServerFn(getCommitmentsByCredor);
   const { data } = useQuery({
     queryKey: ["budget-commitments", activeTenant?.id],
     enabled: Boolean(activeTenant),
     queryFn: () => load({ data: { tenant_id: activeTenant!.id } }),
   });
+  const { data: byCredor } = useQuery({
+    queryKey: ["commitments-by-credor", activeTenant?.id],
+    enabled: Boolean(activeTenant),
+    queryFn: () => loadByCredor({ data: { tenant_id: activeTenant!.id } }),
+  });
   const items = (data ?? []) as Commitment[];
+  const credores = (byCredor?.credores ?? []) as CredorPos[];
 
-  const refresh = () =>
+  const refresh = () => {
     qc.invalidateQueries({
       queryKey: ["budget-commitments", activeTenant?.id],
     });
+    qc.invalidateQueries({
+      queryKey: ["commitments-by-credor", activeTenant?.id],
+    });
+  };
 
   const doTransition = async (
     c: Commitment,
@@ -233,6 +254,47 @@ function Content() {
           </tbody>
         </table>
       </div>
+
+      {credores.length > 0 && (
+        <div>
+          <h2 className="mb-2 text-lg font-bold">Posição por credor</h2>
+          <div className="rounded-xl border bg-card overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b bg-muted/40 text-left">
+                <tr>
+                  <th className="p-3 font-semibold">Credor</th>
+                  <th className="p-3 font-semibold text-right">Empenhado</th>
+                  <th className="p-3 font-semibold text-right">A liquidar</th>
+                  <th className="p-3 font-semibold text-right">A pagar</th>
+                  <th className="p-3 font-semibold text-right">Pago</th>
+                </tr>
+              </thead>
+              <tbody>
+                {credores.map((c) => (
+                  <tr key={c.credor} className="border-b last:border-0">
+                    <td className="p-3 font-medium">{c.credor}</td>
+                    <td className="p-3 text-right tabular-nums">
+                      {brl(c.empenhado)}
+                    </td>
+                    <td className="p-3 text-right tabular-nums text-muted-foreground">
+                      {c.a_liquidar ? brl(c.a_liquidar) : "—"}
+                    </td>
+                    <td className="p-3 text-right tabular-nums font-semibold text-amber-600">
+                      {c.a_pagar ? brl(c.a_pagar) : "—"}
+                    </td>
+                    <td className="p-3 text-right tabular-nums text-emerald-600">
+                      {c.pago ? brl(c.pago) : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            A pagar = empenhos liquidados prontos para ordem bancária.
+          </p>
+        </div>
+      )}
 
       {/* Anulação parcial */}
       <Dialog

@@ -215,6 +215,63 @@ export const getBudgetCommitments = createServerFn({ method: "POST" })
     );
   });
 
+const ByCredorInput = z.object({
+  tenant_id: z.string().uuid(),
+  exercicio: z.number().int().min(2000).max(2200).optional(),
+});
+
+// O2-17 — Posição de empenhos por credor. Consolida, por credor, o valor
+// empenhado (não anulado) e o estágio da despesa: a liquidar (empenhado), a pagar
+// (liquidado) e pago. É a visão do financeiro do quanto se deve a cada fornecedor
+// — complementa o balanço por natureza (O2-07). Empenho anulado não conta; credor
+// sem saldo empenhado não aparece. Read-only, reusa budget.read.
+export const getCommitmentsByCredor = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => ByCredorInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "budget.read");
+    const rows = await query<{
+      credor: string;
+      qtd: number;
+      empenhado: string;
+      a_liquidar: string;
+      a_pagar: string;
+      pago: string;
+    }>(
+      `select c.credor,
+         count(*) filter (where c.status <> 'anulado')::int as qtd,
+         coalesce(sum(c.valor) filter (where c.status <> 'anulado'),0)::text as empenhado,
+         coalesce(sum(c.valor) filter (where c.status = 'empenhado'),0)::text as a_liquidar,
+         coalesce(sum(c.valor) filter (where c.status = 'liquidado'),0)::text as a_pagar,
+         coalesce(sum(c.valor) filter (where c.status = 'pago'),0)::text as pago
+       from public.budget_commitments c
+       where c.tenant_id = $1 and ($2::int is null or c.exercicio = $2)
+       group by c.credor
+       having coalesce(sum(c.valor) filter (where c.status <> 'anulado'),0) > 0
+       order by a_pagar desc, empenhado desc, c.credor`,
+      [data.tenant_id, data.exercicio ?? null],
+    );
+    const credores = rows.map((r) => ({
+      credor: r.credor,
+      qtd: r.qtd,
+      empenhado: Number(r.empenhado),
+      a_liquidar: Number(r.a_liquidar),
+      a_pagar: Number(r.a_pagar),
+      pago: Number(r.pago),
+    }));
+    const totais = credores.reduce(
+      (acc, c) => ({
+        empenhado: Number((acc.empenhado + c.empenhado).toFixed(2)),
+        a_liquidar: Number((acc.a_liquidar + c.a_liquidar).toFixed(2)),
+        a_pagar: Number((acc.a_pagar + c.a_pagar).toFixed(2)),
+        pago: Number((acc.pago + c.pago).toFixed(2)),
+      }),
+      { empenhado: 0, a_liquidar: 0, a_pagar: 0, pago: 0 },
+    );
+    return { credores, totais };
+  });
+
 const ExecutionInput = z.object({
   tenant_id: z.string().uuid(),
   exercicio: z.number().int().min(2000).max(2200),
