@@ -415,6 +415,18 @@ nav em Recursos Humanos. Teste `tests/sprint-apuracao-resumo.test.mjs` verificad
 (remover o filtro `status='ativo'` faz o desligado aparecer; inverter a ordenação ou trocar a
 fórmula do saldo derruba).
 
+### O1-03h — Marcações inconsistentes (intervalo em aberto) ✅
+
+`getPunchInconsistencies` (`time-clock.functions.ts`) lista, para a competência, os **dias com
+número ímpar de marcações** (intervalo em aberto) por vínculo **ativo**. Importa para a
+correção da apuração: `apurarJornada` só conta intervalos **pareados** — a marca solta é
+descartada e vira **falta indevida**; o RH precisa fechar o dia (por **nova marcação**, já que
+o ponto é append-only) antes de valorar. Reusa `buildTimeMirror` (`openInterval`), read-only,
+`people.read`, sem migration; a tela **/rh/apuracao** ganha um alerta âmbar com os dias a
+corrigir. Teste `tests/sprint-punch-inconsistencias.test.mjs` verificado por mutação (incluir
+todo dia, ignorando `openInterval`, faz o dia pareado aparecer; remover `status='ativo'` faz o
+desligado aparecer).
+
 ### ✅ O1-04 — Ligar as ilhas (ponto → folha)
 
 P1. **Feito.** (O1-04a) `payroll_monthly_variables` passou a ser **lida** por

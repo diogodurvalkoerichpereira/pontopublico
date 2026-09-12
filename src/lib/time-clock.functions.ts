@@ -617,3 +617,98 @@ export const getApuracaoResumoMensal = createServerFn({ method: "POST" })
     );
     return { reference_month: data.reference_month, servidores, totals };
   });
+
+const InconsistenciasInput = z.object({
+  tenant_id: z.string().uuid(),
+  reference_month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+  time_zone: z.string().max(64).optional(),
+});
+
+/** Marcacoes inconsistentes do mes: dias com numero IMPAR de marcacoes (intervalo
+ *  em aberto), por vinculo ativo. Importa porque a apuracao (O1-03e) so conta
+ *  intervalos pareados — a marca solta e descartada e vira falta falsa; o RH
+ *  precisa corrigir (por nova marcacao, ja que o ponto e append-only) antes de
+ *  valorar. Read-only, reusa people.read, sem migration. */
+export const getPunchInconsistencies = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => InconsistenciasInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "people.read");
+    const [year, month] = data.reference_month.split("-").map(Number);
+    const from = new Date(Date.UTC(year, month - 1, 1)).toISOString();
+    const to = new Date(Date.UTC(year, month, 1) - 1).toISOString();
+
+    const rows = await query<{
+      employment_link_id: string;
+      registration_number: string | null;
+      full_name: string;
+      nsr: number;
+      punch_time: string;
+      source: string;
+      record_hash: string;
+    }>(
+      `select t.employment_link_id, l.registration_number, p.full_name,
+              t.nsr, t.punch_time, t.source, t.record_hash
+       from public.time_clock_punches t
+       join public.employment_links l on l.id = t.employment_link_id
+       join public.persons p on p.id = l.person_id
+       where t.tenant_id = $1 and l.status = 'ativo'
+         and t.punch_time >= $2 and t.punch_time <= $3
+       order by p.full_name, t.employment_link_id, t.nsr`,
+      [data.tenant_id, from, to],
+    );
+    const byLink = new Map<
+      string,
+      {
+        registration_number: string | null;
+        full_name: string;
+        punches: MirrorPunch[];
+      }
+    >();
+    for (const row of rows) {
+      const entry = byLink.get(row.employment_link_id) ?? {
+        registration_number: row.registration_number,
+        full_name: row.full_name,
+        punches: [],
+      };
+      entry.punches.push({
+        nsr: Number(row.nsr),
+        punchTime: new Date(row.punch_time).toISOString(),
+        recordHash: row.record_hash,
+        source: row.source,
+      });
+      byLink.set(row.employment_link_id, entry);
+    }
+
+    const inconsistencias: {
+      employment_link_id: string;
+      registration_number: string | null;
+      full_name: string;
+      date: string;
+      punchCount: number;
+    }[] = [];
+    for (const [linkId, entry] of byLink) {
+      const { days } = buildTimeMirror(entry.punches, data.time_zone);
+      for (const day of days) {
+        if (day.openInterval)
+          inconsistencias.push({
+            employment_link_id: linkId,
+            registration_number: entry.registration_number,
+            full_name: entry.full_name,
+            date: day.date,
+            punchCount: day.punches.length,
+          });
+      }
+    }
+    inconsistencias.sort((a, b) =>
+      a.full_name === b.full_name
+        ? a.date < b.date
+          ? -1
+          : 1
+        : a.full_name < b.full_name
+          ? -1
+          : 1,
+    );
+    return { reference_month: data.reference_month, inconsistencias };
+  });

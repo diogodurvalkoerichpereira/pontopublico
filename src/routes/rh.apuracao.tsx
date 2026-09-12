@@ -2,12 +2,15 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Clock } from "lucide-react";
+import { AlertTriangle, Clock } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth-context";
-import { getApuracaoResumoMensal } from "@/lib/time-clock.functions";
+import {
+  getApuracaoResumoMensal,
+  getPunchInconsistencies,
+} from "@/lib/time-clock.functions";
 
 export const Route = createFileRoute("/rh/apuracao")({ component: Page });
 
@@ -20,6 +23,14 @@ type Servidor = {
   extraMinutes: number;
   faltaMinutes: number;
   saldoMinutes: number;
+};
+
+type Inconsistencia = {
+  employment_link_id: string;
+  registration_number: string | null;
+  full_name: string;
+  date: string;
+  punchCount: number;
 };
 
 // Minutos -> "12h30" (com sinal para o saldo).
@@ -35,16 +46,27 @@ function Page() {
   const { activeTenant } = useAuth();
   const load = useServerFn(getApuracaoResumoMensal);
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
+  const loadInc = useServerFn(getPunchInconsistencies);
+  const monthOk = /^\d{4}-\d{2}$/.test(month);
   const { data, isFetching, error } = useQuery({
     queryKey: ["apuracao-resumo", activeTenant?.id, month],
-    enabled: !!activeTenant && /^\d{4}-\d{2}$/.test(month),
+    enabled: !!activeTenant && monthOk,
     queryFn: () =>
       load({ data: { tenant_id: activeTenant!.id, reference_month: month } }),
+  });
+  const { data: incData } = useQuery({
+    queryKey: ["apuracao-inconsistencias", activeTenant?.id, month],
+    enabled: !!activeTenant && monthOk,
+    queryFn: () =>
+      loadInc({
+        data: { tenant_id: activeTenant!.id, reference_month: month },
+      }),
   });
   if (!activeTenant) return null;
 
   const servidores = (data?.servidores ?? []) as Servidor[];
   const totals = data?.totals;
+  const inconsistencias = (incData?.inconsistencias ?? []) as Inconsistencia[];
 
   return (
     <AppShell>
@@ -76,6 +98,32 @@ function Page() {
           <p className="text-sm text-destructive">
             {error instanceof Error ? error.message : "Falha ao carregar"}
           </p>
+        )}
+
+        {inconsistencias.length > 0 && (
+          <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-amber-900 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-200">
+            <div className="flex items-center gap-2 font-semibold">
+              <AlertTriangle className="size-4" />
+              Marcações inconsistentes ({inconsistencias.length}) — corrija
+              antes de valorar
+            </div>
+            <p className="mt-1 text-sm">
+              Dias com número ímpar de marcações têm intervalo em aberto; a
+              apuração descarta a marca solta e pode gerar falta indevida. A
+              correção é por <strong>nova marcação</strong> (o ponto é
+              imutável).
+            </p>
+            <ul className="mt-2 space-y-1 text-sm">
+              {inconsistencias.map((i) => (
+                <li key={`${i.employment_link_id}-${i.date}`}>
+                  <span className="font-medium">{i.full_name}</span>
+                  {i.registration_number
+                    ? ` (${i.registration_number})`
+                    : ""} — {i.date} · {i.punchCount} marcações
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
 
         <div className="overflow-x-auto rounded-2xl border bg-card">
