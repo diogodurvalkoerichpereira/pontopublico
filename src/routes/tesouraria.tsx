@@ -28,6 +28,7 @@ import {
   saveTreasuryAccount,
   recordTreasuryMovement,
   transferBetweenAccounts,
+  getTreasuryLedger,
 } from "@/lib/treasury.functions";
 
 export const Route = createFileRoute("/tesouraria")({ component: Page });
@@ -68,7 +69,13 @@ function Content() {
   const saveAccount = useServerFn(saveTreasuryAccount);
   const recordMovement = useServerFn(recordTreasuryMovement);
   const transfer = useServerFn(transferBetweenAccounts);
+  const loadLedger = useServerFn(getTreasuryLedger);
   const qc = useQueryClient();
+
+  const [ledgerAccount, setLedgerAccount] = useState<{
+    id: string;
+    nome: string;
+  } | null>(null);
 
   const [accountOpen, setAccountOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
@@ -98,6 +105,15 @@ function Content() {
     queryKey: ["treasury-accounts", activeTenant?.id],
     enabled: Boolean(activeTenant),
     queryFn: () => load({ data: { tenant_id: activeTenant!.id } }),
+  });
+
+  const { data: ledger } = useQuery({
+    queryKey: ["treasury-ledger", activeTenant?.id, ledgerAccount?.id],
+    enabled: Boolean(activeTenant) && Boolean(ledgerAccount),
+    queryFn: () =>
+      loadLedger({
+        data: { tenant_id: activeTenant!.id, account_id: ledgerAccount!.id },
+      }),
   });
 
   const accounts = (data?.accounts ?? []) as Account[];
@@ -259,6 +275,7 @@ function Content() {
               <th className="p-3 font-semibold">Banco / Ag / Conta</th>
               <th className="p-3 font-semibold text-right">Saldo</th>
               <th className="p-3 font-semibold">Situação</th>
+              <th className="p-3 font-semibold">Extrato</th>
             </tr>
           </thead>
           <tbody>
@@ -280,12 +297,21 @@ function Content() {
                     {a.status}
                   </Badge>
                 </td>
+                <td className="p-3">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setLedgerAccount({ id: a.id, nome: a.nome })}
+                  >
+                    Extrato
+                  </Button>
+                </td>
               </tr>
             ))}
             {accounts.length === 0 && (
               <tr>
                 <td
-                  colSpan={5}
+                  colSpan={6}
                   className="p-6 text-center text-muted-foreground"
                 >
                   Nenhuma conta cadastrada.
@@ -295,6 +321,62 @@ function Content() {
           </tbody>
         </table>
       </div>
+
+      {/* Extrato da conta */}
+      <Dialog
+        open={Boolean(ledgerAccount)}
+        onOpenChange={(o) => !o && setLedgerAccount(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Extrato — {ledgerAccount?.nome}</DialogTitle>
+          </DialogHeader>
+          {ledger && (
+            <div className="mb-2 text-sm text-muted-foreground">
+              Entradas <b className="text-foreground">{brl(ledger.entradas)}</b>{" "}
+              · Saídas <b className="text-foreground">{brl(ledger.saidas)}</b>
+            </div>
+          )}
+          <div className="max-h-80 overflow-auto rounded-lg border">
+            <table className="w-full text-sm">
+              <thead className="border-b bg-muted/40 text-left">
+                <tr>
+                  <th className="p-2 font-semibold">Data</th>
+                  <th className="p-2 font-semibold">Movimento</th>
+                  <th className="p-2 font-semibold text-right">Valor</th>
+                  <th className="p-2 font-semibold text-right">Saldo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(ledger?.movements ?? []).map((m) => (
+                  <tr key={m.id} className="border-b last:border-0">
+                    <td className="p-2">{m.data_movimento}</td>
+                    <td className="p-2 capitalize">
+                      {m.tipo.replace(/_/g, " ")}
+                    </td>
+                    <td className="p-2 text-right tabular-nums">
+                      {brl(m.valor)}
+                    </td>
+                    <td className="p-2 text-right tabular-nums">
+                      {brl(m.saldo_apos)}
+                    </td>
+                  </tr>
+                ))}
+                {(ledger?.movements ?? []).length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={4}
+                      className="p-4 text-center text-muted-foreground"
+                    >
+                      Sem movimentos.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Nova conta */}
       <Dialog open={accountOpen} onOpenChange={setAccountOpen}>

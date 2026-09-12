@@ -281,3 +281,57 @@ export const transferBetweenAccounts = createServerFn({ method: "POST" })
       };
     });
   });
+
+const LedgerInput = z.object({
+  tenant_id: z.string().uuid(),
+  account_id: z.string().uuid(),
+  from: z.string().date().optional(),
+  to: z.string().date().optional(),
+});
+
+// O2-11b — Extrato (razão) de uma conta de tesouraria. Lista os movimentos da conta no
+// período em ordem cronológica, com o saldo após cada lançamento (persistido no ato), e
+// consolida **entradas** (ingresso + transferência recebida) e **saídas** (saída +
+// transferência enviada) do período — o extrato para conciliação/auditoria, isolado por
+// `account_id`. Read-only, reusa accounting.read.
+export const getTreasuryLedger = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => LedgerInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "accounting.read");
+    const account = await queryOne<{ id: string }>(
+      "select id from public.treasury_accounts where id=$1 and tenant_id=$2",
+      [data.account_id, data.tenant_id],
+    );
+    if (!account) throw new Error("Conta de tesouraria não encontrada");
+    const movements = await query<{
+      id: string;
+      tipo: string;
+      data_movimento: string;
+      valor: string;
+      historico: string;
+      saldo_apos: string;
+    }>(
+      `select id, tipo, data_movimento::text, valor::text, historico, saldo_apos::text
+       from public.treasury_movements
+       where tenant_id = $1 and account_id = $2
+         and ($3::date is null or data_movimento >= $3)
+         and ($4::date is null or data_movimento <= $4)
+       order by data_movimento, created_at, id`,
+      [data.tenant_id, data.account_id, data.from ?? null, data.to ?? null],
+    );
+    const entradas = movements
+      .filter(
+        (m) => m.tipo === "ingresso" || m.tipo === "transferencia_entrada",
+      )
+      .reduce((s, m) => s + Number(m.valor), 0);
+    const saidas = movements
+      .filter((m) => m.tipo === "saida" || m.tipo === "transferencia_saida")
+      .reduce((s, m) => s + Number(m.valor), 0);
+    return {
+      movements,
+      entradas: Number(entradas.toFixed(2)),
+      saidas: Number(saidas.toFixed(2)),
+    };
+  });

@@ -664,6 +664,16 @@ ingresso no destino, **atômico**, contas travadas em ordem estável),
 conciliação. Reusa `accounting.*`. Migration `20260909360000_o2_11_treasury.sql`;
 teste `tests/sprint-treasury.test.mjs` verificado por mutação (permitir saldo
 negativo derruba).
+
+**O2-11b — Extrato (razão) da conta de tesouraria ✅.** `getTreasuryLedger` lista os
+movimentos de **uma** conta no período em ordem cronológica, com o **saldo após** cada
+lançamento (persistido no ato), e consolida entradas (ingresso + transferência recebida) e
+saídas (saída + transferência enviada) — o extrato para conciliação/auditoria, isolado por
+`account_id`. Read-only, reusa `accounting.read`, sem migration; `/tesouraria` ganha a ação
+"Extrato" por conta. Teste `tests/sprint-treasury-ledger.test.mjs` verificado por mutação
+(classificar transferência recebida fora das entradas, ou vazar movimentos de outra conta,
+derruba).
+
 **O2-12 — Disponibilidade de caixa (base do balanço financeiro) ✅.**
 `getCashAvailability` consolida o saldo das contas ativas de tesouraria e o fluxo
 do período: ingressos, saídas, fluxo líquido (ingressos − saídas) e as
