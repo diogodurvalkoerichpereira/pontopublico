@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { MessageSquareWarning, Plus, Reply, Star } from "lucide-react";
+import { MessageSquareWarning, Plus, Reply, Star, Archive } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ import {
   openManifestation,
   respondManifestation,
   getOmbudsmanSummary,
+  archiveManifestation,
 } from "@/lib/ombudsman.functions";
 import {
   getOmbudsmanSatisfaction,
@@ -88,6 +89,7 @@ function Content() {
   const respond = useServerFn(respondManifestation);
   const loadSatisfaction = useServerFn(getOmbudsmanSatisfaction);
   const rate = useServerFn(rateManifestation);
+  const archive = useServerFn(archiveManifestation);
   const qc = useQueryClient();
 
   const [openDialog, setOpenDialog] = useState(false);
@@ -150,6 +152,21 @@ function Content() {
     qc.invalidateQueries({
       queryKey: ["response-timeliness", activeTenant?.id],
     });
+  };
+
+  const doArchive = async (m: Manifestation) => {
+    if (!activeTenant) return;
+    if (!window.confirm("Arquivar a manifestação? Encerra o atendimento."))
+      return;
+    try {
+      await archive({
+        data: { tenant_id: activeTenant.id, manifestation_id: m.id },
+      });
+      toast.success("Manifestação arquivada");
+      refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao arquivar");
+    }
   };
 
   const submitRate = async () => {
@@ -405,16 +422,25 @@ function Content() {
                       </Button>
                     )}
                     {m.status === "respondida" && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setRateTarget(m);
-                          setNota("5");
-                        }}
-                      >
-                        <Star className="size-4" /> Avaliar
-                      </Button>
+                      <div className="flex gap-2 flex-wrap">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setRateTarget(m);
+                            setNota("5");
+                          }}
+                        >
+                          <Star className="size-4" /> Avaliar
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => doArchive(m)}
+                        >
+                          <Archive className="size-4" /> Arquivar
+                        </Button>
+                      </div>
                     )}
                   </td>
                 )}

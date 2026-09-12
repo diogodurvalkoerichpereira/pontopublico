@@ -1242,6 +1242,14 @@ das notas — indicador de satisfação dos serviços. Migration
 por mutação (não dividir pela quantidade na média derruba). Próximo: carta de serviços ao
 cidadão e painel de recursos do e-SIC.
 
+**O5-03b — Arquivamento de manifestação da ouvidoria (Lei 13.460) ✅.** `archiveManifestation`
+move uma manifestação **respondida** para `arquivada` (encerra o atendimento); recebida/em
+análise precisa ser respondida antes, e arquivada é terminal — fecha o ciclo da ouvidoria e
+torna alcançável o status `arquivada`, que existia no enum mas nada transicionava. Reusa
+`protocol.manage`, sem migration; `/ouvidoria` ganha a ação "Arquivar" por manifestação
+respondida. Teste `tests/sprint-ombudsman-archive.test.mjs` verificado por mutação (remover
+a guarda de estado deixa arquivar uma manifestação em aberto — derruba).
+
 **O5-08 — Indicador de tempestividade das respostas ✅.** `getResponseTimeliness`
 consolida, na ouvidoria e no e-SIC, quantas respostas saíram **no prazo legal** (data da
 resposta ≤ prazo) e o percentual — transparência ativa do desempenho (Lei 13.460/LAI).
