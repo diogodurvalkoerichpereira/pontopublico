@@ -13,6 +13,7 @@ import {
   loadTenantAccess,
   requireTenantPermission,
 } from "./tenant-access.server";
+import { upsertAndRebalanceTimeBank } from "./time-bank.server";
 
 const PostInput = z.object({
   tenant_id: z.string().uuid(),
@@ -31,7 +32,6 @@ export const postTimeBankEntry = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "people.manage");
-    const referenceDate = `${data.reference_month}-01`;
     return withTransaction(async (client) => {
       // O vinculo tem de ser do ente (defesa em profundidade; o trigger tambem valida).
       const link = (
@@ -41,56 +41,14 @@ export const postTimeBankEntry = createServerFn({ method: "POST" })
         )
       ).rows[0];
       if (!link) throw new Error("Vínculo inválido para esta entidade");
-      // Trava as entradas do vinculo para serializar o recalculo do acumulado.
-      await client.query(
-        `select id from public.time_bank_entries
-         where tenant_id=$1 and employment_link_id=$2 for update`,
-        [data.tenant_id, data.employment_link_id],
-      );
-      // Upsert do mes (minutes). O balance_after e provisorio; sera reescrito abaixo.
-      await client.query(
-        `insert into public.time_bank_entries
-           (tenant_id, employment_link_id, reference_month, minutes, balance_after, note, created_by)
-         values ($1,$2,$3::date,$4,0,$5,$6)
-         on conflict (tenant_id, employment_link_id, reference_month) do update
-           set minutes = excluded.minutes,
-               note = excluded.note,
-               updated_at = now()`,
-        [
-          data.tenant_id,
-          data.employment_link_id,
-          referenceDate,
-          data.minutes,
-          data.note ?? null,
-          context.userId,
-        ],
-      );
-      // Recalcula o acumulado em ordem de competencia (fonte unica da verdade).
-      const rows = (
-        await client.query<{ id: string; minutes: number }>(
-          `select id, minutes from public.time_bank_entries
-           where tenant_id=$1 and employment_link_id=$2
-           order by reference_month`,
-          [data.tenant_id, data.employment_link_id],
-        )
-      ).rows;
-      let running = 0;
-      for (const row of rows) {
-        running += Number(row.minutes);
-        await client.query(
-          "update public.time_bank_entries set balance_after=$1 where id=$2",
-          [running, row.id],
-        );
-      }
-      // Saldo apos a competencia lancada = acumulado ate ela (inclusive).
-      const alvo = (
-        await client.query<{ balance_after: number }>(
-          `select balance_after from public.time_bank_entries
-           where tenant_id=$1 and employment_link_id=$2 and reference_month=$3::date`,
-          [data.tenant_id, data.employment_link_id, referenceDate],
-        )
-      ).rows[0];
-      const balanceAfter = Number(alvo?.balance_after ?? 0);
+      const balanceAfter = await upsertAndRebalanceTimeBank(client, {
+        tenantId: data.tenant_id,
+        employmentLinkId: data.employment_link_id,
+        referenceMonth: data.reference_month,
+        minutes: data.minutes,
+        note: data.note ?? null,
+        createdBy: context.userId,
+      });
       await recordAudit(client, {
         tenantId: data.tenant_id,
         actorId: context.userId,
@@ -98,7 +56,7 @@ export const postTimeBankEntry = createServerFn({ method: "POST" })
         resource: "time_bank_entries",
         recordId: data.employment_link_id,
         after: {
-          reference_month: referenceDate,
+          reference_month: `${data.reference_month}-01`,
           minutes: data.minutes,
           balance_after: balanceAfter,
         },

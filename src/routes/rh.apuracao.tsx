@@ -3,13 +3,16 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { AlertTriangle, Clock } from "lucide-react";
+import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth-context";
 import {
   getApuracaoResumoMensal,
   getPunchInconsistencies,
+  postTimeBankFromApuracao,
 } from "@/lib/time-clock.functions";
 
 export const Route = createFileRoute("/rh/apuracao")({ component: Page });
@@ -62,11 +65,34 @@ function Page() {
         data: { tenant_id: activeTenant!.id, reference_month: month },
       }),
   });
+  const bank = useServerFn(postTimeBankFromApuracao);
+  const [posting, setPosting] = useState<string | null>(null);
   if (!activeTenant) return null;
 
   const servidores = (data?.servidores ?? []) as Servidor[];
   const totals = data?.totals;
+  const canManage = data?.canManage ?? false;
   const inconsistencias = (incData?.inconsistencias ?? []) as Inconsistencia[];
+
+  const lancarBanco = async (linkId: string) => {
+    setPosting(linkId);
+    try {
+      const r = await bank({
+        data: {
+          tenant_id: activeTenant.id,
+          employment_link_id: linkId,
+          reference_month: month,
+        },
+      });
+      toast.success(
+        `Lançado no banco de horas — acumulado ${hm(r.balance_after, true)}`,
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Falha ao lançar");
+    } finally {
+      setPosting(null);
+    }
+  };
 
   return (
     <AppShell>
@@ -137,6 +163,7 @@ function Page() {
                 <th className="p-3 text-right">Extras</th>
                 <th className="p-3 text-right">Faltas</th>
                 <th className="p-3 text-right">Saldo</th>
+                {canManage && <th className="p-3" />}
               </tr>
             </thead>
             <tbody>
@@ -172,11 +199,27 @@ function Page() {
                   >
                     {hm(s.saldoMinutes, true)}
                   </td>
+                  {canManage && (
+                    <td className="p-3 text-right">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={posting === s.employment_link_id}
+                        onClick={() => lancarBanco(s.employment_link_id)}
+                        title="Lança o saldo apurado deste mês no banco de horas"
+                      >
+                        Lançar no banco
+                      </Button>
+                    </td>
+                  )}
                 </tr>
               ))}
               {servidores.length === 0 && (
                 <tr>
-                  <td className="p-4 text-muted-foreground" colSpan={7}>
+                  <td
+                    className="p-4 text-muted-foreground"
+                    colSpan={canManage ? 8 : 7}
+                  >
                     {isFetching
                       ? "Carregando…"
                       : "Nenhum servidor ativo na competência."}
@@ -205,6 +248,7 @@ function Page() {
                   <td className="p-3 text-right tabular-nums">
                     {hm(totals.saldoMinutes, true)}
                   </td>
+                  {canManage && <td className="p-3" />}
                 </tr>
               </tfoot>
             )}

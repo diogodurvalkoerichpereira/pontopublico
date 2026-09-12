@@ -417,6 +417,13 @@ sem escala, cai no padrão por `weekly_hours` (seg-sex). `getEmploymentWeeklySch
 tela **/rh/jornadas** (7 campos por servidor + tabela efetiva) e item de nav. Teste
 `tests/sprint-weekly-schedule.test.mjs` verificado por mutação (ignorar a escala faz
 o sábado voltar a previsto 0 e o extra reaparecer).
+**Apuração → banco de horas (sem redigitar) — feito.** `postTimeBankFromApuracao`
+(`time-clock.functions.ts`, `people.manage`) apura a competência e lança o saldo
+(extras − faltas) direto no banco de horas, reusando o núcleo do razão
+`upsertAndRebalanceTimeBank` (`time-bank.server.ts`) — o mesmo que o lançamento
+manual usa (DRY). A tela **/rh/apuracao** ganhou o botão "Lançar no banco" por
+servidor. Teste `tests/sprint-bank-from-apuracao.test.mjs` verificado por mutação
+(gravar 0 em vez do saldo apurado derruba).
 **Pendente nesta linha** (registrado): escala **rotativa** (ciclo de N dias) e
 aposentar a leitura user-scoped de `time_entries` em favor das marcações multi-tenant.
 

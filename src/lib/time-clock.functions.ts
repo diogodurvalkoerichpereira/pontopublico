@@ -12,6 +12,7 @@ import {
   requireTenantPermission,
 } from "./tenant-access.server";
 import { hashPunch, GENESIS_HASH } from "./time-clock.server";
+import { upsertAndRebalanceTimeBank } from "./time-bank.server";
 import {
   buildTimeMirror,
   apurarJornada,
@@ -638,7 +639,12 @@ export const getApuracaoResumoMensal = createServerFn({ method: "POST" })
         saldoMinutes: 0,
       },
     );
-    return { reference_month: data.reference_month, servidores, totals };
+    return {
+      reference_month: data.reference_month,
+      servidores,
+      totals,
+      canManage: access.permissions.includes("people.manage"),
+    };
   });
 
 const InconsistenciasInput = z.object({
@@ -734,4 +740,63 @@ export const getPunchInconsistencies = createServerFn({ method: "POST" })
           : 1,
     );
     return { reference_month: data.reference_month, inconsistencias };
+  });
+
+const BankFromApuracaoInput = z.object({
+  tenant_id: z.string().uuid(),
+  employment_link_id: z.string().uuid(),
+  reference_month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+  time_zone: z.string().max(64).optional(),
+  tolerance_minutes: z.number().int().min(0).max(60).default(10),
+});
+
+/** Lanca o saldo APURADO do mes (extras - faltas) direto no banco de horas
+ *  (O1-03f), sem redigitar minutos: apura a competencia e grava o saldo,
+ *  recalculando o acumulado do vinculo. Fecha o laco apuracao -> banco de horas.
+ *  Guard people.manage. */
+export const postTimeBankFromApuracao = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => BankFromApuracaoInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "people.manage");
+    const [year, month] = data.reference_month.split("-").map(Number);
+    const from = new Date(Date.UTC(year, month - 1, 1)).toISOString();
+    const to = new Date(Date.UTC(year, month, 1) - 1).toISOString();
+    const { apuracao } = await loadApuracao(
+      data.tenant_id,
+      data.employment_link_id,
+      from,
+      to,
+      data.time_zone,
+      data.tolerance_minutes,
+    );
+    const saldo = apuracao.totals.extraMinutes - apuracao.totals.faltaMinutes;
+    return withTransaction(async (client) => {
+      const balanceAfter = await upsertAndRebalanceTimeBank(client, {
+        tenantId: data.tenant_id,
+        employmentLinkId: data.employment_link_id,
+        referenceMonth: data.reference_month,
+        minutes: saldo,
+        note: "Apuração de ponto",
+        createdBy: context.userId,
+      });
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "post_time_bank_from_apuracao",
+        resource: "time_bank_entries",
+        recordId: data.employment_link_id,
+        after: {
+          reference_month: `${data.reference_month}-01`,
+          minutes: saldo,
+          balance_after: balanceAfter,
+        },
+      });
+      return {
+        reference_month: data.reference_month,
+        minutes: saldo,
+        balance_after: balanceAfter,
+      };
+    });
   });
