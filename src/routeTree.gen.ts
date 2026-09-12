@@ -47,6 +47,7 @@ import { Route as RhRubricasRouteImport } from './routes/rh.rubricas'
 import { Route as RhPrevidenciaRouteImport } from './routes/rh.previdencia'
 import { Route as RhPessoasRouteImport } from './routes/rh.pessoas'
 import { Route as RhMovimentacoesRouteImport } from './routes/rh.movimentacoes'
+import { Route as RhJornadasRouteImport } from './routes/rh.jornadas'
 import { Route as RhImportacoesRouteImport } from './routes/rh.importacoes'
 import { Route as RhFuncionariosRouteImport } from './routes/rh.funcionarios'
 import { Route as RhFolhasEspeciaisRouteImport } from './routes/rh.folhas-especiais'
@@ -259,6 +260,11 @@ const RhMovimentacoesRoute = RhMovimentacoesRouteImport.update({
   path: '/movimentacoes',
   getParentRoute: () => RhRoute,
 } as any)
+const RhJornadasRoute = RhJornadasRouteImport.update({
+  id: '/jornadas',
+  path: '/jornadas',
+  getParentRoute: () => RhRoute,
+} as any)
 const RhImportacoesRoute = RhImportacoesRouteImport.update({
   id: '/importacoes',
   path: '/importacoes',
@@ -417,6 +423,7 @@ export interface FileRoutesByFullPath {
   '/rh/folhas-especiais': typeof RhFolhasEspeciaisRoute
   '/rh/funcionarios': typeof RhFuncionariosRouteWithChildren
   '/rh/importacoes': typeof RhImportacoesRoute
+  '/rh/jornadas': typeof RhJornadasRoute
   '/rh/movimentacoes': typeof RhMovimentacoesRoute
   '/rh/pessoas': typeof RhPessoasRoute
   '/rh/previdencia': typeof RhPrevidenciaRoute
@@ -478,6 +485,7 @@ export interface FileRoutesByTo {
   '/rh/folhas-especiais': typeof RhFolhasEspeciaisRoute
   '/rh/funcionarios': typeof RhFuncionariosRouteWithChildren
   '/rh/importacoes': typeof RhImportacoesRoute
+  '/rh/jornadas': typeof RhJornadasRoute
   '/rh/movimentacoes': typeof RhMovimentacoesRoute
   '/rh/pessoas': typeof RhPessoasRoute
   '/rh/previdencia': typeof RhPrevidenciaRoute
@@ -540,6 +548,7 @@ export interface FileRoutesById {
   '/rh/folhas-especiais': typeof RhFolhasEspeciaisRoute
   '/rh/funcionarios': typeof RhFuncionariosRouteWithChildren
   '/rh/importacoes': typeof RhImportacoesRoute
+  '/rh/jornadas': typeof RhJornadasRoute
   '/rh/movimentacoes': typeof RhMovimentacoesRoute
   '/rh/pessoas': typeof RhPessoasRoute
   '/rh/previdencia': typeof RhPrevidenciaRoute
@@ -603,6 +612,7 @@ export interface FileRouteTypes {
     | '/rh/folhas-especiais'
     | '/rh/funcionarios'
     | '/rh/importacoes'
+    | '/rh/jornadas'
     | '/rh/movimentacoes'
     | '/rh/pessoas'
     | '/rh/previdencia'
@@ -664,6 +674,7 @@ export interface FileRouteTypes {
     | '/rh/folhas-especiais'
     | '/rh/funcionarios'
     | '/rh/importacoes'
+    | '/rh/jornadas'
     | '/rh/movimentacoes'
     | '/rh/pessoas'
     | '/rh/previdencia'
@@ -725,6 +736,7 @@ export interface FileRouteTypes {
     | '/rh/folhas-especiais'
     | '/rh/funcionarios'
     | '/rh/importacoes'
+    | '/rh/jornadas'
     | '/rh/movimentacoes'
     | '/rh/pessoas'
     | '/rh/previdencia'
@@ -1045,6 +1057,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RhMovimentacoesRouteImport
       parentRoute: typeof RhRoute
     }
+    '/rh/jornadas': {
+      id: '/rh/jornadas'
+      path: '/jornadas'
+      fullPath: '/rh/jornadas'
+      preLoaderRoute: typeof RhJornadasRouteImport
+      parentRoute: typeof RhRoute
+    }
     '/rh/importacoes': {
       id: '/rh/importacoes'
       path: '/importacoes'
@@ -1231,6 +1250,7 @@ interface RhRouteChildren {
   RhFolhasEspeciaisRoute: typeof RhFolhasEspeciaisRoute
   RhFuncionariosRoute: typeof RhFuncionariosRouteWithChildren
   RhImportacoesRoute: typeof RhImportacoesRoute
+  RhJornadasRoute: typeof RhJornadasRoute
   RhMovimentacoesRoute: typeof RhMovimentacoesRoute
   RhPessoasRoute: typeof RhPessoasRoute
   RhPrevidenciaRoute: typeof RhPrevidenciaRoute
@@ -1251,6 +1271,7 @@ const RhRouteChildren: RhRouteChildren = {
   RhFolhasEspeciaisRoute: RhFolhasEspeciaisRoute,
   RhFuncionariosRoute: RhFuncionariosRouteWithChildren,
   RhImportacoesRoute: RhImportacoesRoute,
+  RhJornadasRoute: RhJornadasRoute,
   RhMovimentacoesRoute: RhMovimentacoesRoute,
   RhPessoasRoute: RhPessoasRoute,
   RhPrevidenciaRoute: RhPrevidenciaRoute,

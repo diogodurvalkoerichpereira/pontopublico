@@ -406,9 +406,19 @@ servidor em ordem de competência**, sob `FOR UPDATE`, de modo que lançar/retif
 um mês no meio reordena os seguintes. Tela **/rh/banco-horas** (lançar + razão por
 servidor) e item de nav. Teste `tests/sprint-time-bank.test.mjs` verificado por
 mutação (recalcular fora de ordem, ou não recalcular após retificar, derruba).
-**Pendente nesta linha** (registrado): **escala diária customizada** (rotativa,
-sábado, turnos) sobre `work_schedules` — hoje o previsto é `weekly_hours`
-distribuído seg-sex; e aposentar a leitura user-scoped de `time_entries`.
+
+**Escala semanal customizada — feito.** `employment_weekly_schedules` (migration
+`20260909600000_o1_03f_weekly_schedule.sql`) guarda, por vínculo, os minutos
+previstos de cada dia da semana (domingo..sábado). A apuração (O1-03e/O1-03g) passou
+a consumir essa escala pela função pura `expectedByWeekdayFor` (`time-mirror.ts`):
+com escala, quem trabalha sábado/turno tem o previsto correto (não vira tudo extra);
+sem escala, cai no padrão por `weekly_hours` (seg-sex). `getEmploymentWeeklySchedules`/
+`saveEmploymentWeeklySchedule` (`work-schedule.functions.ts`, `people.read`/`people.manage`),
+tela **/rh/jornadas** (7 campos por servidor + tabela efetiva) e item de nav. Teste
+`tests/sprint-weekly-schedule.test.mjs` verificado por mutação (ignorar a escala faz
+o sábado voltar a previsto 0 e o extra reaparecer).
+**Pendente nesta linha** (registrado): escala **rotativa** (ciclo de N dias) e
+aposentar a leitura user-scoped de `time_entries` em favor das marcações multi-tenant.
 
 ### O1-03g — Resumo mensal da apuração de ponto por servidor ✅
 

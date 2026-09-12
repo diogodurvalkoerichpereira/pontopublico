@@ -9,6 +9,7 @@ import {
   FolderOpen,
   Clock,
   Hourglass,
+  CalendarRange,
   Calendar,
   UserCog,
   Menu,
@@ -238,6 +239,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       to: "/rh/banco-horas",
       label: "Banco de horas",
       icon: Hourglass,
+      section: "Recursos Humanos",
+    });
+  }
+  if (hasTenantPermission("people.read")) {
+    items.push({
+      to: "/rh/jornadas",
+      label: "Jornadas semanais",
+      icon: CalendarRange,
       section: "Recursos Humanos",
     });
   }

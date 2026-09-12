@@ -187,10 +187,42 @@ export function apurarJornada(
 
 /**
  * Config de previsto padrão a partir da jornada semanal: distribui as horas de
- * seg-sex igualmente, sábado/domingo 0. Escala customizada (rotativa, sábado) é o
- * O1-04b.
+ * seg-sex igualmente, sábado/domingo 0. É o fallback quando o vínculo não tem
+ * escala semanal customizada (O1-03f).
  */
 export function defaultExpectedByWeekday(weeklyHours: number): number[] {
   const perWorkday = Math.round((weeklyHours * 60) / 5);
   return [0, perWorkday, perWorkday, perWorkday, perWorkday, perWorkday, 0];
+}
+
+/** Escala semanal customizada (minutos previstos por dia, domingo..sábado). */
+export interface WeeklyScheduleRow {
+  minutes_sun: number;
+  minutes_mon: number;
+  minutes_tue: number;
+  minutes_wed: number;
+  minutes_thu: number;
+  minutes_fri: number;
+  minutes_sat: number;
+}
+
+/**
+ * Minutos previstos por dia da semana (índice 0=domingo … 6=sábado) a partir da
+ * escala customizada do vínculo (O1-03f); sem escala, cai no padrão por
+ * `weekly_hours` (seg-sex). Fonte única usada pela apuração e pelo resumo.
+ */
+export function expectedByWeekdayFor(
+  schedule: WeeklyScheduleRow | null | undefined,
+  fallbackWeeklyHours: number,
+): number[] {
+  if (!schedule) return defaultExpectedByWeekday(fallbackWeeklyHours);
+  return [
+    Number(schedule.minutes_sun),
+    Number(schedule.minutes_mon),
+    Number(schedule.minutes_tue),
+    Number(schedule.minutes_wed),
+    Number(schedule.minutes_thu),
+    Number(schedule.minutes_fri),
+    Number(schedule.minutes_sat),
+  ];
 }

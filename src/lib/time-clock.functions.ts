@@ -15,9 +15,10 @@ import { hashPunch, GENESIS_HASH } from "./time-clock.server";
 import {
   buildTimeMirror,
   apurarJornada,
-  defaultExpectedByWeekday,
+  expectedByWeekdayFor,
   type MirrorPunch,
   type HolidayRule,
+  type WeeklyScheduleRow,
 } from "./time-mirror";
 
 const RecordInput = z.object({
@@ -351,9 +352,17 @@ async function loadApuracao(
      where tenant_id=$1 or tenant_id is null`,
     [tenantId],
   );
+  const schedule = await queryOne<WeeklyScheduleRow>(
+    `select minutes_sun, minutes_mon, minutes_tue, minutes_wed,
+            minutes_thu, minutes_fri, minutes_sat
+     from public.employment_weekly_schedules
+     where tenant_id=$1 and employment_link_id=$2`,
+    [tenantId, employmentLinkId],
+  );
   const { days } = buildTimeMirror(punches, timeZone, holidays);
   const apuracao = apurarJornada(days, {
-    expectedMinutesByWeekday: defaultExpectedByWeekday(
+    expectedMinutesByWeekday: expectedByWeekdayFor(
+      schedule,
       Number(link.weekly_hours ?? 0),
     ),
     toleranceMinutesPerDay: toleranceMinutes,
@@ -575,12 +584,26 @@ export const getApuracaoResumoMensal = createServerFn({ method: "POST" })
        where tenant_id = $1 or tenant_id is null`,
       [data.tenant_id],
     );
+    // Escalas semanais customizadas do ente, de uma vez, indexadas por vinculo.
+    const scheduleRows = await query<
+      WeeklyScheduleRow & { employment_link_id: string }
+    >(
+      `select employment_link_id, minutes_sun, minutes_mon, minutes_tue,
+              minutes_wed, minutes_thu, minutes_fri, minutes_sat
+       from public.employment_weekly_schedules
+       where tenant_id = $1`,
+      [data.tenant_id],
+    );
+    const scheduleByLink = new Map(
+      scheduleRows.map((r) => [r.employment_link_id, r]),
+    );
 
     const servidores = links.map((link) => {
       const punches = punchesByLink.get(link.id) ?? [];
       const { days } = buildTimeMirror(punches, data.time_zone, holidays);
       const apuracao = apurarJornada(days, {
-        expectedMinutesByWeekday: defaultExpectedByWeekday(
+        expectedMinutesByWeekday: expectedByWeekdayFor(
+          scheduleByLink.get(link.id),
           Number(link.weekly_hours ?? 0),
         ),
         toleranceMinutesPerDay: data.tolerance_minutes,
