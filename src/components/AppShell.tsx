@@ -360,6 +360,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       icon: PiggyBank,
       section: "Contabilidade e Finanças",
     });
+  if (hasTenantPermission("budget.read"))
+    items.push({
+      to: "/empenhos",
+      label: "Empenhos",
+      icon: ReceiptText,
+      section: "Contabilidade e Finanças",
+    });
   if (hasTenantPermission("accounting.read"))
     items.push({
       to: "/tesouraria",

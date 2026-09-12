@@ -542,6 +542,13 @@ origem e carimba o marco), e **anular devolve o saldo** reservado à dotação
 Pendente de endurecimento: exigir MFA nas transições financeiras (molde
 `requireCriticalMfa` da folha) — registrado.
 
+**O2-03c — Tela de empenhos (máquina de estados) ✅.** Rota `/empenhos` dá cara ao ciclo da
+despesa (O2-03/O2-03b): lista os empenhos (nº, credor, dotação, valor, estágio) e expõe as
+ações Liquidar/Pagar/Anular (`transitionBudgetCommitment`) e Anular parcial
+(`partiallyCancelBudgetCommitment`), cada uma no estágio de origem correto. Item de menu em
+Contabilidade e Finanças. Sem novo backend/migration (UI sobre funções já testadas por
+`sprint-budget-stages` e `sprint-budget-partial-cancel`).
+
 **O2-03b — Anulação parcial de empenho (Lei 4.320 art. 59) ✅.**
 `partiallyCancelBudgetCommitment` reduz o valor de um empenho ainda no estágio
 `empenhado` (antes de liquidar) e **devolve a diferença** ao saldo empenhado da dotação (e
