@@ -221,7 +221,9 @@ motor genérico já existe); endurecer o atalho `personId=id` (sem CPF).
 
 ### Dívidas menores registradas (P2)
 
-- Remover os 6 `scripts/reconcile-sprint*.sql` órfãos que nenhum script executa.
+- ✅ **Removidos os 6 `scripts/reconcile-sprint*.sql` órfãos** (nenhum script
+  ou teste os executava; ficam só citados nos relatórios arquivados em
+  `docs/historico/`, que não mudam).
 - `test:all` que rode a suíte inteira de validadores.
 - ✅ **Corrigir o operador `is` em `pgrest.server.ts`** (`IS $1` era SQL
   inválido para não-nulo — PostgreSQL só aceita `IS NULL/TRUE/FALSE/UNKNOWN`
