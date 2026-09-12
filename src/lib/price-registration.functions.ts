@@ -174,9 +174,10 @@ export const drawFromPriceRegistration = createServerFn({ method: "POST" })
           registration_id: string;
           quantidade_registrada: string;
           quantidade_consumida: string;
+          preco_unitario: string;
         }>(
           `select registration_id, quantidade_registrada::text,
-             quantidade_consumida::text
+             quantidade_consumida::text, preco_unitario::text
            from public.price_registration_items
            where id=$1 and tenant_id=$2 for update`,
           [data.item_id, data.tenant_id],
@@ -216,6 +217,24 @@ export const drawFromPriceRegistration = createServerFn({ method: "POST" })
          set quantidade_consumida=$3
          where id=$1 and tenant_id=$2`,
         [data.item_id, data.tenant_id, novaConsumida],
+      );
+      // Razao do consumo: uma linha por consumo, valorada ao preco registrado.
+      const valor = Number(
+        (data.quantidade * Number(item.preco_unitario)).toFixed(2),
+      );
+      await client.query(
+        `insert into public.price_registration_draws
+           (tenant_id, registration_id, item_id, quantidade, valor, data_referencia, created_by)
+         values ($1,$2,$3,$4,$5,$6,$7)`,
+        [
+          data.tenant_id,
+          item.registration_id,
+          data.item_id,
+          data.quantidade,
+          valor,
+          data.data_referencia,
+          context.userId,
+        ],
       );
       await recordAudit(client, {
         tenantId: data.tenant_id,
@@ -336,5 +355,50 @@ export const getPriceRegistrationSummary = createServerFn({ method: "POST" })
       valorRegistrado,
       valorConsumido,
       saldoAConsumir: Number((valorRegistrado - valorConsumido).toFixed(2)),
+    };
+  });
+
+const DrawsInput = z.object({
+  tenant_id: z.string().uuid(),
+  registration_id: z.string().uuid(),
+});
+
+// O3-12d — Historico (razao) dos consumos de uma ata. Lista cada consumo
+// (O3-12) em ordem cronologica, com o item, a quantidade e o valor, e consolida
+// o total consumido — a trilha auditavel do uso da ata (SRP), isolada por ata.
+// Read-only, reusa contracts.read.
+export const getPriceRegistrationDraws = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => DrawsInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "contracts.read");
+    const draws = await query<{
+      id: string;
+      item_id: string;
+      descricao: string;
+      unidade: string;
+      quantidade: string;
+      valor: string;
+      data_referencia: string;
+    }>(
+      `select d.id, d.item_id, i.descricao, i.unidade,
+         d.quantidade::text, d.valor::text, d.data_referencia::text
+       from public.price_registration_draws d
+       join public.price_registration_items i on i.id = d.item_id
+       where d.tenant_id = $1 and d.registration_id = $2
+       order by d.data_referencia, d.created_at, d.id`,
+      [data.tenant_id, data.registration_id],
+    );
+    const totalConsumido = Number(
+      draws.reduce((s, d) => s + Number(d.valor), 0).toFixed(2),
+    );
+    return {
+      draws: draws.map((d) => ({
+        ...d,
+        quantidade: Number(d.quantidade),
+        valor: Number(d.valor),
+      })),
+      totalConsumido,
     };
   });

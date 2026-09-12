@@ -8,6 +8,7 @@ import {
   PackageMinus,
   CircleSlash,
   Ban,
+  History,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -35,6 +36,7 @@ import {
   drawFromPriceRegistration,
   closePriceRegistration,
   getPriceRegistrationSummary,
+  getPriceRegistrationDraws,
 } from "@/lib/price-registration.functions";
 import { getProcurementProcesses } from "@/lib/procurement.functions";
 
@@ -101,6 +103,16 @@ function Content() {
 
   const [drawItem, setDrawItem] = useState<Item | null>(null);
   const [drawQtd, setDrawQtd] = useState("");
+  const [histAta, setHistAta] = useState<Registration | null>(null);
+  const loadDraws = useServerFn(getPriceRegistrationDraws);
+  const { data: histData } = useQuery({
+    queryKey: ["price-registration-draws", activeTenant?.id, histAta?.id],
+    enabled: Boolean(activeTenant && histAta),
+    queryFn: () =>
+      loadDraws({
+        data: { tenant_id: activeTenant!.id, registration_id: histAta!.id },
+      }),
+  });
 
   const { data } = useQuery({
     queryKey: ["price-registrations", activeTenant?.id],
@@ -311,6 +323,13 @@ function Content() {
               >
                 {ata.status}
               </Badge>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setHistAta(ata)}
+              >
+                <History className="size-4" /> Histórico
+              </Button>
               {canManage && ata.status === "vigente" && (
                 <div className="flex items-center gap-1">
                   <Button
@@ -392,6 +411,57 @@ function Content() {
           Nenhuma ata registrada.
         </div>
       )}
+
+      <Dialog
+        open={Boolean(histAta)}
+        onOpenChange={(o) => !o && setHistAta(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Histórico de consumos — ata {histAta?.numero}/{histAta?.ano}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="max-h-96 overflow-y-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b text-left text-muted-foreground">
+                <tr>
+                  <th className="p-2">Data</th>
+                  <th className="p-2">Item</th>
+                  <th className="p-2 text-right">Qtd.</th>
+                  <th className="p-2 text-right">Valor</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(histData?.draws ?? []).map((d) => (
+                  <tr key={d.id} className="border-b last:border-0">
+                    <td className="p-2 tabular-nums">{d.data_referencia}</td>
+                    <td className="p-2">{d.descricao}</td>
+                    <td className="p-2 text-right tabular-nums">
+                      {d.quantidade} {d.unidade}
+                    </td>
+                    <td className="p-2 text-right tabular-nums">
+                      {brl(d.valor)}
+                    </td>
+                  </tr>
+                ))}
+                {(histData?.draws ?? []).length === 0 && (
+                  <tr>
+                    <td className="p-3 text-muted-foreground" colSpan={4}>
+                      Nenhum consumo registrado nesta ata.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          {histData && (
+            <p className="text-sm font-semibold">
+              Total consumido: {brl(histData.totalConsumido)}
+            </p>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>

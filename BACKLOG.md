@@ -1124,6 +1124,17 @@ Read-only, reusa `contracts.read`, sem migration; `/atas` ganha os cartões. Tes
 `tests/sprint-price-registration-summary.test.mjs` verificado por mutação (usar a
 quantidade registrada no lugar da consumida no valor consumido derruba).
 
+**O3-12d — Histórico (razão) de consumos da ata ✅.** Até aqui `drawFromPriceRegistration`
+(O3-12) só incrementava `quantidade_consumida` no item — não havia registro de **cada**
+consumo (quando, quanto, a que valor), sem trilha para auditar o uso da ata (accountability
+do SRP). Agora cada consumo grava uma linha em `price_registration_draws` (valorada:
+quantidade × preço registrado) na mesma transação; `getPriceRegistrationDraws` lista os
+consumos de uma ata em ordem cronológica com o item e consolida o total consumido. Migration
+`20260909620000_o3_12d_price_registration_draws.sql` (tabela + coerência de ente, RLS
+`contracts.read`/`contracts.manage`, append-only); `/atas` ganha a ação **Histórico** por
+ata. Teste `tests/sprint-price-registration-draws.test.mjs` verificado por mutação (não
+gravar o consumo, ou valorar sem o preço, derruba).
+
 **O3-13 — Painel de Registro de Preços (UI) ✅.** Rota `/atas` dá cara ao O3-12: lista as
 atas com seus itens (registrada × consumida × saldo), ação "Consumir" por item (respeita o
 saldo e a vigência) e "Nova ata" a partir de uma licitação homologada. Reusa
