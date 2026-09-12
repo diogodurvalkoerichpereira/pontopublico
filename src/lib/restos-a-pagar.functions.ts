@@ -235,3 +235,63 @@ export const cancelRestoAPagar = createServerFn({ method: "POST" })
       return { id: data.resto_id, status: "cancelado" };
     });
   });
+
+const SummaryInput = z.object({
+  tenant_id: z.string().uuid(),
+  exercicio_origem: z.number().int().min(2000).max(2200).optional(),
+});
+
+// O2-09b — Demonstrativo de restos a pagar (Lei 4.320). Consolida os restos inscritos por
+// situação (inscrito=a pagar, pago, cancelado) e o saldo **a pagar** (status='inscrito')
+// aberto por tipo — processado (liquidado, pronto para pagar) e não processado (ainda a
+// liquidar). Read-only, reusa budget.read.
+export const getRestosAPagarSummary = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => SummaryInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "budget.read");
+    const row = (
+      await query<{
+        q_inscrito: string;
+        v_inscrito: string;
+        q_pago: string;
+        v_pago: string;
+        q_cancelado: string;
+        v_cancelado: string;
+        v_proc: string;
+        v_nproc: string;
+      }>(
+        `select
+           count(*) filter (where status='inscrito')::text as q_inscrito,
+           coalesce(sum(valor) filter (where status='inscrito'),0)::text as v_inscrito,
+           count(*) filter (where status='pago')::text as q_pago,
+           coalesce(sum(valor) filter (where status='pago'),0)::text as v_pago,
+           count(*) filter (where status='cancelado')::text as q_cancelado,
+           coalesce(sum(valor) filter (where status='cancelado'),0)::text as v_cancelado,
+           coalesce(sum(valor) filter (where status='inscrito' and tipo='processado'),0)::text as v_proc,
+           coalesce(sum(valor) filter (where status='inscrito' and tipo='nao_processado'),0)::text as v_nproc
+         from public.restos_a_pagar
+         where tenant_id = $1 and ($2::int is null or exercicio_origem = $2)`,
+        [data.tenant_id, data.exercicio_origem ?? null],
+      )
+    )[0];
+    return {
+      porStatus: {
+        inscrito: {
+          qtd: Number(row.q_inscrito),
+          valor: Number(row.v_inscrito),
+        },
+        pago: { qtd: Number(row.q_pago), valor: Number(row.v_pago) },
+        cancelado: {
+          qtd: Number(row.q_cancelado),
+          valor: Number(row.v_cancelado),
+        },
+      },
+      saldoAPagar: Number(row.v_inscrito),
+      saldoPorTipo: {
+        processado: Number(row.v_proc),
+        nao_processado: Number(row.v_nproc),
+      },
+    };
+  });

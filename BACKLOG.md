@@ -617,6 +617,15 @@ O2-09/O2-20: lista os restos inscritos (empenho, exercício, credor, tipo, valor
 com ações "Pagar" e "Cancelar" por resto inscrito e "Inscrever exercício" (snapshot dos
 empenhos não pagos). Reusa `getRestosAPagar`, `inscribeRestosAPagar`, `payRestoAPagar`,
 `cancelRestoAPagar`; item de menu em Contabilidade e Finanças. Sem novo backend.
+
+**O2-09b — Demonstrativo de restos a pagar ✅.** `getRestosAPagarSummary` consolida os
+restos por situação (inscrito=a pagar, pago, cancelado — quantidade e valor) e o **saldo a
+pagar** (status `inscrito`) aberto por tipo: processado (liquidado, pronto para pagar) e
+não processado (ainda a liquidar) — a leitura executiva do estoque de restos. Read-only,
+reusa `budget.read`, sem migration; `/restos-a-pagar` ganha os cartões. Teste
+`tests/sprint-restos-summary.test.mjs` verificado por mutação (somar sem o filtro de
+situação, ou trocar o tipo no saldo, derruba).
+
 **O2-10 — Balanço orçamentário (Lei 4.320, Anexo 1) ✅.** `getBudgetBalance`
 consolida o exercício: RECEITA (prevista × arrecadada × diferença), DESPESA
 (fixada × empenhada × liquidada × paga × saldo de dotação), o resultado

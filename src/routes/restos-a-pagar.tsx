@@ -21,6 +21,7 @@ import {
   inscribeRestosAPagar,
   payRestoAPagar,
   cancelRestoAPagar,
+  getRestosAPagarSummary,
 } from "@/lib/restos-a-pagar.functions";
 
 export const Route = createFileRoute("/restos-a-pagar")({ component: Page });
@@ -59,6 +60,7 @@ function Content() {
   const inscribe = useServerFn(inscribeRestosAPagar);
   const pay = useServerFn(payRestoAPagar);
   const cancel = useServerFn(cancelRestoAPagar);
+  const loadSummary = useServerFn(getRestosAPagarSummary);
   const qc = useQueryClient();
 
   const [open, setOpen] = useState(false);
@@ -72,11 +74,18 @@ function Content() {
     enabled: Boolean(activeTenant),
     queryFn: () => load({ data: { tenant_id: activeTenant!.id } }),
   });
+  const { data: summary } = useQuery({
+    queryKey: ["restos-summary", activeTenant?.id],
+    enabled: Boolean(activeTenant),
+    queryFn: () => loadSummary({ data: { tenant_id: activeTenant!.id } }),
+  });
   const restos = (data?.restos ?? []) as Resto[];
   const canManage = data?.canManage ?? false;
 
-  const refresh = () =>
+  const refresh = () => {
     qc.invalidateQueries({ queryKey: ["restos", activeTenant?.id] });
+    qc.invalidateQueries({ queryKey: ["restos-summary", activeTenant?.id] });
+  };
 
   const submitInscribe = async () => {
     if (!activeTenant) return;
@@ -158,6 +167,49 @@ function Content() {
           </Button>
         )}
       </div>
+
+      {summary && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-xl border bg-card p-4">
+            <div className="text-xs text-muted-foreground">Saldo a pagar</div>
+            <div className="text-2xl font-bold tabular-nums text-primary">
+              {brl(summary.saldoAPagar)}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {summary.porStatus.inscrito.qtd} inscritos
+            </div>
+          </div>
+          <div className="rounded-xl border bg-card p-4">
+            <div className="text-xs text-muted-foreground">
+              A pagar — processados
+            </div>
+            <div className="text-2xl font-bold tabular-nums">
+              {brl(summary.saldoPorTipo.processado)}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              não processados: {brl(summary.saldoPorTipo.nao_processado)}
+            </div>
+          </div>
+          <div className="rounded-xl border bg-card p-4">
+            <div className="text-xs text-muted-foreground">Pagos</div>
+            <div className="text-2xl font-bold tabular-nums">
+              {brl(summary.porStatus.pago.valor)}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {summary.porStatus.pago.qtd} restos
+            </div>
+          </div>
+          <div className="rounded-xl border bg-card p-4">
+            <div className="text-xs text-muted-foreground">Cancelados</div>
+            <div className="text-2xl font-bold tabular-nums">
+              {brl(summary.porStatus.cancelado.valor)}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {summary.porStatus.cancelado.qtd} restos
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="rounded-xl border bg-card overflow-x-auto">
         <table className="w-full text-sm">
