@@ -838,6 +838,17 @@ Migration `..._o2_16_bank_orders.sql`, reusa `accounting.*`; teste
 `tests/sprint-bank-orders.test.mjs` verificado por mutação (somar em vez de subtrair o
 valor no saldo derruba). Próximo: MSC-SICONFI e a demonstração dos fluxos de caixa.
 
+**O2-16b — Cancelamento (estorno) de ordem bancária ✅.** `cancelBankOrder`
+(`bank-orders.functions.ts`, `accounting.manage`) estorna uma OB **paga**, na mesma
+transação: devolve o valor à conta de tesouraria (**ingresso**), devolve o empenho ao
+estágio `liquidado` (limpa `pago_em`/`pago_por`) e estorna a contabilização do
+pagamento — lançamento **inverso** ao roteiro `pagamento` (D↔C), quando o roteiro está
+configurado (sem mapeamento, não contabiliza). Só a OB `paga` cancela (a `cancelada`
+recusa). `/ordens-bancarias` ganha a ação **Estornar** por OB paga. Sem migration (o
+status `cancelada` e o `grant update` já existiam). Teste
+`tests/sprint-bank-order-cancel.test.mjs` verificado por mutação (não devolver o valor
+à conta, ou não reverter o empenho a `liquidado`, derruba).
+
 **O2-18 — Balanço patrimonial + DVP (PCASP) ✅.** `getEquityStatement` classifica o
 razão (`accounting_entry_lines`) pela classe PCASP — 1 Ativo, 2 Passivo, 3 VPD, 4 VPA
 —, inverte o sinal das contas de natureza credora e apura Ativo, Passivo, Patrimônio

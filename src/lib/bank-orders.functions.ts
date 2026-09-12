@@ -9,7 +9,7 @@ import { z } from "zod";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
-import { contabilizarEvento } from "./accounting.functions";
+import { contabilizarEvento, postEntry } from "./accounting.functions";
 import {
   loadTenantAccess,
   requireTenantPermission,
@@ -201,5 +201,137 @@ export const emitBankOrder = createServerFn({ method: "POST" })
         after: { numero, valor, saldo_apos: novoSaldo },
       });
       return { id, numero, valor, saldo_apos: novoSaldo };
+    });
+  });
+
+const CancelInput = z.object({
+  tenant_id: z.string().uuid(),
+  order_id: z.string().uuid(),
+  data_estorno: z.string().date(),
+  motivo: z.string().trim().max(500).optional(),
+});
+
+// Cancela (estorna) uma OB paga: devolve o valor à conta de tesouraria (ingresso),
+// devolve o empenho ao estágio 'liquidado' e estorna a contabilização do pagamento
+// (lançamento inverso ao roteiro 'pagamento', se configurado). Só uma OB 'paga'
+// cancela; a de OB já cancelada é recusada. Fecha o ciclo reversível do pagamento.
+export const cancelBankOrder = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => CancelInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "accounting.manage");
+    return withTransaction(async (client) => {
+      // OB a estornar: trava a linha; só a 'paga' cancela.
+      const order = (
+        await client.query<{
+          exercicio: number;
+          numero: string;
+          commitment_id: string;
+          account_id: string;
+          valor: string;
+          status: string;
+        }>(
+          `select exercicio, numero::text, commitment_id, account_id, valor::text, status
+           from public.bank_orders where id = $1 and tenant_id = $2 for update`,
+          [data.order_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!order) throw new Error("Ordem bancária não encontrada");
+      if (order.status !== "paga")
+        throw new Error("Só uma ordem bancária paga pode ser cancelada");
+      const valor = Number(order.valor);
+
+      // Devolve o empenho ao estágio 'liquidado' (o pagamento é desfeito).
+      const commitment = (
+        await client.query<{ status: string }>(
+          `select status from public.budget_commitments
+           where id = $1 and tenant_id = $2 for update`,
+          [order.commitment_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!commitment) throw new Error("Empenho da OB não encontrado");
+      await client.query(
+        `update public.budget_commitments
+         set status = 'liquidado', pago_em = null, pago_por = null
+         where id = $1 and tenant_id = $2`,
+        [order.commitment_id, data.tenant_id],
+      );
+
+      // Ingresso de estorno na conta: devolve o valor (trava a conta).
+      const account = (
+        await client.query<{ saldo_atual: string; status: string }>(
+          `select saldo_atual::text, status from public.treasury_accounts
+           where id = $1 and tenant_id = $2 for update`,
+          [order.account_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!account) throw new Error("Conta não encontrada");
+      if (account.status !== "ativa")
+        throw new Error("Conta encerrada não recebe estorno");
+      const novoSaldo = Number(
+        (Number(account.saldo_atual) + valor).toFixed(2),
+      );
+      await client.query(
+        `insert into public.treasury_movements
+           (id, tenant_id, account_id, tipo, data_movimento, valor, historico,
+            saldo_apos, transfer_ref, created_by)
+         values ($1,$2,$3,'ingresso',$4,$5,$6,$7,null,$8)`,
+        [
+          randomUUID(),
+          data.tenant_id,
+          order.account_id,
+          data.data_estorno,
+          valor,
+          `Estorno da OB nº ${order.numero}`,
+          novoSaldo,
+          context.userId,
+        ],
+      );
+      await client.query(
+        `update public.treasury_accounts set saldo_atual = $3, updated_at = now()
+         where id = $1 and tenant_id = $2`,
+        [order.account_id, data.tenant_id, novoSaldo],
+      );
+
+      // Estorno contábil: lançamento inverso ao roteiro 'pagamento' (se configurado).
+      const mapping = (
+        await client.query<{ debit_account: string; credit_account: string }>(
+          `select debit_account, credit_account
+           from public.accounting_event_accounts
+           where tenant_id = $1 and event_code = 'pagamento'`,
+          [data.tenant_id],
+        )
+      ).rows[0];
+      if (mapping)
+        await postEntry({
+          client,
+          tenantId: data.tenant_id,
+          exercicio: order.exercicio,
+          dataLancamento: data.data_estorno,
+          historico: `Estorno de pagamento — OB nº ${order.numero}`,
+          // Inverte débito/crédito do pagamento original.
+          lines: [
+            { conta: mapping.credit_account, lado: "D", valor },
+            { conta: mapping.debit_account, lado: "C", valor },
+          ],
+          source: "evento:pagamento_estorno",
+          sourceRef: order.commitment_id,
+          actorId: context.userId,
+        });
+
+      await client.query(
+        `update public.bank_orders set status = 'cancelada' where id = $1 and tenant_id = $2`,
+        [data.order_id, data.tenant_id],
+      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "cancelar",
+        resource: "bank_orders",
+        recordId: data.order_id,
+        after: { valor, saldo_apos: novoSaldo, motivo: data.motivo ?? null },
+      });
+      return { id: data.order_id, status: "cancelada", saldo_apos: novoSaldo };
     });
   });

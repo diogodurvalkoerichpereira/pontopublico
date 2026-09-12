@@ -23,7 +23,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth-context";
-import { getBankOrders, emitBankOrder } from "@/lib/bank-orders.functions";
+import {
+  getBankOrders,
+  emitBankOrder,
+  cancelBankOrder,
+} from "@/lib/bank-orders.functions";
 import { getBudgetCommitments } from "@/lib/budget.functions";
 import { getTreasuryAccounts } from "@/lib/treasury.functions";
 
@@ -63,6 +67,7 @@ function Content() {
   const loadCommitments = useServerFn(getBudgetCommitments);
   const loadAccounts = useServerFn(getTreasuryAccounts);
   const emit = useServerFn(emitBankOrder);
+  const cancel = useServerFn(cancelBankOrder);
   const qc = useQueryClient();
 
   const [open, setOpen] = useState(false);
@@ -109,6 +114,32 @@ function Content() {
     setCommitmentId(liquidados[0]?.id ?? "");
     setAccountId(accounts[0]?.id ?? "");
     setOpen(true);
+  };
+
+  const cancelar = async (order: Order) => {
+    if (!activeTenant) return;
+    if (
+      !window.confirm(
+        `Estornar a OB nº ${order.numero}? Devolve ${brl(order.valor)} à conta e retorna o empenho a liquidado.`,
+      )
+    )
+      return;
+    setBusy(true);
+    try {
+      await cancel({
+        data: {
+          tenant_id: activeTenant.id,
+          order_id: order.id,
+          data_estorno: hoje(),
+        },
+      });
+      toast.success(`OB nº ${order.numero} estornada`);
+      refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao estornar");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const submit = async () => {
@@ -164,6 +195,7 @@ function Content() {
               <th className="p-3 font-semibold">Credor</th>
               <th className="p-3 font-semibold text-right">Valor</th>
               <th className="p-3 font-semibold">Situação</th>
+              {canManage && <th className="p-3" />}
             </tr>
           </thead>
           <tbody>
@@ -181,12 +213,26 @@ function Content() {
                     {o.status}
                   </Badge>
                 </td>
+                {canManage && (
+                  <td className="p-3 text-right">
+                    {o.status === "paga" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={busy}
+                        onClick={() => cancelar(o)}
+                      >
+                        Estornar
+                      </Button>
+                    )}
+                  </td>
+                )}
               </tr>
             ))}
             {orders.length === 0 && (
               <tr>
                 <td
-                  colSpan={6}
+                  colSpan={canManage ? 7 : 6}
                   className="p-6 text-center text-muted-foreground"
                 >
                   Nenhuma ordem bancária emitida.
