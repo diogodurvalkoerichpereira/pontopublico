@@ -1296,21 +1296,6 @@ mantém o catálogo dos serviços do ente (descrição, requisitos, prazo, canai
 `tests/sprint-citizen-services.test.mjs` verificado por mutação (ignorar a completude ao
 publicar derruba). Próximo: painel de decisão de recursos do e-SIC e dados abertos.
 
-**O5-10 — Integrações (menuia/bealys) e canais de alerta (WhatsApp/e-mail) ✅ (configuração).**
-`integration_settings` e `alert_settings` (migration `..._o5_10_integrations_alerts.sql`)
-guardam, por ente, cada integração externa (chatbot **menuia**, **bealys**) com liga/desliga,
-URL e credencial, e cada canal de alerta (**WhatsApp**, **e-mail**) com liga/desliga,
-destinatários e eventos. `getIntegrationSettings`/`saveIntegrationSettings` e
-`getAlertSettings`/`saveAlertSettings` (reusam `org.read`/`org.manage`): a **credencial nunca
-volta ao cliente** (a leitura só informa `has_credential`); **ligar uma integração exige
-URL** e **ligar um canal exige ao menos um destinatário**. Rota `/integracoes` com os botões
-de liga/desliga (Switch) e formulários por integração e por canal; item de menu em
-Administração. Teste `tests/sprint-integrations.test.mjs` verificado por mutação (remover a
-guarda de URL, ou a de destinatário, derruba). **Pendente (externo/homologação):** o **envio
-efetivo** das mensagens ao menuia/bealys/WhatsApp exige endpoint e credenciais reais da
-plataforma — a configuração está pronta; o disparo entra quando os acessos forem fornecidos
-(ver `docs/CONFORMIDADE.md`). Não se declara integração operante contra mock próprio.
-
 ### Onda 6 — Conformidade contínua ⚠️ (contínuo)
 
 Layout do TCE estadual (um por vez; a referência de Timóteo é SICOM/MG, não
