@@ -495,6 +495,13 @@ consignação** (tipo, consignatário, parcela, nº, início), reusando
 item de menu em Recursos Humanos. **Pendente:** amortização automática no fechamento do
 ciclo.
 
+**O1-09b — Resumo das consignações por tipo ✅.** `getConsignmentsSummary` agrupa as
+consignações **ativas** por tipo (emprestimo/sindicato/plano_saude/pensao/outro) com
+quantidade e soma das parcelas mensais, ordenado por comprometido, com total geral —
+quitada/cancelada não entra. Reusa `people.read`, sem migration; `/consignacoes` ganha a
+tabela de consignações ativas por tipo. Teste `tests/sprint-consignments-summary.test.mjs`
+verificado por mutação (incluir não-ativas derruba).
+
 ---
 
 ## Ondas 2–6 — épicos

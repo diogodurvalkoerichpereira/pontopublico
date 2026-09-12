@@ -29,6 +29,7 @@ import {
   registerConsignment,
   amortizeConsignment,
   cancelConsignment,
+  getConsignmentsSummary,
 } from "@/lib/consignments.functions";
 
 export const Route = createFileRoute("/consignacoes")({ component: Page });
@@ -121,10 +122,28 @@ function Content() {
   const consignments = (margin?.consignments ?? []) as Consignment[];
   const canManage = margin?.canManage ?? false;
 
-  const refresh = () =>
+  const loadSummary = useServerFn(getConsignmentsSummary);
+  const { data: summary } = useQuery({
+    queryKey: ["consignments-summary", activeTenant?.id],
+    enabled: Boolean(activeTenant),
+    queryFn: () => loadSummary({ data: { tenant_id: activeTenant!.id } }),
+  });
+  const TIPO_LABEL: Record<string, string> = {
+    emprestimo: "Empréstimo",
+    sindicato: "Sindicato",
+    plano_saude: "Plano de saúde",
+    pensao: "Pensão",
+    outro: "Outro",
+  };
+
+  const refresh = () => {
     qc.invalidateQueries({
       queryKey: ["consignment-margin", activeTenant?.id, linkId],
     });
+    qc.invalidateQueries({
+      queryKey: ["consignments-summary", activeTenant?.id],
+    });
+  };
 
   const submit = async () => {
     if (!activeTenant || !linkId) return;
@@ -205,6 +224,43 @@ function Content() {
           </Button>
         )}
       </div>
+
+      {summary && summary.tipos.length > 0 && (
+        <div className="rounded-xl border bg-card overflow-x-auto">
+          <div className="flex items-baseline justify-between gap-3 p-3 flex-wrap">
+            <h2 className="font-bold">Consignações ativas por tipo</h2>
+            <div className="text-sm text-muted-foreground">
+              {summary.totalConsignacoes} ativas ·{" "}
+              <span className="font-semibold text-foreground">
+                {brl(summary.totalParcela)}
+              </span>
+              /mês
+            </div>
+          </div>
+          <table className="w-full text-sm">
+            <thead className="border-b bg-muted/40 text-left">
+              <tr>
+                <th className="p-3 font-semibold">Tipo</th>
+                <th className="p-3 font-semibold text-right">Quantidade</th>
+                <th className="p-3 font-semibold text-right">Parcela/mês</th>
+              </tr>
+            </thead>
+            <tbody>
+              {summary.tipos.map((t) => (
+                <tr key={t.tipo} className="border-b last:border-0">
+                  <td className="p-3">{TIPO_LABEL[t.tipo] ?? t.tipo}</td>
+                  <td className="p-3 text-right tabular-nums">
+                    {t.quantidade}
+                  </td>
+                  <td className="p-3 text-right tabular-nums font-medium">
+                    {brl(t.total_parcela)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <div className="rounded-xl border bg-card p-4 max-w-md">
         <Label>Servidor / matrícula</Label>

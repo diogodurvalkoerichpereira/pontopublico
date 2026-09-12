@@ -23,6 +23,43 @@ const MarginInput = z.object({
   margem_percent: z.number().positive().max(1).optional(),
 });
 
+const SummaryInput = z.object({ tenant_id: z.string().uuid() });
+
+// O1-09b — Resumo das consignações ATIVAS por tipo (emprestimo/sindicato/plano_saude/
+// pensao/outro): quantidade e soma das parcelas mensais, ordenado do maior comprometido ao
+// menor, com o total geral. Só consignação `ativa` compromete margem. Reusa people.read.
+export const getConsignmentsSummary = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => SummaryInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "people.read");
+    const rows = await query<{
+      tipo: string;
+      quantidade: string;
+      total_parcela: string;
+    }>(
+      `select tipo, count(*)::text as quantidade,
+         coalesce(sum(valor_parcela),0)::text as total_parcela
+       from public.payroll_consignments
+       where tenant_id = $1 and status = 'ativa'
+       group by tipo
+       order by sum(valor_parcela) desc, tipo`,
+      [data.tenant_id],
+    );
+    const round2 = (v: number) => Number(v.toFixed(2));
+    const tipos = rows.map((r) => ({
+      tipo: r.tipo,
+      quantidade: Number(r.quantidade),
+      total_parcela: round2(Number(r.total_parcela)),
+    }));
+    return {
+      tipos,
+      totalParcela: round2(tipos.reduce((s, t) => s + t.total_parcela, 0)),
+      totalConsignacoes: tipos.reduce((s, t) => s + t.quantidade, 0),
+    };
+  });
+
 // Consulta a margem: remuneração de base, teto, comprometido e disponível, com as
 // consignações ativas.
 export const getConsignmentMargin = createServerFn({ method: "POST" })
