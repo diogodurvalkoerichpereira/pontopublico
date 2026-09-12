@@ -757,6 +757,14 @@ da cota (negativo = estouro) — programação financeira da Lei 4.320 art. 47-5
 `tests/sprint-disbursement-schedule.test.mjs` verificado por mutação (somar em vez de
 subtrair no saldo derruba). Próximo: balanço financeiro (Anexo 13) e MSC-SICONFI.
 
+**O2-19b — Execução acumulada do cronograma (LRF) ✅.** `getDisbursementProgress` confronta,
+do início do exercício **até o mês de referência (inclusive)**, o total programado (cotas)
+com o realizado (despesa paga no período) e devolve saldo, % de execução e se está
+**dentro do programado** — o indicador de aderência à programação financeira, além do
+detalhe mês a mês. Read-only, reusa `budget.read`, sem migration; `/orcamento` ganha o
+resumo acumulado no cronograma. Teste `tests/sprint-disbursement-progress.test.mjs`
+verificado por mutação (tirar o limite do mês, no programado ou no realizado, derruba).
+
 ### Onda 3 — Materiais e Contratações (14-18 sem)
 
 Compras Lei 14.133 → contratos → almoxarifado → patrimônio (depreciação NBC TSP)

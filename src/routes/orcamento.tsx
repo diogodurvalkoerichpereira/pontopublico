@@ -30,6 +30,7 @@ import {
 import {
   getDisbursementSchedule,
   saveDisbursementQuota,
+  getDisbursementProgress,
 } from "@/lib/disbursement-schedule.functions";
 import { contingenciarDotacao } from "@/lib/budget-contingency.functions";
 import { openSupplementaryCredit } from "@/lib/supplementary-credit.functions";
@@ -144,10 +145,29 @@ function Content() {
       }),
   });
 
-  const refreshSchedule = () =>
+  const loadProgress = useServerFn(getDisbursementProgress);
+  const mesAtual = new Date().getMonth() + 1;
+  const { data: progress } = useQuery({
+    queryKey: ["disbursement-progress", activeTenant?.id, scheduleYear],
+    enabled: Boolean(activeTenant) && /^\d{4}$/.test(scheduleYear),
+    queryFn: () =>
+      loadProgress({
+        data: {
+          tenant_id: activeTenant!.id,
+          exercicio: Number(scheduleYear),
+          ate_mes: mesAtual,
+        },
+      }),
+  });
+
+  const refreshSchedule = () => {
     qc.invalidateQueries({
       queryKey: ["disbursement-schedule", activeTenant?.id, scheduleYear],
     });
+    qc.invalidateQueries({
+      queryKey: ["disbursement-progress", activeTenant?.id, scheduleYear],
+    });
+  };
 
   const refreshAppropriations = () =>
     qc.invalidateQueries({
@@ -435,6 +455,28 @@ function Content() {
             )}
           </div>
         </div>
+        {progress && (
+          <div className="rounded-lg border bg-muted/30 p-3 text-sm flex flex-wrap gap-x-6 gap-y-1">
+            <span>
+              Até {MESES[progress.ate_mes - 1]}: programado{" "}
+              <b className="tabular-nums">{brl(progress.programado)}</b> ·
+              realizado{" "}
+              <b className="tabular-nums">{brl(progress.realizado)}</b> (
+              {progress.percentualExecucao}%)
+            </span>
+            <span
+              className={
+                progress.dentroDoCronograma
+                  ? "text-primary"
+                  : "text-red-600 font-semibold"
+              }
+            >
+              {progress.dentroDoCronograma
+                ? "dentro do cronograma"
+                : "acima do programado"}
+            </span>
+          </div>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="border-b bg-muted/40 text-left">

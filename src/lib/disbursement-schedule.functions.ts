@@ -134,3 +134,53 @@ export const saveDisbursementQuota = createServerFn({ method: "POST" })
       return { ok: true };
     });
   });
+
+const ProgressInput = z.object({
+  tenant_id: z.string().uuid(),
+  exercicio: z.number().int().min(2000).max(2200),
+  ate_mes: z.number().int().min(1).max(12),
+});
+
+// O2-19b — Execução acumulada do cronograma de desembolso (LRF/Lei 4.320). Confronta, do
+// início do exercício **até o mês de referência (inclusive)**, o total programado (cotas)
+// com o realizado (despesa paga no período) e diz se a execução está dentro do programado.
+// É o indicador de aderência à programação financeira. Read-only, reusa budget.read.
+export const getDisbursementProgress = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => ProgressInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "budget.read");
+    const prog = (
+      await query<{ v: string }>(
+        `select coalesce(sum(valor_programado),0)::text as v
+         from public.disbursement_schedules
+         where tenant_id = $1 and exercicio = $2 and mes <= $3`,
+        [data.tenant_id, data.exercicio, data.ate_mes],
+      )
+    )[0];
+    const real = (
+      await query<{ v: string }>(
+        `select coalesce(sum(valor),0)::text as v
+         from public.budget_commitments
+         where tenant_id = $1 and exercicio = $2 and status = 'pago'
+           and pago_em is not null
+           and extract(month from pago_em) <= $3`,
+        [data.tenant_id, data.exercicio, data.ate_mes],
+      )
+    )[0];
+    const programado = Number(Number(prog.v).toFixed(2));
+    const realizado = Number(Number(real.v).toFixed(2));
+    return {
+      exercicio: data.exercicio,
+      ate_mes: data.ate_mes,
+      programado,
+      realizado,
+      saldo: Number((programado - realizado).toFixed(2)),
+      percentualExecucao:
+        programado > 0
+          ? Number(((realizado / programado) * 100).toFixed(1))
+          : 0,
+      dentroDoCronograma: realizado <= programado,
+    };
+  });
