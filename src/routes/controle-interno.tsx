@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ShieldAlert, Plus, ClipboardCheck } from "lucide-react";
+import { ShieldAlert, Plus, ClipboardCheck, History } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,7 @@ import {
   openInternalControlFinding,
   updateInternalControlFinding,
   getInternalControlSummary,
+  getInternalControlFollowups,
 } from "@/lib/internal-control.functions";
 
 export const Route = createFileRoute("/controle-interno")({ component: Page });
@@ -99,6 +100,17 @@ function Content() {
     "em_implementacao" | "implementado" | "nao_implementado"
   >("em_implementacao");
   const [providencia, setProvidencia] = useState("");
+
+  const [histTarget, setHistTarget] = useState<Finding | null>(null);
+  const loadFollowups = useServerFn(getInternalControlFollowups);
+  const { data: histData } = useQuery({
+    queryKey: ["internal-control-followups", activeTenant?.id, histTarget?.id],
+    enabled: Boolean(activeTenant && histTarget),
+    queryFn: () =>
+      loadFollowups({
+        data: { tenant_id: activeTenant!.id, finding_id: histTarget!.id },
+      }),
+  });
 
   const { data } = useQuery({
     queryKey: ["internal-control", activeTenant?.id],
@@ -278,15 +290,24 @@ function Content() {
                 </td>
                 {canManage && (
                   <td className="p-3">
-                    {!encerrado(f.status) && (
+                    <div className="flex gap-2">
+                      {!encerrado(f.status) && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openUpd(f)}
+                        >
+                          <ClipboardCheck className="size-4" /> Acompanhar
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => openUpd(f)}
+                        onClick={() => setHistTarget(f)}
                       >
-                        <ClipboardCheck className="size-4" /> Acompanhar
+                        <History className="size-4" /> Histórico
                       </Button>
-                    )}
+                    </div>
                   </td>
                 )}
               </tr>
@@ -360,6 +381,40 @@ function Content() {
               Registrar
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Histórico de acompanhamento */}
+      <Dialog
+        open={Boolean(histTarget)}
+        onOpenChange={(o) => !o && setHistTarget(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Histórico — apontamento {histTarget?.numero}/{histTarget?.ano}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="max-h-96 space-y-2 overflow-y-auto">
+            {(histData?.followups ?? []).map((f) => (
+              <div key={f.id} className="rounded-lg border p-2 text-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <Badge variant={statusVariant[f.status] ?? "secondary"}>
+                    {statusLabel[f.status] ?? f.status}
+                  </Badge>
+                  <span className="text-muted-foreground tabular-nums">
+                    {f.data_referencia}
+                  </span>
+                </div>
+                <p className="mt-1">{f.providencia}</p>
+              </div>
+            ))}
+            {(histData?.followups ?? []).length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                Nenhum acompanhamento registrado.
+              </p>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 

@@ -221,6 +221,21 @@ export const updateInternalControlFinding = createServerFn({ method: "POST" })
           data.data_referencia,
         ],
       );
+      // Razao append-only do acompanhamento: guarda cada atualizacao (a coluna
+      // providencia do apontamento so mantem a ultima; o historico fica aqui).
+      await client.query(
+        `insert into public.internal_control_followups
+           (tenant_id, finding_id, status, providencia, data_referencia, created_by)
+         values ($1,$2,$3,$4,$5,$6)`,
+        [
+          data.tenant_id,
+          data.finding_id,
+          data.novo_status,
+          data.providencia,
+          data.data_referencia,
+          context.userId,
+        ],
+      );
       await recordAudit(client, {
         tenantId: data.tenant_id,
         actorId: context.userId,
@@ -231,4 +246,34 @@ export const updateInternalControlFinding = createServerFn({ method: "POST" })
       });
       return { id: data.finding_id, status: data.novo_status };
     });
+  });
+
+const FollowupsInput = z.object({
+  tenant_id: z.string().uuid(),
+  finding_id: z.string().uuid(),
+});
+
+// O5-05c — Historico de acompanhamento de um apontamento. Lista os
+// acompanhamentos (status daquele momento + providencia) em ordem cronologica —
+// a trilha de como o apontamento evoluiu, isolada por `finding_id`. Read-only,
+// reusa analytics.read.
+export const getInternalControlFollowups = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => FollowupsInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "analytics.read");
+    const followups = await query<{
+      id: string;
+      status: string;
+      providencia: string;
+      data_referencia: string;
+    }>(
+      `select id, status, providencia, data_referencia::text
+       from public.internal_control_followups
+       where tenant_id = $1 and finding_id = $2
+       order by created_at, id`,
+      [data.tenant_id, data.finding_id],
+    );
+    return { followups };
   });

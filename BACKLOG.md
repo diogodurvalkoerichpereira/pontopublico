@@ -1359,6 +1359,18 @@ migration; `/controle-interno` ganha os cartões (total, em curso, implementados
 vencido em destaque). Teste `tests/sprint-internal-control-summary.test.mjs` verificado
 por mutação (contar encerrado vencido, ou ignorar o prazo, derruba).
 
+**O5-05c — Histórico de acompanhamento do apontamento ✅.** Até aqui
+`updateInternalControlFinding` (O5-05) **sobrescrevia** a `providencia` a cada
+acompanhamento — a trilha de como o apontamento evoluiu se perdia, ruim para a
+accountability do controle interno (CF art. 74). Agora cada atualização grava uma linha
+append-only em `internal_control_followups` (status daquele momento + providência + data)
+na mesma transação; `getInternalControlFollowups` lista os acompanhamentos de um
+apontamento em ordem cronológica (isolado por `finding_id`). Migration
+`20260909640000_o5_05c_internal_control_followups.sql` (tabela + coerência de ente, RLS
+`analytics.read`/`analytics.manage`, append-only); `/controle-interno` ganha a ação
+**Histórico** por apontamento. Teste `tests/sprint-internal-control-followups.test.mjs`
+verificado por mutação (não gravar o acompanhamento derruba).
+
 **O5-01d — Resumo do protocolo ✅.** `getProtocolSummary` conta os processos por situação
 (em tramitação, concluído, arquivado) e o total. Reusa `protocol.read`, sem migration;
 `/protocolo` ganha os cartões. Teste `tests/sprint-protocol-summary.test.mjs` verificado por
