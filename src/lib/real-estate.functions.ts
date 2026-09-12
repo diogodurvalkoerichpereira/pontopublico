@@ -41,6 +41,40 @@ export const getProperties = createServerFn({ method: "POST" })
     };
   });
 
+// O4-04b — Resumo do cadastro imobiliário. Consolida a contagem de imóveis por situação
+// (ativo/baixado) e, dos **ativos**, o valor venal total e a área construída — a **base
+// tributável** do IPTU. Imóvel baixado não integra a base. Read-only, reusa taxes.read.
+export const getRealEstateSummary = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => TenantInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "taxes.read");
+    const row = (
+      await query<{
+        ativos: string;
+        baixados: string;
+        valor_venal: string;
+        area_construida: string;
+      }>(
+        `select
+           count(*) filter (where status='ativo')::text as ativos,
+           count(*) filter (where status='baixado')::text as baixados,
+           coalesce(sum(valor_venal) filter (where status='ativo'),0)::text as valor_venal,
+           coalesce(sum(area_construida) filter (where status='ativo'),0)::text as area_construida
+         from public.real_estate_properties
+         where tenant_id = $1`,
+        [data.tenant_id],
+      )
+    )[0];
+    return {
+      ativos: Number(row.ativos),
+      baixados: Number(row.baixados),
+      valorVenalTributavel: Number(Number(row.valor_venal).toFixed(2)),
+      areaConstruidaTotal: Number(Number(row.area_construida).toFixed(2)),
+    };
+  });
+
 const SaveInput = z.object({
   id: z.string().uuid().optional(),
   tenant_id: z.string().uuid(),

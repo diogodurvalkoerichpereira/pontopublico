@@ -41,7 +41,11 @@ import {
   getTaxCreditsByTributo,
 } from "@/lib/taxes.functions";
 import { emitActiveDebtCertificate } from "@/lib/active-debt-certificate.functions";
-import { getProperties, launchIptu } from "@/lib/real-estate.functions";
+import {
+  getProperties,
+  launchIptu,
+  getRealEstateSummary,
+} from "@/lib/real-estate.functions";
 import { getServiceTaxpayers, launchIss } from "@/lib/service-tax.functions";
 import { launchItbi } from "@/lib/itbi.functions";
 
@@ -171,6 +175,12 @@ function Content() {
     enabled: Boolean(activeTenant),
     queryFn: () => loadByTributo({ data: { tenant_id: activeTenant!.id } }),
   });
+  const loadRealEstate = useServerFn(getRealEstateSummary);
+  const { data: realEstate } = useQuery({
+    queryKey: ["real-estate-summary", activeTenant?.id],
+    enabled: Boolean(activeTenant),
+    queryFn: () => loadRealEstate({ data: { tenant_id: activeTenant!.id } }),
+  });
   const tributos = (byTributo?.tributos ?? []) as Array<{
     tributo: string;
     quantidade: number;
@@ -182,6 +192,10 @@ function Content() {
     qc.invalidateQueries({ queryKey: ["tax-credits", activeTenant?.id] });
     qc.invalidateQueries({ queryKey: ["tax-summary", activeTenant?.id] });
     qc.invalidateQueries({ queryKey: ["tax-by-tributo", activeTenant?.id] });
+    qc.invalidateQueries({ queryKey: ["properties", activeTenant?.id] });
+    qc.invalidateQueries({
+      queryKey: ["real-estate-summary", activeTenant?.id],
+    });
   };
 
   const openPay = (c: Credit) => {
@@ -431,6 +445,31 @@ function Content() {
             <div className="text-sm text-muted-foreground">Em dívida ativa</div>
             <div className="text-xl font-bold">
               {summary.porStatus.divida_ativa}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {realEstate && (
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="rounded-xl border bg-card p-4">
+            <div className="text-sm text-muted-foreground">
+              Base tributável do IPTU (valor venal)
+            </div>
+            <div className="text-xl font-bold">
+              {brl(realEstate.valorVenalTributavel)}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {realEstate.ativos} imóveis ativos · {realEstate.baixados}{" "}
+              baixados
+            </div>
+          </div>
+          <div className="rounded-xl border bg-card p-4">
+            <div className="text-sm text-muted-foreground">
+              Área construída cadastrada
+            </div>
+            <div className="text-xl font-bold">
+              {realEstate.areaConstruidaTotal.toLocaleString("pt-BR")} m²
             </div>
           </div>
         </div>

@@ -1035,6 +1035,13 @@ de arrecadação → dívida ativa → parcelamento. Pendente (externo/homologa�
 nacional; emissão da CND com autenticação e layout do ente; execução fiscal
 integrada ao Judiciário.
 
+**O4-04b — Resumo do cadastro imobiliário (base do IPTU) ✅.** `getRealEstateSummary`
+consolida a contagem de imóveis por situação (ativo/baixado) e, dos **ativos**, o valor
+venal total e a área construída — a **base tributável** do IPTU; imóvel baixado não integra
+a base. Read-only, reusa `taxes.read`, sem migration; `/tributos` ganha os cartões de base
+tributável. Teste `tests/sprint-real-estate-summary.test.mjs` verificado por mutação (somar
+o valor venal sem o filtro de imóvel ativo derruba).
+
 **O4-07 — Encargos de mora do crédito tributário ✅.** `getUpdatedTaxDebt` calcula o
 valor atualizado do crédito: sobre o saldo devedor (lançado − pago), a partir do
 vencimento, aplica multa de mora (uma vez) e juros de mora por mês ou fração (mês
