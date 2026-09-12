@@ -3,7 +3,7 @@
 // Sem tabelas próprias; só agrega.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { queryOne } from "./db.server";
+import { query, queryOne } from "./db.server";
 import { requireAuth } from "./data.functions";
 import {
   loadTenantAccess,
@@ -94,4 +94,50 @@ export const getTransparencyReport = createServerFn({ method: "POST" })
         (arrecadado - num(despesa?.pago)).toFixed(2),
       ),
     };
+  });
+
+// O5-02b — Despesa por função de governo (transparência ativa, LAI/LC 131). Agrega
+// a execução da despesa (empenhado não anulado, liquidado, pago) pela FUNÇÃO da
+// classificação da dotação (saúde, educação, …) — a leitura que o cidadão procura
+// ("quanto foi para cada área?"). Empenho anulado não conta; função sem empenho não
+// aparece; ordena pelo maior empenhado. Read-only, reusa transparency.read.
+export const getTransparencyByFunction = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => Input.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "transparency.read");
+    const rows = await query<{
+      funcao: string;
+      empenhado: string;
+      liquidado: string;
+      pago: string;
+    }>(
+      `select a.funcao,
+         coalesce(sum(c.valor) filter (where c.status <> 'anulado'),0)::text as empenhado,
+         coalesce(sum(c.valor) filter (where c.status in ('liquidado','pago')),0)::text as liquidado,
+         coalesce(sum(c.valor) filter (where c.status = 'pago'),0)::text as pago
+       from public.budget_commitments c
+       join public.budget_appropriations a on a.id = c.appropriation_id
+       where c.tenant_id = $1 and c.exercicio = $2
+       group by a.funcao
+       having coalesce(sum(c.valor) filter (where c.status <> 'anulado'),0) > 0
+       order by empenhado desc, a.funcao`,
+      [data.tenant_id, data.exercicio],
+    );
+    const funcoes = rows.map((r) => ({
+      funcao: r.funcao,
+      empenhado: num(r.empenhado),
+      liquidado: num(r.liquidado),
+      pago: num(r.pago),
+    }));
+    const totais = funcoes.reduce(
+      (acc, f) => ({
+        empenhado: Number((acc.empenhado + f.empenhado).toFixed(2)),
+        liquidado: Number((acc.liquidado + f.liquidado).toFixed(2)),
+        pago: Number((acc.pago + f.pago).toFixed(2)),
+      }),
+      { empenhado: 0, liquidado: 0, pago: 0 },
+    );
+    return { exercicio: data.exercicio, funcoes, totais };
   });

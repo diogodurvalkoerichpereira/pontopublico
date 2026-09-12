@@ -1323,6 +1323,18 @@ acompanhamento aberto→em_implementacao→implementado/nao_implementado, numera
 por ano, reusa `analytics.*`). Pendente: assinatura ICP-Brasil, dados abertos
 publicáveis.
 
+**O5-02b — Despesa por função de governo + Portal da Transparência (UI) ✅.**
+`getTransparencyByFunction` (`transparency.functions.ts`) agrega a execução da despesa
+(empenhado não anulado, liquidado, pago) pela **função** da classificação da dotação
+(saúde, educação, …) com totais — a leitura que o cidadão procura ("quanto foi para cada
+área?"), distinta da execução por dotação (O2-07) e por credor (O2-17). Empenho anulado
+não conta; função sem empenho não aparece; ordena pelo maior empenhado. Read-only, reusa
+`transparency.read`, sem migration. Ativa o módulo na interface: nova rota
+**/transparencia** (cartões de despesa/receita do `getTransparencyReport` — que existia no
+backend O5-02 sem tela — mais a tabela de despesa por função), item de nav em Contabilidade
+e Finanças. Teste `tests/sprint-transparency-by-function.test.mjs` verificado por mutação
+(incluir anulado no empenhado, ou agrupar por unidade em vez de função, derruba).
+
 **O5-03b — Painel da ouvidoria (Lei 13.460) ✅.** `getOmbudsmanSummary` consolida as
 manifestações **por tipo** (denúncia/reclamação/sugestão/elogio/informação/solicitação),
 conta as em aberto (recebida/em_analise), as **vencidas** (em aberto com prazo passado) e a

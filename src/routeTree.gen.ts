@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TributosRouteImport } from './routes/tributos'
+import { Route as TransparenciaRouteImport } from './routes/transparencia'
 import { Route as TesourariaRouteImport } from './routes/tesouraria'
 import { Route as RhRouteImport } from './routes/rh'
 import { Route as RestosAPagarRouteImport } from './routes/restos-a-pagar'
@@ -73,6 +74,11 @@ import { Route as RhFuncionariosIdRouteImport } from './routes/rh.funcionarios.$
 const TributosRoute = TributosRouteImport.update({
   id: '/tributos',
   path: '/tributos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TransparenciaRoute = TransparenciaRouteImport.update({
+  id: '/transparencia',
+  path: '/transparencia',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TesourariaRoute = TesourariaRouteImport.update({
@@ -402,6 +408,7 @@ export interface FileRoutesByFullPath {
   '/restos-a-pagar': typeof RestosAPagarRoute
   '/rh': typeof RhRouteWithChildren
   '/tesouraria': typeof TesourariaRoute
+  '/transparencia': typeof TransparenciaRoute
   '/tributos': typeof TributosRoute
   '/admin/auditoria': typeof AdminAuditoriaRoute
   '/admin/configuracoes': typeof AdminConfiguracoesRoute
@@ -464,6 +471,7 @@ export interface FileRoutesByTo {
   '/restos-a-pagar': typeof RestosAPagarRoute
   '/rh': typeof RhRouteWithChildren
   '/tesouraria': typeof TesourariaRoute
+  '/transparencia': typeof TransparenciaRoute
   '/tributos': typeof TributosRoute
   '/admin/auditoria': typeof AdminAuditoriaRoute
   '/admin/configuracoes': typeof AdminConfiguracoesRoute
@@ -527,6 +535,7 @@ export interface FileRoutesById {
   '/restos-a-pagar': typeof RestosAPagarRoute
   '/rh': typeof RhRouteWithChildren
   '/tesouraria': typeof TesourariaRoute
+  '/transparencia': typeof TransparenciaRoute
   '/tributos': typeof TributosRoute
   '/admin/auditoria': typeof AdminAuditoriaRoute
   '/admin/configuracoes': typeof AdminConfiguracoesRoute
@@ -591,6 +600,7 @@ export interface FileRouteTypes {
     | '/restos-a-pagar'
     | '/rh'
     | '/tesouraria'
+    | '/transparencia'
     | '/tributos'
     | '/admin/auditoria'
     | '/admin/configuracoes'
@@ -653,6 +663,7 @@ export interface FileRouteTypes {
     | '/restos-a-pagar'
     | '/rh'
     | '/tesouraria'
+    | '/transparencia'
     | '/tributos'
     | '/admin/auditoria'
     | '/admin/configuracoes'
@@ -715,6 +726,7 @@ export interface FileRouteTypes {
     | '/restos-a-pagar'
     | '/rh'
     | '/tesouraria'
+    | '/transparencia'
     | '/tributos'
     | '/admin/auditoria'
     | '/admin/configuracoes'
@@ -778,6 +790,7 @@ export interface RootRouteChildren {
   RestosAPagarRoute: typeof RestosAPagarRoute
   RhRoute: typeof RhRouteWithChildren
   TesourariaRoute: typeof TesourariaRoute
+  TransparenciaRoute: typeof TransparenciaRoute
   TributosRoute: typeof TributosRoute
   AdminAuditoriaRoute: typeof AdminAuditoriaRoute
   AdminConfiguracoesRoute: typeof AdminConfiguracoesRoute
@@ -796,6 +809,13 @@ declare module '@tanstack/react-router' {
       path: '/tributos'
       fullPath: '/tributos'
       preLoaderRoute: typeof TributosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/transparencia': {
+      id: '/transparencia'
+      path: '/transparencia'
+      fullPath: '/transparencia'
+      preLoaderRoute: typeof TransparenciaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/tesouraria': {
@@ -1314,6 +1334,7 @@ const rootRouteChildren: RootRouteChildren = {
   RestosAPagarRoute: RestosAPagarRoute,
   RhRoute: RhRouteWithChildren,
   TesourariaRoute: TesourariaRoute,
+  TransparenciaRoute: TransparenciaRoute,
   TributosRoute: TributosRoute,
   AdminAuditoriaRoute: AdminAuditoriaRoute,
   AdminConfiguracoesRoute: AdminConfiguracoesRoute,

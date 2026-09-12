@@ -10,6 +10,7 @@ import {
   Clock,
   Hourglass,
   CalendarRange,
+  Eye,
   Calendar,
   UserCog,
   Menu,
@@ -454,6 +455,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       to: "/parcelamentos",
       label: "Parcelamentos",
       icon: CalendarClock,
+      section: "Contabilidade e Finanças",
+    });
+  if (hasTenantPermission("transparency.read"))
+    items.push({
+      to: "/transparencia",
+      label: "Transparência",
+      icon: Eye,
       section: "Contabilidade e Finanças",
     });
   if (hasTenantPermission("contracts.read"))
