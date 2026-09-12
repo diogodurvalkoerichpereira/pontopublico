@@ -10,6 +10,7 @@ import {
   Briefcase,
   ArrowLeftRight,
   Calculator,
+  ScrollText,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +40,7 @@ import {
   cancelTaxCredit,
   getTaxCreditsSummary,
   getTaxCreditsByTributo,
+  getTaxCreditPayments,
 } from "@/lib/taxes.functions";
 import { emitActiveDebtCertificate } from "@/lib/active-debt-certificate.functions";
 import {
@@ -141,6 +143,17 @@ function Content() {
   const [aliquotaItbi, setAliquotaItbi] = useState("2");
 
   const [busy, setBusy] = useState(false);
+
+  const [extratoCredit, setExtratoCredit] = useState<Credit | null>(null);
+  const loadPayments = useServerFn(getTaxCreditPayments);
+  const { data: extrato } = useQuery({
+    queryKey: ["tax-payments", activeTenant?.id, extratoCredit?.id],
+    enabled: Boolean(activeTenant && extratoCredit),
+    queryFn: () =>
+      loadPayments({
+        data: { tenant_id: activeTenant!.id, credit_id: extratoCredit!.id },
+      }),
+  });
 
   const { data } = useQuery({
     queryKey: ["tax-credits", activeTenant?.id],
@@ -545,6 +558,13 @@ function Content() {
                           <HandCoins className="size-4" /> Arrecadar
                         </Button>
                       )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setExtratoCredit(c)}
+                      >
+                        <ScrollText className="size-4" /> Extrato
+                      </Button>
                       {c.status === "lancado" && (
                         <Button
                           size="sm"
@@ -601,6 +621,57 @@ function Content() {
       </div>
 
       {/* Arrecadar */}
+      <Dialog
+        open={Boolean(extratoCredit)}
+        onOpenChange={(o) => !o && setExtratoCredit(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Extrato de pagamentos — {extratoCredit?.tributo}{" "}
+              {extratoCredit?.exercicio} ({extratoCredit?.inscricao})
+            </DialogTitle>
+          </DialogHeader>
+          <div className="max-h-96 overflow-y-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b text-left text-muted-foreground">
+                <tr>
+                  <th className="p-2">Data</th>
+                  <th className="p-2 text-right">Valor</th>
+                  <th className="p-2 text-right">Saldo após</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(extrato?.pagamentos ?? []).map((p) => (
+                  <tr key={p.id} className="border-b last:border-0">
+                    <td className="p-2 tabular-nums">{p.data_pagamento}</td>
+                    <td className="p-2 text-right tabular-nums">
+                      {brl(p.valor)}
+                    </td>
+                    <td className="p-2 text-right tabular-nums">
+                      {brl(p.saldo_apos)}
+                    </td>
+                  </tr>
+                ))}
+                {(extrato?.pagamentos ?? []).length === 0 && (
+                  <tr>
+                    <td className="p-3 text-muted-foreground" colSpan={3}>
+                      Nenhum pagamento registrado.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          {extrato && (
+            <p className="text-sm font-semibold">
+              Lançado {brl(extrato.valor_lancado)} · pago{" "}
+              {brl(extrato.total_pago)} · saldo {brl(extrato.saldo)}
+            </p>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={payOpen} onOpenChange={setPayOpen}>
         <DialogContent>
           <DialogHeader>

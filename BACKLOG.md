@@ -1183,6 +1183,15 @@ dos pagamentos), ordenado do mais arrecadado ao menos. Reusa `taxes.read`, sem m
 `tests/sprint-tax-by-tributo.test.mjs` verificado por mutação (arrecadado pelo lançado, ou
 incluir cancelado, derruba).
 
+**O4-01d — Extrato (razão) de pagamentos do crédito tributário ✅.** `getTaxCreditPayments`
+(`taxes.functions.ts`) lista os pagamentos (`tax_payments`) de **um** crédito em ordem
+cronológica, com o **saldo devedor após** cada um (lançado − Σpago até ali), e consolida o
+total pago e o saldo atual — a trilha de arrecadação do crédito, isolada por `credit_id`
+(não vaza pagamento de outro crédito). Read-only, reusa `taxes.read`, sem migration;
+`/tributos` ganha a ação **Extrato** por crédito. Teste
+`tests/sprint-tax-credit-payments.test.mjs` verificado por mutação (somar em vez de subtrair
+no saldo após, ou vazar pagamentos de outro crédito, derruba).
+
 **O4-01b — Resumo da arrecadação tributária ✅.** `getTaxCreditsSummary` consolida os
 créditos por situação (lancado/divida_ativa/quitado/cancelado), o total **lançado**, o
 **arrecadado** (soma dos pagamentos dos não cancelados) e o **a receber** (saldo dos

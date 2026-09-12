@@ -437,3 +437,54 @@ export const cancelTaxCredit = createServerFn({ method: "POST" })
       return { id: data.credit_id, status: "cancelado" };
     });
   });
+
+const PaymentsInput = z.object({
+  tenant_id: z.string().uuid(),
+  credit_id: z.string().uuid(),
+});
+
+// O4-01d — Extrato (razão) de pagamentos de um crédito tributário. Lista os
+// pagamentos do crédito em ordem cronológica, com o **saldo devedor após** cada um
+// (lançado − Σpago até ali), e devolve o total pago e o saldo atual — a trilha de
+// arrecadação do crédito, isolada por `credit_id`. Read-only, reusa taxes.read.
+export const getTaxCreditPayments = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => PaymentsInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "taxes.read");
+    const credit = await queryOne<{ valor_lancado: string }>(
+      `select valor_lancado::text from public.tax_credits
+       where id=$1 and tenant_id=$2`,
+      [data.credit_id, data.tenant_id],
+    );
+    if (!credit) throw new Error("Crédito tributário não encontrado");
+    const rows = await query<{
+      id: string;
+      data_pagamento: string;
+      valor: string;
+    }>(
+      `select id, data_pagamento::text, valor::text
+       from public.tax_payments
+       where tenant_id=$1 and credit_id=$2
+       order by data_pagamento, created_at, id`,
+      [data.tenant_id, data.credit_id],
+    );
+    const lancado = Number(credit.valor_lancado);
+    let acumulado = 0;
+    const pagamentos = rows.map((r) => {
+      acumulado = Number((acumulado + Number(r.valor)).toFixed(2));
+      return {
+        id: r.id,
+        data_pagamento: r.data_pagamento,
+        valor: Number(r.valor),
+        saldo_apos: Number((lancado - acumulado).toFixed(2)),
+      };
+    });
+    return {
+      valor_lancado: lancado,
+      total_pago: acumulado,
+      saldo: Number((lancado - acumulado).toFixed(2)),
+      pagamentos,
+    };
+  });
