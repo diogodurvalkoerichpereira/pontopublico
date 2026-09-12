@@ -31,10 +31,11 @@ export const getMaterialItems = createServerFn({ method: "POST" })
       categoria: "consumo" | "permanente";
       saldo_quantidade: string;
       saldo_valor: string;
+      estoque_minimo: string;
       status: "ativo" | "inativo";
     }>(
       `select id, codigo, nome, unidade, categoria,
-         saldo_quantidade::text, saldo_valor::text, status
+         saldo_quantidade::text, saldo_valor::text, estoque_minimo::text, status
        from public.material_items where tenant_id = $1 order by codigo`,
       [data.tenant_id],
     );
@@ -51,6 +52,7 @@ const SaveItemInput = z.object({
   nome: z.string().trim().min(2).max(200),
   unidade: z.string().trim().min(1).max(20),
   categoria: z.enum(["consumo", "permanente"]).default("consumo"),
+  estoque_minimo: z.number().min(0).max(1_000_000_000).default(0),
   status: z.enum(["ativo", "inativo"]).default("ativo"),
 });
 
@@ -72,7 +74,8 @@ export const saveMaterialItem = createServerFn({ method: "POST" })
       if (data.id) {
         await client.query(
           `update public.material_items set codigo=$3, nome=$4, unidade=$5,
-             categoria=$6, status=$7, updated_at=now() where id=$1 and tenant_id=$2`,
+             categoria=$6, estoque_minimo=$7, status=$8, updated_at=now()
+           where id=$1 and tenant_id=$2`,
           [
             id,
             data.tenant_id,
@@ -80,14 +83,16 @@ export const saveMaterialItem = createServerFn({ method: "POST" })
             data.nome,
             data.unidade,
             data.categoria,
+            data.estoque_minimo,
             data.status,
           ],
         );
       } else {
         await client.query(
           `insert into public.material_items
-             (id, tenant_id, codigo, nome, unidade, categoria, status, created_by)
-           values ($1,$2,$3,$4,$5,$6,$7,$8)`,
+             (id, tenant_id, codigo, nome, unidade, categoria, estoque_minimo,
+              status, created_by)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
           [
             id,
             data.tenant_id,
@@ -95,6 +100,7 @@ export const saveMaterialItem = createServerFn({ method: "POST" })
             data.nome,
             data.unidade,
             data.categoria,
+            data.estoque_minimo,
             data.status,
             context.userId,
           ],
@@ -449,4 +455,48 @@ export const adjustMaterialInventory = createServerFn({ method: "POST" })
         saldo_valor: novoValor,
       };
     });
+  });
+
+const ReorderInput = z.object({ tenant_id: z.string().uuid() });
+
+// O3-02c — Alerta de reposição do almoxarifado (ponto de pedido). Lista os itens **ativos**
+// com estoque mínimo definido (> 0) cujo saldo em estoque caiu ao mínimo ou abaixo, com o
+// quanto falta para repor (faltante = mínimo − saldo, nunca negativo). Item sem mínimo (0)
+// ou com saldo acima do mínimo não alerta. Read-only, reusa materials.read.
+export const getMaterialReorderAlerts = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => ReorderInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "materials.read");
+    const itens = await query<{
+      id: string;
+      codigo: string;
+      nome: string;
+      unidade: string;
+      saldo_quantidade: string;
+      estoque_minimo: string;
+      faltante: string;
+    }>(
+      `select id, codigo, nome, unidade, saldo_quantidade::text,
+         estoque_minimo::text,
+         (estoque_minimo - saldo_quantidade)::text as faltante
+       from public.material_items
+       where tenant_id = $1 and status = 'ativo'
+         and estoque_minimo > 0
+         and saldo_quantidade <= estoque_minimo
+       order by (estoque_minimo - saldo_quantidade) desc, codigo`,
+      [data.tenant_id],
+    );
+    return {
+      itens: itens.map((i) => ({
+        id: i.id,
+        codigo: i.codigo,
+        nome: i.nome,
+        unidade: i.unidade,
+        saldo: Number(i.saldo_quantidade),
+        minimo: Number(i.estoque_minimo),
+        faltante: Number(Number(i.faltante).toFixed(3)),
+      })),
+    };
   });

@@ -958,6 +958,15 @@ entra. Reusa `materials.read`, sem migration; `/almoxarifado` ganha o filtro de 
 os cartões de entradas/saídas. Teste `tests/sprint-material-movement-summary.test.mjs`
 verificado por mutação (trocar o tipo somado, ou ignorar o filtro de período, derruba).
 
+**O3-02c — Estoque mínimo / ponto de pedido ✅.** `material_items` ganha `estoque_minimo`
+(migration `..._o3_02c_material_min_stock.sql`, aditiva; 0 = sem controle) e
+`saveMaterialItem` passa a gravá-lo. `getMaterialReorderAlerts` lista os itens **ativos**
+com mínimo > 0 cujo saldo caiu ao mínimo ou **abaixo**, com o faltante para repor
+(mínimo − saldo), ordenado pelo maior faltante — o alerta de reposição do almoxarifado.
+Read-only, reusa `materials.read`; `/almoxarifado` ganha o campo de estoque mínimo no
+cadastro e o painel "Reposição necessária". Teste `tests/sprint-material-reorder.test.mjs`
+verificado por mutação (trocar `<=` por `<`, ou remover o filtro de mínimo > 0, derruba).
+
 **O3-18 — Razão (kardex) de movimentação de material ✅.** `getMaterialLedger` relê as
 movimentações do item em ordem cronológica e recompõe o saldo em quantidade linha a linha
 (entrada soma, saída subtrai); o saldo corrente final bate com o saldo do próprio item.

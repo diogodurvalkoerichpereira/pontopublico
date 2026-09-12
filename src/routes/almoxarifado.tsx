@@ -38,6 +38,7 @@ import {
   getMaterialLedger,
   getMaterialMovementSummary,
   adjustMaterialInventory,
+  getMaterialReorderAlerts,
 } from "@/lib/materials.functions";
 import { incorporateMaterialAsset } from "@/lib/assets.functions";
 
@@ -137,6 +138,7 @@ function Content() {
   const [categoria, setCategoria] = useState<"consumo" | "permanente">(
     "consumo",
   );
+  const [estoqueMinimo, setEstoqueMinimo] = useState("0");
 
   const [moveItemId, setMoveItemId] = useState("");
   const [moveTipo, setMoveTipo] = useState<"entrada" | "saida">("entrada");
@@ -159,6 +161,22 @@ function Content() {
     queryFn: () => loadInventory({ data: { tenant_id: activeTenant!.id } }),
   });
   const inventory = (inv?.categorias ?? []) as InventoryLine[];
+
+  const loadReorder = useServerFn(getMaterialReorderAlerts);
+  const { data: reorder } = useQuery({
+    queryKey: ["material-reorder", activeTenant?.id],
+    enabled: Boolean(activeTenant),
+    queryFn: () => loadReorder({ data: { tenant_id: activeTenant!.id } }),
+  });
+  const reorderItens = (reorder?.itens ?? []) as Array<{
+    id: string;
+    codigo: string;
+    nome: string;
+    unidade: string;
+    saldo: number;
+    minimo: number;
+    faltante: number;
+  }>;
 
   const { data: movSummary } = useQuery({
     queryKey: [
@@ -186,6 +204,7 @@ function Content() {
     qc.invalidateQueries({
       queryKey: ["material-mov-summary", activeTenant?.id],
     });
+    qc.invalidateQueries({ queryKey: ["material-reorder", activeTenant?.id] });
   };
 
   const openAdjust = (item: Item) => {
@@ -228,6 +247,7 @@ function Content() {
           nome: nome.trim(),
           unidade: unidade.trim(),
           categoria,
+          estoque_minimo: Number(estoqueMinimo || 0),
           status: "ativo",
         },
       });
@@ -236,6 +256,7 @@ function Content() {
       setCodigo("");
       setNome("");
       setCategoria("consumo");
+      setEstoqueMinimo("0");
       refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Falha ao salvar");
@@ -361,6 +382,28 @@ function Content() {
           </div>
         )}
       </div>
+
+      {reorderItens.length > 0 && (
+        <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-4">
+          <h2 className="mb-2 font-bold text-destructive">
+            Reposição necessária ({reorderItens.length})
+          </h2>
+          <div className="flex flex-wrap gap-2">
+            {reorderItens.map((i) => (
+              <span
+                key={i.id}
+                className="rounded-lg border bg-card px-3 py-1 text-sm"
+                title={i.nome}
+              >
+                <b>{i.codigo}</b> — saldo {i.saldo} / mín. {i.minimo}{" "}
+                <span className="text-destructive">
+                  (repor {i.faltante} {i.unidade})
+                </span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-xl border bg-card p-4">
@@ -565,6 +608,15 @@ function Content() {
                   <SelectItem value="permanente">Permanente</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div>
+              <Label>Estoque mínimo (0 = sem alerta)</Label>
+              <Input
+                type="number"
+                step="0.001"
+                value={estoqueMinimo}
+                onChange={(e) => setEstoqueMinimo(e.target.value)}
+              />
             </div>
           </div>
           <DialogFooter>
