@@ -1109,6 +1109,15 @@ Read-only, reusa `assets.read`, sem migration; `/frotas` ganha o diálogo "Consu
 veículo. Teste `tests/sprint-fleet-consumption.test.mjs` verificado por mutação (não
 excluir o primeiro abastecimento do denominador derruba).
 
+**O3-05c — Custo total da frota por veículo ✅.** `getFleetCostSummary` consolida, por
+veículo no período, o gasto com **abastecimento** e com **manutenção** (via `left join`, o
+veículo sem evento fica zerado mas listado), com o total por veículo e os **totais do
+ente** — a visão gerencial de custo da frota, complementar ao consumo por veículo (O3-05b).
+Evento fora do período não entra. Read-only, reusa `assets.read`, sem migration; `/frotas`
+ganha o painel "Custo da frota". Teste `tests/sprint-fleet-cost.test.mjs` verificado por
+mutação (trocar o tipo somado combustível↔manutenção, ou remover qualquer limite do
+período, derruba).
+
 **O3-12 — Ata de Registro de Preços (SRP, Lei 14.133 art. 82-86) ✅.**
 `createPriceRegistration` forma a ata a partir de uma licitação **homologada**, com itens
 (unidade, quantidade registrada, preço) e **vigência de até 1 ano** (art. 84);

@@ -28,6 +28,7 @@ import {
   saveFleetVehicle,
   recordFleetEvent,
   getFleetConsumption,
+  getFleetCostSummary,
 } from "@/lib/fleet.functions";
 
 export const Route = createFileRoute("/frotas")({ component: Page });
@@ -101,6 +102,21 @@ function Content() {
   });
   const vehicles = (data?.vehicles ?? []) as Vehicle[];
   const canManage = data?.canManage ?? false;
+
+  const loadCost = useServerFn(getFleetCostSummary);
+  const { data: cost } = useQuery({
+    queryKey: ["fleet-cost", activeTenant?.id],
+    enabled: Boolean(activeTenant),
+    queryFn: () => loadCost({ data: { tenant_id: activeTenant!.id } }),
+  });
+  const custoVeiculos = (cost?.veiculos ?? []) as Array<{
+    id: string;
+    placa: string;
+    modelo: string;
+    combustivel: number;
+    manutencao: number;
+    total: number;
+  }>;
 
   const { data: consumption } = useQuery({
     queryKey: ["fleet-consumption", activeTenant?.id, consumptionVehicle?.id],
@@ -254,6 +270,58 @@ function Content() {
           </tbody>
         </table>
       </div>
+
+      {custoVeiculos.length > 0 && (
+        <div>
+          <h2 className="mb-2 text-lg font-bold">Custo da frota (acumulado)</h2>
+          <div className="rounded-xl border bg-card overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b bg-muted/40 text-left">
+                <tr>
+                  <th className="p-3 font-semibold">Veículo</th>
+                  <th className="p-3 font-semibold text-right">Combustível</th>
+                  <th className="p-3 font-semibold text-right">Manutenção</th>
+                  <th className="p-3 font-semibold text-right">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {custoVeiculos.map((c) => (
+                  <tr key={c.id} className="border-b last:border-0">
+                    <td className="p-3 font-medium">
+                      {c.placa} · {c.modelo}
+                    </td>
+                    <td className="p-3 text-right tabular-nums">
+                      {brl(c.combustivel)}
+                    </td>
+                    <td className="p-3 text-right tabular-nums">
+                      {brl(c.manutencao)}
+                    </td>
+                    <td className="p-3 text-right font-semibold tabular-nums">
+                      {brl(c.total)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              {cost && (
+                <tfoot>
+                  <tr className="border-t-2 font-semibold">
+                    <td className="p-3">Total da frota</td>
+                    <td className="p-3 text-right tabular-nums">
+                      {brl(cost.totais.combustivel)}
+                    </td>
+                    <td className="p-3 text-right tabular-nums">
+                      {brl(cost.totais.manutencao)}
+                    </td>
+                    <td className="p-3 text-right tabular-nums">
+                      {brl(cost.totais.total)}
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Novo veículo */}
       <Dialog open={vehicleOpen} onOpenChange={setVehicleOpen}>

@@ -249,3 +249,63 @@ export const getFleetConsumption = createServerFn({ method: "POST" })
       custoPorKm,
     };
   });
+
+const CostSummaryInput = z.object({
+  tenant_id: z.string().uuid(),
+  from: z.string().date().optional(),
+  to: z.string().date().optional(),
+});
+
+// O3-05c — Custo total da frota no período, por veículo. Consolida o gasto com
+// abastecimento e com manutenção de cada veículo no intervalo, com o total por
+// veículo e os totais do ente — a visão gerencial de custo da frota (complementa o
+// consumo por veículo do O3-05b). Veículo sem evento no período fica zerado (ainda
+// listado). Read-only, reusa assets.read.
+export const getFleetCostSummary = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => CostSummaryInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "assets.read");
+    const rows = await query<{
+      id: string;
+      placa: string;
+      modelo: string;
+      combustivel: string;
+      manutencao: string;
+    }>(
+      `select v.id, v.placa, v.modelo,
+         coalesce(sum(e.valor) filter (where e.tipo='abastecimento'),0)::text as combustivel,
+         coalesce(sum(e.valor) filter (where e.tipo='manutencao'),0)::text as manutencao
+       from public.fleet_vehicles v
+       left join public.fleet_events e
+         on e.vehicle_id = v.id and e.tenant_id = v.tenant_id
+         and ($2::date is null or e.data_evento >= $2)
+         and ($3::date is null or e.data_evento <= $3)
+       where v.tenant_id = $1
+       group by v.id, v.placa, v.modelo
+       order by v.placa`,
+      [data.tenant_id, data.from ?? null, data.to ?? null],
+    );
+    const veiculos = rows.map((r) => {
+      const combustivel = Number(r.combustivel);
+      const manutencao = Number(r.manutencao);
+      return {
+        id: r.id,
+        placa: r.placa,
+        modelo: r.modelo,
+        combustivel: round2(combustivel),
+        manutencao: round2(manutencao),
+        total: round2(combustivel + manutencao),
+      };
+    });
+    const totais = veiculos.reduce(
+      (acc, v) => ({
+        combustivel: round2(acc.combustivel + v.combustivel),
+        manutencao: round2(acc.manutencao + v.manutencao),
+        total: round2(acc.total + v.total),
+      }),
+      { combustivel: 0, manutencao: 0, total: 0 },
+    );
+    return { veiculos, totais };
+  });
