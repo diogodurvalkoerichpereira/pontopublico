@@ -413,6 +413,17 @@ divisor; nada adivinhado) — e grava em `payroll_monthly_variables`
 folha** fecha ponta a ponta. Testes `tests/sprint-monthly-variables.test.mjs` e
 `tests/sprint-ponto-folha.test.mjs`, verificados por mutação.
 
+### O1-04c — Resumo da folha por rubrica (verba) ✅
+
+`getPayrollCycleByRubric` (`payroll-cycle.functions.ts`) consolida, para um ciclo, o total
+de cada rubrica (código, nome, natureza) somando os **itens de cálculo da simulação de
+origem** do ciclo (`source_run_id`), com quantos servidores a receberam — o "resumo por
+verba" para conferência e base do empenho por natureza. Itens de outra simulação não
+entram; ciclo sem origem devolve lista vazia. Read-only, reusa `payroll.cycles.read`, sem
+migration; `/rh/ciclos` ganha a tabela "Resumo por rubrica" no detalhe do ciclo. Teste
+`tests/sprint-payroll-cycle-by-rubric.test.mjs` verificado por mutação (remover o filtro por
+`run_id`, somando itens de outra simulação, derruba).
+
 ### O1-05a — Rescisão com INSS/IRRF ✅
 
 P1 · feito. `calculateTermination` (`employment-special.functions.ts`) deixou de

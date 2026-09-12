@@ -559,3 +559,58 @@ export const transitionPayrollCycle = createServerFn({ method: "POST" })
       return { cycleId: data.cycle_id, status: rule.to };
     });
   });
+
+const ByRubricInput = z.object({
+  tenant_id: z.string().uuid(),
+  cycle_id: z.string().uuid(),
+});
+
+// O1-04c — Resumo da folha por rubrica (verba). Consolida, para um ciclo, o total de cada
+// rubrica (código, nome, natureza) somando os itens de cálculo da simulação de origem
+// (`source_run_id`) — o "resumo por verba" para conferência e base do empenho por natureza.
+// Cada rubrica traz quantos servidores a receberam e o total. Read-only, reusa
+// payroll.cycles.read.
+export const getPayrollCycleByRubric = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => ByRubricInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "payroll.cycles.read");
+    const cycle = (
+      await query<{ source_run_id: string | null }>(
+        `select source_run_id from public.payroll_cycles
+         where id=$1 and tenant_id=$2`,
+        [data.cycle_id, data.tenant_id],
+      )
+    )[0];
+    if (!cycle) throw new Error("Ciclo não encontrado");
+    if (!cycle.source_run_id) return { rubricas: [] };
+    const rubricas = await query<{
+      rubric_id: string;
+      code: string;
+      name: string;
+      nature: string;
+      beneficiarios: string;
+      total: string;
+    }>(
+      `select item.rubric_id, rubric.code, rubric.name, rubric.nature,
+         count(distinct item.employment_link_id)::text as beneficiarios,
+         coalesce(sum(item.amount),0)::text as total
+       from public.payroll_calculation_items item
+       join public.payroll_rubrics rubric on rubric.id = item.rubric_id
+       where item.tenant_id = $1 and item.run_id = $2
+       group by item.rubric_id, rubric.code, rubric.name, rubric.nature
+       order by rubric.nature, rubric.code`,
+      [data.tenant_id, cycle.source_run_id],
+    );
+    return {
+      rubricas: rubricas.map((r) => ({
+        rubric_id: r.rubric_id,
+        code: r.code,
+        name: r.name,
+        nature: r.nature,
+        beneficiarios: Number(r.beneficiarios),
+        total: Number(Number(r.total).toFixed(2)),
+      })),
+    };
+  });

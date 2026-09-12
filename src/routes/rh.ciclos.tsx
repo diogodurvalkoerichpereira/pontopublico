@@ -29,6 +29,7 @@ import {
   getPayrollCycleWorkspace,
   materializePayrollPreview,
   transitionPayrollCycle,
+  getPayrollCycleByRubric,
 } from "@/lib/payroll-cycle.functions";
 
 export const Route = createFileRoute("/rh/ciclos")({ component: Page });
@@ -77,6 +78,16 @@ function Content() {
     if (!selectedCycleId && data?.cycles[0])
       setSelectedCycleId(data.cycles[0].id);
   }, [data, selectedCycleId]);
+
+  const loadByRubric = useServerFn(getPayrollCycleByRubric);
+  const { data: byRubric } = useQuery({
+    queryKey: ["payroll-cycle-rubric", activeTenant?.id, selectedCycleId],
+    enabled: Boolean(activeTenant) && Boolean(selectedCycleId),
+    queryFn: () =>
+      loadByRubric({
+        data: { tenant_id: activeTenant!.id, cycle_id: selectedCycleId },
+      }),
+  });
 
   const selected = data?.cycles.find((cycle) => cycle.id === selectedCycleId);
   const results = useMemo(
@@ -380,6 +391,44 @@ function Content() {
                   </table>
                 </div>
               </div>
+
+              {byRubric && byRubric.rubricas.length > 0 && (
+                <div className="rounded-2xl border bg-card p-5 shadow-sm">
+                  <h2 className="mb-4 font-bold">Resumo por rubrica (verba)</h2>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="border-b text-left text-xs uppercase text-muted-foreground">
+                        <tr>
+                          <th className="py-2">Rubrica</th>
+                          <th>Natureza</th>
+                          <th>Servidores</th>
+                          <th className="text-right">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {byRubric.rubricas.map((r) => (
+                          <tr
+                            key={r.rubric_id}
+                            className="border-b last:border-0"
+                          >
+                            <td className="py-2">
+                              <span className="font-mono text-xs text-muted-foreground">
+                                {r.code}
+                              </span>{" "}
+                              {r.name}
+                            </td>
+                            <td className="capitalize">{r.nature}</td>
+                            <td className="tabular-nums">{r.beneficiarios}</td>
+                            <td className="text-right font-mono">
+                              {fmt(r.total)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
 
               <div className="rounded-2xl border bg-card p-5 shadow-sm">
                 <h2 className="mb-4 flex items-center gap-2 font-bold">
