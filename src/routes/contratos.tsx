@@ -34,6 +34,7 @@ import {
   getContractMeasurements,
   recordContractMeasurement,
   attestContractMeasurement,
+  cancelContractMeasurement,
 } from "@/lib/contract-measurements.functions";
 
 export const Route = createFileRoute("/contratos")({ component: Page });
@@ -94,6 +95,7 @@ function Content() {
   const loadMeasurements = useServerFn(getContractMeasurements);
   const measure = useServerFn(recordContractMeasurement);
   const attest = useServerFn(attestContractMeasurement);
+  const cancelMeasurement = useServerFn(cancelContractMeasurement);
   const transition = useServerFn(transitionContract);
   const qc = useQueryClient();
 
@@ -210,6 +212,25 @@ function Content() {
       refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Falha no atesto");
+    }
+  };
+
+  const doCancelMeasurement = async (measurementId: string) => {
+    if (!activeTenant) return;
+    if (
+      !window.confirm(
+        "Cancelar (glosar) esta medição provisória? O valor volta ao saldo executável do contrato.",
+      )
+    )
+      return;
+    try {
+      await cancelMeasurement({
+        data: { tenant_id: activeTenant.id, measurement_id: measurementId },
+      });
+      toast.success("Medição cancelada");
+      refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao cancelar");
     }
   };
 
@@ -497,13 +518,22 @@ function Content() {
                   {measurements?.canManage && (
                     <td className="p-3">
                       {m.recebimento === "provisorio" && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => doAttest(m.id)}
-                        >
-                          Receber definitivo
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => doAttest(m.id)}
+                          >
+                            Receber definitivo
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => doCancelMeasurement(m.id)}
+                          >
+                            Cancelar
+                          </Button>
+                        </div>
                       )}
                     </td>
                   )}

@@ -1083,6 +1083,17 @@ grant UPDATE já existiam); `/contratos` ganha a ação "Receber definitivo" por
 provisória. Teste `tests/sprint-contract-measurement-attest.test.mjs` verificado por
 mutação (remover a guarda de estado deixa atestar duas vezes — derruba).
 
+**O3-14c — Cancelamento (glosa) de medição provisória ✅.** `cancelContractMeasurement`
+(`contract-measurements.functions.ts`, `contracts.manage`) cancela uma medição
+**provisória** rejeitada na verificação (Lei 14.133 art. 140): a medição vai a `cancelado`
+(terminal) e o valor **volta ao `valor_executado`** do contrato, liberando o saldo
+executável. Definitiva (já atestou o pagamento) não cancela; cancelada não recancela.
+Migration `20260909630000_o3_14c_measurement_cancel.sql` (ALTER do check de `recebimento`
+para admitir `cancelado`; aditiva, default e medições existentes inalterados); `/contratos`
+ganha a ação **Cancelar** por medição provisória. Teste
+`tests/sprint-contract-measurement-cancel.test.mjs` verificado por mutação (não devolver o
+valor ao contrato, ou aceitar cancelar uma definitiva, derruba).
+
 **O3-15 — Medições no painel de contratos (UI) ✅.** No `/contratos`, cada contrato
 expande as suas medições (nº, competência, descrição, valor, recebimento) e tem a ação
 "Medir" (contrato vigente) que registra uma medição respeitando o teto do empenhado.

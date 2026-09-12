@@ -187,3 +187,82 @@ export const attestContractMeasurement = createServerFn({ method: "POST" })
       return { id: data.measurement_id, recebimento: "definitivo" };
     });
   });
+
+const CancelInput = z.object({
+  tenant_id: z.string().uuid(),
+  measurement_id: z.string().uuid(),
+  motivo: z.string().trim().max(500).optional(),
+});
+
+// O3-14c — Cancela (glosa) uma medição **provisória** rejeitada na verificação (Lei
+// 14.133 art. 140): a medição vai a 'cancelado' (terminal) e o valor volta ao
+// executado do contrato, liberando o saldo executável. Definitiva (já atestada,
+// autorizou pagamento) não cancela; cancelada não recancela. Reusa contracts.manage.
+export const cancelContractMeasurement = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => CancelInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "contracts.manage");
+    return withTransaction(async (client) => {
+      const medicao = (
+        await client.query<{
+          recebimento: string;
+          numero: number;
+          valor: string;
+          contract_id: string;
+        }>(
+          `select recebimento, numero, valor::text, contract_id
+           from public.contract_measurements
+           where id=$1 and tenant_id=$2 for update`,
+          [data.measurement_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!medicao) throw new Error("Medição não encontrada");
+      if (medicao.recebimento !== "provisorio")
+        throw new Error(
+          "Só uma medição provisória pode ser cancelada (definitiva autorizou pagamento)",
+        );
+      // Devolve o valor ao saldo executável do contrato (trava o contrato).
+      const contract = (
+        await client.query<{ valor_executado: string }>(
+          `select valor_executado::text from public.procurement_contracts
+           where id=$1 and tenant_id=$2 for update`,
+          [medicao.contract_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!contract) throw new Error("Contrato da medição não encontrado");
+      const novoExecutado = Number(
+        (Number(contract.valor_executado) - Number(medicao.valor)).toFixed(2),
+      );
+      await client.query(
+        `update public.contract_measurements set recebimento='cancelado'
+         where id=$1 and tenant_id=$2`,
+        [data.measurement_id, data.tenant_id],
+      );
+      await client.query(
+        `update public.procurement_contracts
+         set valor_executado=$3, updated_at=now()
+         where id=$1 and tenant_id=$2`,
+        [medicao.contract_id, data.tenant_id, novoExecutado],
+      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "cancelar_medicao",
+        resource: "contract_measurements",
+        recordId: data.measurement_id,
+        before: { recebimento: "provisorio" },
+        after: {
+          recebimento: "cancelado",
+          valor_executado: novoExecutado,
+          motivo: data.motivo ?? null,
+        },
+      });
+      return {
+        id: data.measurement_id,
+        recebimento: "cancelado",
+        valor_executado: novoExecutado,
+      };
+    });
+  });
