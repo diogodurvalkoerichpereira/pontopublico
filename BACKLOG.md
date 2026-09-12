@@ -713,6 +713,13 @@ subtrair no saldo derruba). Próximo: balanço financeiro (Anexo 13) e MSC-SICON
 Compras Lei 14.133 → contratos → almoxarifado → patrimônio (depreciação NBC TSP)
 → frotas → integração PNCP. Emite empenho pelo mesmo primitivo da folha.
 
+**O3-01c — Contratos a vencer ✅.** `getExpiringContracts` lista os contratos **vigentes**
+cuja vigência final cai entre a data de referência e `dias` à frente (inclusive), com os
+dias para vencer — alerta de renovação/aditivo (Lei 14.133); encerrado/suspenso/rescindido
+não alerta. Reusa `contracts.read`, sem migration; `/contratos` ganha o painel "a vencer em
+30 dias". Teste `tests/sprint-contracts-expiring.test.mjs` verificado por mutação (incluir
+não-vigentes, ou remover o limite superior da janela, derruba).
+
 **O3-01b — Resumo dos contratos ✅.** `getContractsSummary` consolida a contagem por
 situação e, dos contratos **vigentes**, o valor contratado, empenhado, executado (medições)
 e o **saldo a executar** (contratado − executado) — encerrado/rescindido fora da carteira

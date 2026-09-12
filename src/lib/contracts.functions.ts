@@ -107,6 +107,45 @@ export const getContractsSummary = createServerFn({ method: "POST" })
     };
   });
 
+const ExpiringInput = z.object({
+  tenant_id: z.string().uuid(),
+  data_referencia: z.string().date(),
+  dias: z.number().int().min(1).max(365).default(30),
+});
+
+// O3-01c — Contratos a vencer. Lista os contratos **vigentes** cuja vigência final cai
+// entre a data de referência e `dias` à frente (inclusive) — alerta de renovação/aditivo
+// antes do vencimento (Lei 14.133). Contrato encerrado/suspenso/rescindido não alerta.
+// Reusa contracts.read.
+export const getExpiringContracts = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => ExpiringInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "contracts.read");
+    const contracts = await query<{
+      id: string;
+      numero: string;
+      ano: number;
+      fornecedor: string;
+      objeto: string;
+      valor_total: string;
+      vigencia_fim: string;
+      dias_para_vencer: number;
+    }>(
+      `select id, numero, ano, fornecedor, objeto, valor_total::text,
+         vigencia_fim::text,
+         (vigencia_fim - $2::date)::int as dias_para_vencer
+       from public.procurement_contracts
+       where tenant_id = $1 and status = 'vigente'
+         and vigencia_fim >= $2::date
+         and vigencia_fim <= ($2::date + ($3 || ' days')::interval)
+       order by vigencia_fim, numero`,
+      [data.tenant_id, data.data_referencia, data.dias],
+    );
+    return { contracts, dias: data.dias };
+  });
+
 const SaveInput = z.object({
   id: z.string().uuid().optional(),
   tenant_id: z.string().uuid(),

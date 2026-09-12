@@ -28,6 +28,7 @@ import {
   saveContract,
   transitionContract,
   getContractsSummary,
+  getExpiringContracts,
 } from "@/lib/contracts.functions";
 import {
   getContractMeasurements,
@@ -131,6 +132,27 @@ function Content() {
     enabled: Boolean(activeTenant),
     queryFn: () => loadSummary({ data: { tenant_id: activeTenant!.id } }),
   });
+  const loadExpiring = useServerFn(getExpiringContracts);
+  const { data: expiring } = useQuery({
+    queryKey: ["contracts-expiring", activeTenant?.id],
+    enabled: Boolean(activeTenant),
+    queryFn: () =>
+      loadExpiring({
+        data: {
+          tenant_id: activeTenant!.id,
+          data_referencia: new Date().toISOString().slice(0, 10),
+          dias: 30,
+        },
+      }),
+  });
+  const expiringList = (expiring?.contracts ?? []) as Array<{
+    id: string;
+    numero: string;
+    ano: number;
+    fornecedor: string;
+    vigencia_fim: string;
+    dias_para_vencer: number;
+  }>;
 
   const { data: measurements } = useQuery({
     queryKey: ["contract-measurements", activeTenant?.id, expanded],
@@ -147,6 +169,9 @@ function Content() {
       queryKey: ["contract-measurements", activeTenant?.id],
     });
     qc.invalidateQueries({ queryKey: ["contracts-summary", activeTenant?.id] });
+    qc.invalidateQueries({
+      queryKey: ["contracts-expiring", activeTenant?.id],
+    });
   };
 
   const doTransition = async (
@@ -281,6 +306,29 @@ function Content() {
               {brl(summary.saldoAExecutar)}
             </div>
           </div>
+        </div>
+      )}
+
+      {expiringList.length > 0 && (
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/5 p-4">
+          <h2 className="font-bold text-amber-700 dark:text-amber-500">
+            Contratos a vencer em 30 dias ({expiringList.length})
+          </h2>
+          <ul className="mt-2 space-y-1 text-sm">
+            {expiringList.map((c) => (
+              <li key={c.id} className="flex justify-between gap-3">
+                <span>
+                  <span className="font-medium tabular-nums">
+                    {c.numero}/{c.ano}
+                  </span>{" "}
+                  — {c.fornecedor}
+                </span>
+                <span className="text-muted-foreground tabular-nums">
+                  {c.vigencia_fim} ({c.dias_para_vencer}d)
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
