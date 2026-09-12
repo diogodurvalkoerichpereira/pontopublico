@@ -25,6 +25,7 @@ import { Route as OrcamentoRouteImport } from './routes/orcamento'
 import { Route as MeusDocumentosRouteImport } from './routes/meus-documentos'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LicitacoesRouteImport } from './routes/licitacoes'
+import { Route as IntegracoesRouteImport } from './routes/integracoes'
 import { Route as GestorRouteImport } from './routes/gestor'
 import { Route as FrotasRouteImport } from './routes/frotas'
 import { Route as EsicRouteImport } from './routes/esic'
@@ -145,6 +146,11 @@ const LoginRoute = LoginRouteImport.update({
 const LicitacoesRoute = LicitacoesRouteImport.update({
   id: '/licitacoes',
   path: '/licitacoes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IntegracoesRoute = IntegracoesRouteImport.update({
+  id: '/integracoes',
+  path: '/integracoes',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GestorRoute = GestorRouteImport.update({
@@ -369,6 +375,7 @@ export interface FileRoutesByFullPath {
   '/esic': typeof EsicRoute
   '/frotas': typeof FrotasRoute
   '/gestor': typeof GestorRouteWithChildren
+  '/integracoes': typeof IntegracoesRoute
   '/licitacoes': typeof LicitacoesRoute
   '/login': typeof LoginRoute
   '/meus-documentos': typeof MeusDocumentosRoute
@@ -428,6 +435,7 @@ export interface FileRoutesByTo {
   '/esic': typeof EsicRoute
   '/frotas': typeof FrotasRoute
   '/gestor': typeof GestorRouteWithChildren
+  '/integracoes': typeof IntegracoesRoute
   '/licitacoes': typeof LicitacoesRoute
   '/login': typeof LoginRoute
   '/meus-documentos': typeof MeusDocumentosRoute
@@ -488,6 +496,7 @@ export interface FileRoutesById {
   '/esic': typeof EsicRoute
   '/frotas': typeof FrotasRoute
   '/gestor': typeof GestorRouteWithChildren
+  '/integracoes': typeof IntegracoesRoute
   '/licitacoes': typeof LicitacoesRoute
   '/login': typeof LoginRoute
   '/meus-documentos': typeof MeusDocumentosRoute
@@ -549,6 +558,7 @@ export interface FileRouteTypes {
     | '/esic'
     | '/frotas'
     | '/gestor'
+    | '/integracoes'
     | '/licitacoes'
     | '/login'
     | '/meus-documentos'
@@ -608,6 +618,7 @@ export interface FileRouteTypes {
     | '/esic'
     | '/frotas'
     | '/gestor'
+    | '/integracoes'
     | '/licitacoes'
     | '/login'
     | '/meus-documentos'
@@ -667,6 +678,7 @@ export interface FileRouteTypes {
     | '/esic'
     | '/frotas'
     | '/gestor'
+    | '/integracoes'
     | '/licitacoes'
     | '/login'
     | '/meus-documentos'
@@ -727,6 +739,7 @@ export interface RootRouteChildren {
   EsicRoute: typeof EsicRoute
   FrotasRoute: typeof FrotasRoute
   GestorRoute: typeof GestorRouteWithChildren
+  IntegracoesRoute: typeof IntegracoesRoute
   LicitacoesRoute: typeof LicitacoesRoute
   LoginRoute: typeof LoginRoute
   MeusDocumentosRoute: typeof MeusDocumentosRoute
@@ -865,6 +878,13 @@ declare module '@tanstack/react-router' {
       path: '/licitacoes'
       fullPath: '/licitacoes'
       preLoaderRoute: typeof LicitacoesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/integracoes': {
+      id: '/integracoes'
+      path: '/integracoes'
+      fullPath: '/integracoes'
+      preLoaderRoute: typeof IntegracoesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/gestor': {
@@ -1236,6 +1256,7 @@ const rootRouteChildren: RootRouteChildren = {
   EsicRoute: EsicRoute,
   FrotasRoute: FrotasRoute,
   GestorRoute: GestorRouteWithChildren,
+  IntegracoesRoute: IntegracoesRoute,
   LicitacoesRoute: LicitacoesRoute,
   LoginRoute: LoginRoute,
   MeusDocumentosRoute: MeusDocumentosRoute,

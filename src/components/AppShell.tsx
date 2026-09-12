@@ -167,6 +167,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       icon: Settings,
       section: "Administração",
     });
+    items.push({
+      to: "/integracoes",
+      label: "Integrações e alertas",
+      icon: Bot,
+      section: "Administração",
+    });
   }
   if (hasTenantPermission("org.read")) {
     items.push({
