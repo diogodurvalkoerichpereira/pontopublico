@@ -225,9 +225,13 @@ motor genérico já existe); endurecer o atalho `personId=id` (sem CPF).
 - `test:all` que rode a suíte inteira de validadores.
 - Corrigir o operador `is` em `pgrest.server.ts` (`IS $1` é SQL inválido para não-nulo).
 - Migrar `.validator()` (deprecado, 65 usos) para `.inputValidator()`.
-- Exigir `requireAuth` nos proxies de OCR (`extractAtestadoOCR`,
-  `extractDocumentoOCR`): hoje são endpoints públicos que consomem a
-  `LOVABLE_API_KEY` — risco de abuso do serviço pago, não de tenant.
+- ✅ **Exigir `requireAuth` nos proxies de OCR** (`extractAtestadoOCR`,
+  `extractDocumentoOCR`): eram endpoints públicos que consomiam a
+  `LOVABLE_API_KEY` sem autenticação — risco de abuso do serviço pago, não de
+  tenant (por isso seguem na ALLOWLIST de `authorization-coverage.test.mjs`,
+  que cobre só guard de tenant). Ambos ganharam `.middleware([requireAuth])`;
+  `tests/ocr-auth-guard.test.mjs` varre por AST (compiler API do TypeScript,
+  não string) e derruba se o guard sumir de novo.
 
 ---
 

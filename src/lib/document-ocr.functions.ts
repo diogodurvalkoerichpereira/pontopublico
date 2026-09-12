@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { requireAuth } from "./data.functions";
 
 const InputSchema = z.object({
   base64: z.string().min(10),
@@ -34,6 +35,7 @@ const TOOL = {
 };
 
 export const extractDocumentoOCR = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
   .inputValidator((d: unknown) => InputSchema.parse(d))
   .handler(async ({ data }) => {
     const apiKey = process.env.LOVABLE_API_KEY;
