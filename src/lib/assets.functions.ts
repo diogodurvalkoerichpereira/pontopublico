@@ -14,6 +14,35 @@ import {
 const round2 = (v: number) => Number(v.toFixed(2));
 const TenantInput = z.object({ tenant_id: z.string().uuid() });
 
+// Depreciação linear (NBC TSP) de um bem por `meses`. Fonte única do cálculo — usada tanto
+// na depreciação avulsa quanto na rotina mensal em lote. A acumulada nunca passa da base
+// depreciável (aquisição − residual) e os meses efetivos respeitam a vida útil restante.
+function computeDepreciation(input: {
+  valorAquisicao: number;
+  valorResidual: number;
+  vidaUtilMeses: number;
+  mesesDepreciados: number;
+  acumuladaAtual: number;
+  meses: number;
+}): { mesesAplicar: number; novosMeses: number; novaAcumulada: number } {
+  const base = input.valorAquisicao - input.valorResidual;
+  const cotaMensal = round2(base / input.vidaUtilMeses);
+  const mesesRestantes = Math.max(
+    0,
+    input.vidaUtilMeses - input.mesesDepreciados,
+  );
+  const mesesAplicar = Math.min(input.meses, mesesRestantes);
+  // Cap na base; o último mês fecha exatamente na base (evita resíduo de arredondamento).
+  const novaAcumulada = round2(
+    Math.min(base, input.acumuladaAtual + cotaMensal * mesesAplicar),
+  );
+  return {
+    mesesAplicar,
+    novosMeses: input.mesesDepreciados + mesesAplicar,
+    novaAcumulada,
+  };
+}
+
 export const getAssets = createServerFn({ method: "POST" })
   .middleware([requireAuth])
   .validator((data: unknown) => TenantInput.parse(data))
@@ -319,19 +348,14 @@ export const depreciateAsset = createServerFn({ method: "POST" })
       ).rows[0];
       if (!asset) throw new Error("Bem não encontrado");
       if (asset.status !== "ativo") throw new Error("Bem baixado não deprecia");
-      const base = Number(asset.valor_aquisicao) - Number(asset.valor_residual);
-      const cotaMensal = round2(base / asset.vida_util_meses);
-      const mesesRestantes = Math.max(
-        0,
-        asset.vida_util_meses - asset.meses_depreciados,
-      );
-      const mesesAplicar = Math.min(data.meses, mesesRestantes);
-      const acumuladaAtual = Number(asset.depreciacao_acumulada);
-      // Cap na base; o último mês fecha exatamente na base (evita resíduo de arredondamento).
-      const novaAcumulada = round2(
-        Math.min(base, acumuladaAtual + cotaMensal * mesesAplicar),
-      );
-      const novosMeses = asset.meses_depreciados + mesesAplicar;
+      const { mesesAplicar, novosMeses, novaAcumulada } = computeDepreciation({
+        valorAquisicao: Number(asset.valor_aquisicao),
+        valorResidual: Number(asset.valor_residual),
+        vidaUtilMeses: asset.vida_util_meses,
+        mesesDepreciados: asset.meses_depreciados,
+        acumuladaAtual: Number(asset.depreciacao_acumulada),
+        meses: data.meses,
+      });
       await client.query(
         `update public.patrimony_assets
          set meses_depreciados=$3, depreciacao_acumulada=$4, updated_at=now()
@@ -351,6 +375,76 @@ export const depreciateAsset = createServerFn({ method: "POST" })
         depreciacao_acumulada: novaAcumulada,
         valor_liquido: round2(Number(asset.valor_aquisicao) - novaAcumulada),
       };
+    });
+  });
+
+const DepreciateAllInput = z.object({
+  tenant_id: z.string().uuid(),
+  meses: z.number().int().positive().max(120).default(1),
+});
+
+// O3-03c — Rotina de depreciação em lote (fechamento do mês). Deprecia por `meses` (padrão
+// 1) todos os bens **ativos** com vida útil restante, num único ato. Reusa a mesma fórmula
+// linear da depreciação avulsa (computeDepreciation). Bem baixado ou já totalmente
+// depreciado é ignorado. Devolve quantos foram depreciados e o total da cota do período.
+export const depreciateAllAssets = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => DepreciateAllInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "assets.manage");
+    return withTransaction(async (client) => {
+      const assets = (
+        await client.query<{
+          id: string;
+          valor_aquisicao: string;
+          valor_residual: string;
+          vida_util_meses: number;
+          meses_depreciados: number;
+          depreciacao_acumulada: string;
+        }>(
+          `select id, valor_aquisicao::text, valor_residual::text, vida_util_meses,
+             meses_depreciados, depreciacao_acumulada::text
+           from public.patrimony_assets
+           where tenant_id=$1 and status='ativo' and meses_depreciados < vida_util_meses
+           order by id
+           for update`,
+          [data.tenant_id],
+        )
+      ).rows;
+      let depreciados = 0;
+      let totalCota = 0;
+      for (const asset of assets) {
+        const acumuladaAtual = Number(asset.depreciacao_acumulada);
+        const { mesesAplicar, novosMeses, novaAcumulada } = computeDepreciation(
+          {
+            valorAquisicao: Number(asset.valor_aquisicao),
+            valorResidual: Number(asset.valor_residual),
+            vidaUtilMeses: asset.vida_util_meses,
+            mesesDepreciados: asset.meses_depreciados,
+            acumuladaAtual,
+            meses: data.meses,
+          },
+        );
+        if (mesesAplicar === 0) continue;
+        depreciados += 1;
+        totalCota = round2(totalCota + (novaAcumulada - acumuladaAtual));
+        await client.query(
+          `update public.patrimony_assets
+           set meses_depreciados=$3, depreciacao_acumulada=$4, updated_at=now()
+           where id=$1 and tenant_id=$2`,
+          [asset.id, data.tenant_id, novosMeses, novaAcumulada],
+        );
+      }
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "depreciate_all",
+        resource: "patrimony_assets",
+        recordId: data.tenant_id,
+        after: { meses: data.meses, depreciados, total_cota: totalCota },
+      });
+      return { depreciados, total_cota: totalCota };
     });
   });
 

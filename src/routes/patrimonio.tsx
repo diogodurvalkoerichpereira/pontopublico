@@ -20,6 +20,7 @@ import {
   getAssets,
   saveAsset,
   depreciateAsset,
+  depreciateAllAssets,
   disposeAsset,
   getPatrimonySummary,
 } from "@/lib/assets.functions";
@@ -59,6 +60,7 @@ function Content() {
   const load = useServerFn(getAssets);
   const save = useServerFn(saveAsset);
   const depreciate = useServerFn(depreciateAsset);
+  const depreciateAll = useServerFn(depreciateAllAssets);
   const dispose = useServerFn(disposeAsset);
   const qc = useQueryClient();
 
@@ -95,6 +97,32 @@ function Content() {
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["assets", activeTenant?.id] });
     qc.invalidateQueries({ queryKey: ["patrimony-summary", activeTenant?.id] });
+  };
+
+  const runDepreciateAll = async () => {
+    if (!activeTenant) return;
+    if (
+      !window.confirm(
+        "Rodar a depreciação de 1 mês para todos os bens ativos com vida útil restante?",
+      )
+    )
+      return;
+    setBusy(true);
+    try {
+      const r = await depreciateAll({
+        data: { tenant_id: activeTenant.id, meses: 1 },
+      });
+      toast.success(
+        `Depreciados ${r.depreciados} bens — cota do mês ${brl(r.total_cota)}`,
+      );
+      refresh();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Falha ao depreciar",
+      );
+    } finally {
+      setBusy(false);
+    }
   };
 
   const submit = async () => {
@@ -185,9 +213,18 @@ function Content() {
           </div>
         </div>
         {canManage && (
-          <Button variant="outline" onClick={() => setOpen(true)}>
-            <Plus className="size-4" /> Novo bem
-          </Button>
+          <div className="flex gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              onClick={runDepreciateAll}
+              disabled={busy}
+            >
+              <TrendingDown className="size-4" /> Depreciar mês (lote)
+            </Button>
+            <Button variant="outline" onClick={() => setOpen(true)}>
+              <Plus className="size-4" /> Novo bem
+            </Button>
+          </div>
         )}
       </div>
 

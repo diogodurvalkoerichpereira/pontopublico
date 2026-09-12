@@ -785,6 +785,16 @@ deprecia linear (cotas constantes); a acumulada nunca passa da base depreciável
 `getAssets`/`saveAsset`. Permissões `assets.read`/`assets.manage`. Migration
 `20260909210000_o3_03_assets.sql`; teste `tests/sprint-assets.test.mjs`
 verificado por mutação (remover o cap de meses derruba).
+
+**O3-03c — Rotina de depreciação em lote (fechamento do mês) ✅.** `depreciateAllAssets`
+deprecia, num único ato, todos os bens **ativos** com vida útil restante por `meses`
+(padrão 1) — a rotina de mês de fechamento — reusando a **mesma fórmula linear** da
+depreciação avulsa (a matemática foi extraída para `computeDepreciation`, fonte única).
+Bem baixado ou já totalmente depreciado é ignorado; devolve quantos foram depreciados e o
+total da cota do período. Reusa `assets.manage`, sem migration; `/patrimonio` ganha o botão
+"Depreciar mês (lote)". Teste `tests/sprint-depreciate-all.test.mjs` verificado por mutação
+(incluir bens não-ativos derruba).
+
 **O3-04 — Contrato → orçamento ✅.** `commitContractEmpenho`
 (`budget.functions.ts`) empenha uma parcela do contrato (O3-01) contra dotação,
 pelo mesmo primitivo `reserveOnAppropriation` da folha (O2-04) — um contrato
