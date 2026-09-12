@@ -400,6 +400,21 @@ P1. Modelar a **escala diária** (rotativa, sábado, turnos) sobre `work_schedul
 como saldo acumulado (persistente) dos extras/faltas apurados. Aposentar a leitura
 user-scoped de `time_entries` em favor das marcações multi-tenant.
 
+### O1-03g — Resumo mensal da apuração de ponto por servidor ✅
+
+`getApuracaoResumoMensal` (`time-clock.functions.ts`) consolida, para a competência, a
+apuração (previsto × trabalhado, extras, faltas e **saldo líquido em minutos**) de **todos
+os vínculos ativos** do ente — a visão do RH antes de valorar/depositar (O1-04b). Lê os
+vínculos ativos, todas as marcações do período de uma vez e os feriados, e reusa as funções
+puras `buildTimeMirror`/`apurarJornada`; ordena por **menor saldo primeiro** (maior falta no
+topo) e devolve os totais do ente. Como a apuração (O1-03e) só olha dias **com marcação**, um
+servidor ativo sem marcação aparece zerado — ainda assim listado, para o RH ver quem está sem
+apuração (falta por dia sem marcação depende de escala, é o O1-03f). Read-only, reusa
+`people.read`, sem migration; tela **/rh/apuracao** (competência + tabela + totais) e item de
+nav em Recursos Humanos. Teste `tests/sprint-apuracao-resumo.test.mjs` verificado por mutação
+(remover o filtro `status='ativo'` faz o desligado aparecer; inverter a ordenação ou trocar a
+fórmula do saldo derruba).
+
 ### ✅ O1-04 — Ligar as ilhas (ponto → folha)
 
 P1. **Feito.** (O1-04a) `payroll_monthly_variables` passou a ser **lida** por

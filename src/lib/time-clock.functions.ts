@@ -507,3 +507,113 @@ export const depositTimeApuracao = createServerFn({ method: "POST" })
       absenceAmount,
     };
   });
+
+const ResumoMensalInput = z.object({
+  tenant_id: z.string().uuid(),
+  reference_month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+  time_zone: z.string().max(64).optional(),
+  tolerance_minutes: z.number().int().min(0).max(60).default(10),
+});
+
+/** Resumo mensal da apuracao de ponto de TODOS os vinculos ativos do ente
+ *  (previsto x trabalhado, extras, faltas e saldo liquido em minutos) — a visao
+ *  do RH antes de valorar/depositar (O1-04b). Como a apuracao (O1-03e) so
+ *  considera os dias COM marcacao, um servidor sem marcacao no mes aparece
+ *  zerado — ainda assim listado, para o RH ver quem esta sem apuracao (falta por
+ *  dia sem marcacao depende de escala, e O1-03f). Read-only, reusa people.read. */
+export const getApuracaoResumoMensal = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => ResumoMensalInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "people.read");
+    const [year, month] = data.reference_month.split("-").map(Number);
+    const from = new Date(Date.UTC(year, month - 1, 1)).toISOString();
+    const to = new Date(Date.UTC(year, month, 1) - 1).toISOString();
+
+    const links = await query<{
+      id: string;
+      registration_number: string | null;
+      full_name: string;
+      weekly_hours: number | null;
+    }>(
+      `select l.id, l.registration_number, p.full_name, l.weekly_hours
+       from public.employment_links l
+       join public.persons p on p.id = l.person_id
+       where l.tenant_id = $1 and l.status = 'ativo'
+       order by p.full_name`,
+      [data.tenant_id],
+    );
+    // Todas as marcacoes do periodo, de uma vez, agrupadas por vinculo.
+    const punchRows = await query<{
+      employment_link_id: string;
+      nsr: number;
+      punch_time: string;
+      source: string;
+      record_hash: string;
+    }>(
+      `select employment_link_id, nsr, punch_time, source, record_hash
+       from public.time_clock_punches
+       where tenant_id = $1 and punch_time >= $2 and punch_time <= $3
+       order by employment_link_id, nsr`,
+      [data.tenant_id, from, to],
+    );
+    const punchesByLink = new Map<string, MirrorPunch[]>();
+    for (const row of punchRows) {
+      const punch: MirrorPunch = {
+        nsr: Number(row.nsr),
+        punchTime: new Date(row.punch_time).toISOString(),
+        recordHash: row.record_hash,
+        source: row.source,
+      };
+      const list = punchesByLink.get(row.employment_link_id);
+      if (list) list.push(punch);
+      else punchesByLink.set(row.employment_link_id, [punch]);
+    }
+    const holidays = await query<HolidayRule>(
+      `select year, month, day, name from public.holidays
+       where tenant_id = $1 or tenant_id is null`,
+      [data.tenant_id],
+    );
+
+    const servidores = links.map((link) => {
+      const punches = punchesByLink.get(link.id) ?? [];
+      const { days } = buildTimeMirror(punches, data.time_zone, holidays);
+      const apuracao = apurarJornada(days, {
+        expectedMinutesByWeekday: defaultExpectedByWeekday(
+          Number(link.weekly_hours ?? 0),
+        ),
+        toleranceMinutesPerDay: data.tolerance_minutes,
+      });
+      return {
+        employment_link_id: link.id,
+        registration_number: link.registration_number,
+        full_name: link.full_name,
+        expectedMinutes: apuracao.totals.expectedMinutes,
+        workedMinutes: apuracao.totals.workedMinutes,
+        extraMinutes: apuracao.totals.extraMinutes,
+        faltaMinutes: apuracao.totals.faltaMinutes,
+        saldoMinutes:
+          apuracao.totals.extraMinutes - apuracao.totals.faltaMinutes,
+      };
+    });
+    // Maior falta primeiro (menor saldo) — e o que o RH precisa ver e tratar.
+    servidores.sort((a, b) => a.saldoMinutes - b.saldoMinutes);
+    const totals = servidores.reduce(
+      (acc, s) => ({
+        expectedMinutes: acc.expectedMinutes + s.expectedMinutes,
+        workedMinutes: acc.workedMinutes + s.workedMinutes,
+        extraMinutes: acc.extraMinutes + s.extraMinutes,
+        faltaMinutes: acc.faltaMinutes + s.faltaMinutes,
+        saldoMinutes: acc.saldoMinutes + s.saldoMinutes,
+      }),
+      {
+        expectedMinutes: 0,
+        workedMinutes: 0,
+        extraMinutes: 0,
+        faltaMinutes: 0,
+        saldoMinutes: 0,
+      },
+    );
+    return { reference_month: data.reference_month, servidores, totals };
+  });

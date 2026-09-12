@@ -224,6 +224,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       section: "Recursos Humanos",
     });
   }
+  if (hasTenantPermission("people.read")) {
+    items.push({
+      to: "/rh/apuracao",
+      label: "Apuração de ponto",
+      icon: Clock,
+      section: "Recursos Humanos",
+    });
+  }
   if (hasTenantPermission("payroll.catalog.read")) {
     items.push({
       to: "/rh/rubricas",

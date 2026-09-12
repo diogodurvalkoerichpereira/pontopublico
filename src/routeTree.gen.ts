@@ -55,6 +55,7 @@ import { Route as RhFamiliaRouteImport } from './routes/rh.familia'
 import { Route as RhEventosFuncionaisRouteImport } from './routes/rh.eventos-funcionais'
 import { Route as RhEscalasRouteImport } from './routes/rh.escalas'
 import { Route as RhCiclosRouteImport } from './routes/rh.ciclos'
+import { Route as RhApuracaoRouteImport } from './routes/rh.apuracao'
 import { Route as GestorLrfRouteImport } from './routes/gestor/lrf'
 import { Route as GestorAssistenteRouteImport } from './routes/gestor/assistente'
 import { Route as ContaSegurancaRouteImport } from './routes/conta.seguranca'
@@ -297,6 +298,11 @@ const RhCiclosRoute = RhCiclosRouteImport.update({
   path: '/ciclos',
   getParentRoute: () => RhRoute,
 } as any)
+const RhApuracaoRoute = RhApuracaoRouteImport.update({
+  id: '/apuracao',
+  path: '/apuracao',
+  getParentRoute: () => RhRoute,
+} as any)
 const GestorLrfRoute = GestorLrfRouteImport.update({
   id: '/lrf',
   path: '/lrf',
@@ -395,6 +401,7 @@ export interface FileRoutesByFullPath {
   '/conta/seguranca': typeof ContaSegurancaRoute
   '/gestor/assistente': typeof GestorAssistenteRoute
   '/gestor/lrf': typeof GestorLrfRoute
+  '/rh/apuracao': typeof RhApuracaoRoute
   '/rh/ciclos': typeof RhCiclosRoute
   '/rh/escalas': typeof RhEscalasRoute
   '/rh/eventos-funcionais': typeof RhEventosFuncionaisRoute
@@ -454,6 +461,7 @@ export interface FileRoutesByTo {
   '/conta/seguranca': typeof ContaSegurancaRoute
   '/gestor/assistente': typeof GestorAssistenteRoute
   '/gestor/lrf': typeof GestorLrfRoute
+  '/rh/apuracao': typeof RhApuracaoRoute
   '/rh/ciclos': typeof RhCiclosRoute
   '/rh/escalas': typeof RhEscalasRoute
   '/rh/eventos-funcionais': typeof RhEventosFuncionaisRoute
@@ -514,6 +522,7 @@ export interface FileRoutesById {
   '/conta/seguranca': typeof ContaSegurancaRoute
   '/gestor/assistente': typeof GestorAssistenteRoute
   '/gestor/lrf': typeof GestorLrfRoute
+  '/rh/apuracao': typeof RhApuracaoRoute
   '/rh/ciclos': typeof RhCiclosRoute
   '/rh/escalas': typeof RhEscalasRoute
   '/rh/eventos-funcionais': typeof RhEventosFuncionaisRoute
@@ -575,6 +584,7 @@ export interface FileRouteTypes {
     | '/conta/seguranca'
     | '/gestor/assistente'
     | '/gestor/lrf'
+    | '/rh/apuracao'
     | '/rh/ciclos'
     | '/rh/escalas'
     | '/rh/eventos-funcionais'
@@ -634,6 +644,7 @@ export interface FileRouteTypes {
     | '/conta/seguranca'
     | '/gestor/assistente'
     | '/gestor/lrf'
+    | '/rh/apuracao'
     | '/rh/ciclos'
     | '/rh/escalas'
     | '/rh/eventos-funcionais'
@@ -693,6 +704,7 @@ export interface FileRouteTypes {
     | '/conta/seguranca'
     | '/gestor/assistente'
     | '/gestor/lrf'
+    | '/rh/apuracao'
     | '/rh/ciclos'
     | '/rh/escalas'
     | '/rh/eventos-funcionais'
@@ -1077,6 +1089,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RhCiclosRouteImport
       parentRoute: typeof RhRoute
     }
+    '/rh/apuracao': {
+      id: '/rh/apuracao'
+      path: '/apuracao'
+      fullPath: '/rh/apuracao'
+      preLoaderRoute: typeof RhApuracaoRouteImport
+      parentRoute: typeof RhRoute
+    }
     '/gestor/lrf': {
       id: '/gestor/lrf'
       path: '/lrf'
@@ -1183,6 +1202,7 @@ const RhFuncionariosRouteWithChildren = RhFuncionariosRoute._addFileChildren(
 )
 
 interface RhRouteChildren {
+  RhApuracaoRoute: typeof RhApuracaoRoute
   RhCiclosRoute: typeof RhCiclosRoute
   RhEscalasRoute: typeof RhEscalasRoute
   RhEventosFuncionaisRoute: typeof RhEventosFuncionaisRoute
@@ -1201,6 +1221,7 @@ interface RhRouteChildren {
 }
 
 const RhRouteChildren: RhRouteChildren = {
+  RhApuracaoRoute: RhApuracaoRoute,
   RhCiclosRoute: RhCiclosRoute,
   RhEscalasRoute: RhEscalasRoute,
   RhEventosFuncionaisRoute: RhEventosFuncionaisRoute,
