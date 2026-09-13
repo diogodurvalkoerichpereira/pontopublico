@@ -1130,6 +1130,16 @@ ganha a ação **Cancelar** por medição provisória. Teste
 `tests/sprint-contract-measurement-cancel.test.mjs` verificado por mutação (não devolver o
 valor ao contrato, ou aceitar cancelar uma definitiva, derruba).
 
+**O3-14d — Execução físico-financeira do contrato ✅.** `getContractMeasurementsSummary`
+consolida, por contrato, o contratado/empenhado/executado e o **saldo executável**
+(contratado − executado), e reparte as medições por situação: **definitivo** (atestado,
+autoriza pagamento), **provisório** (medido, aguardando atesto) e **glosado** (cancelado,
+devolveu o saldo) — a visão de quanto já pode pagar × quanto ainda depende de verificação,
+que a lista de medições uma a uma não resume. Read-only, reusa `contracts.read`, sem
+migration; painel de medições do `/contratos` ganha os cartões. Teste
+`tests/sprint-contract-measurements-summary.test.mjs` verificado por mutação (trocar o filtro
+`definitivo` por `provisorio` no total atestado derruba).
+
 **O3-15 — Medições no painel de contratos (UI) ✅.** No `/contratos`, cada contrato
 expande as suas medições (nº, competência, descrição, valor, recebimento) e tem a ação
 "Medir" (contrato vigente) que registra uma medição respeitando o teto do empenhado.

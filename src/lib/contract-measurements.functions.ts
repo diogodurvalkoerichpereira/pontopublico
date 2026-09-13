@@ -266,3 +266,73 @@ export const cancelContractMeasurement = createServerFn({ method: "POST" })
       };
     });
   });
+
+const SummaryInput = z.object({
+  tenant_id: z.string().uuid(),
+  contract_id: z.string().uuid(),
+});
+
+// O3-14d — Execução físico-financeira do contrato. Consolida, para um contrato, o valor
+// contratado/empenhado/executado e o saldo executável (contratado − executado), e reparte
+// as medições por situação: **definitivo** (atestado, autoriza pagamento), **provisório**
+// (medido, aguardando atesto) e **glosado** (cancelado, devolveu o saldo). Dá a visão de
+// quanto já pode pagar × quanto ainda depende de verificação — que a lista de medições, uma
+// a uma, não resume. Read-only, reusa contracts.read.
+export const getContractMeasurementsSummary = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => SummaryInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "contracts.read");
+    const contract = (
+      await query<{
+        valor_total: string;
+        valor_empenhado: string;
+        valor_executado: string;
+      }>(
+        `select valor_total::text, valor_empenhado::text, valor_executado::text
+         from public.procurement_contracts where id=$1 and tenant_id=$2`,
+        [data.contract_id, data.tenant_id],
+      )
+    )[0];
+    if (!contract) throw new Error("Contrato não encontrado");
+    const agg = (
+      await query<{
+        definitivo: string;
+        provisorio: string;
+        glosado: string;
+        q_definitivo: string;
+        q_provisorio: string;
+        q_glosado: string;
+      }>(
+        `select
+           coalesce(sum(valor) filter (where recebimento='definitivo'),0)::text as definitivo,
+           coalesce(sum(valor) filter (where recebimento='provisorio'),0)::text as provisorio,
+           coalesce(sum(valor) filter (where recebimento='cancelado'),0)::text as glosado,
+           count(*) filter (where recebimento='definitivo')::text as q_definitivo,
+           count(*) filter (where recebimento='provisorio')::text as q_provisorio,
+           count(*) filter (where recebimento='cancelado')::text as q_glosado
+         from public.contract_measurements
+         where tenant_id=$1 and contract_id=$2`,
+        [data.tenant_id, data.contract_id],
+      )
+    )[0];
+    const round2 = (v: number) => Number(v.toFixed(2));
+    const valorTotal = round2(Number(contract.valor_total));
+    const executado = round2(Number(contract.valor_executado));
+    return {
+      valor_total: valorTotal,
+      valor_empenhado: round2(Number(contract.valor_empenhado)),
+      valor_executado: executado,
+      saldo_a_executar: round2(valorTotal - executado),
+      medicoes: {
+        // Atestado autoriza pagamento; provisório aguarda verificação.
+        definitivo: round2(Number(agg.definitivo)),
+        provisorio: round2(Number(agg.provisorio)),
+        glosado: round2(Number(agg.glosado)),
+        q_definitivo: Number(agg.q_definitivo),
+        q_provisorio: Number(agg.q_provisorio),
+        q_glosado: Number(agg.q_glosado),
+      },
+    };
+  });

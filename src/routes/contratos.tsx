@@ -32,6 +32,7 @@ import {
 } from "@/lib/contracts.functions";
 import {
   getContractMeasurements,
+  getContractMeasurementsSummary,
   recordContractMeasurement,
   attestContractMeasurement,
   cancelContractMeasurement,
@@ -167,10 +168,23 @@ function Content() {
       }),
   });
 
+  const loadMeasurementSummary = useServerFn(getContractMeasurementsSummary);
+  const { data: measurementSummary } = useQuery({
+    queryKey: ["contract-measurements-summary", activeTenant?.id, expanded],
+    enabled: Boolean(activeTenant) && Boolean(expanded),
+    queryFn: () =>
+      loadMeasurementSummary({
+        data: { tenant_id: activeTenant!.id, contract_id: expanded! },
+      }),
+  });
+
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["contracts", activeTenant?.id] });
     qc.invalidateQueries({
       queryKey: ["contract-measurements", activeTenant?.id],
+    });
+    qc.invalidateQueries({
+      queryKey: ["contract-measurements-summary", activeTenant?.id],
     });
     qc.invalidateQueries({ queryKey: ["contracts-summary", activeTenant?.id] });
     qc.invalidateQueries({
@@ -492,6 +506,52 @@ function Content() {
       {expanded && (
         <div className="rounded-xl border bg-card overflow-x-auto">
           <h2 className="font-bold p-3">Medições do contrato</h2>
+          {measurementSummary && (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 px-3 pb-3">
+              <div className="rounded-lg border p-3">
+                <div className="text-xs text-muted-foreground">
+                  Saldo executável
+                </div>
+                <div className="text-lg font-bold tabular-nums">
+                  {brl(measurementSummary.saldo_a_executar)}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  de {brl(measurementSummary.valor_total)}
+                </div>
+              </div>
+              <div className="rounded-lg border p-3">
+                <div className="text-xs text-muted-foreground">
+                  Atestado (pode pagar)
+                </div>
+                <div className="text-lg font-bold tabular-nums text-emerald-600">
+                  {brl(measurementSummary.medicoes.definitivo)}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {measurementSummary.medicoes.q_definitivo} medição(ões)
+                </div>
+              </div>
+              <div className="rounded-lg border p-3">
+                <div className="text-xs text-muted-foreground">
+                  Aguardando atesto
+                </div>
+                <div className="text-lg font-bold tabular-nums">
+                  {brl(measurementSummary.medicoes.provisorio)}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {measurementSummary.medicoes.q_provisorio} medição(ões)
+                </div>
+              </div>
+              <div className="rounded-lg border p-3">
+                <div className="text-xs text-muted-foreground">Glosado</div>
+                <div className="text-lg font-bold tabular-nums text-muted-foreground">
+                  {brl(measurementSummary.medicoes.glosado)}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {measurementSummary.medicoes.q_glosado} medição(ões)
+                </div>
+              </div>
+            </div>
+          )}
           <table className="w-full text-sm">
             <thead className="border-b bg-muted/40 text-left">
               <tr>
