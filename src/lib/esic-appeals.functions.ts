@@ -46,6 +46,90 @@ export const getEsicAppeals = createServerFn({ method: "POST" })
     };
   });
 
+// Prazo legal para decidir o recurso: 5 dias (LAI art. 15, parágrafo único, e
+// art. 16, §1º — 2ª instância também em 5 dias).
+const PRAZO_DECISAO_DIAS = 5;
+
+const AppealsSummaryInput = z.object({
+  tenant_id: z.string().uuid(),
+  data_referencia: z.string().date().optional(),
+});
+
+// O5-10 — Painel de decisão dos recursos (LAI art. 15-16). Por instância: pendentes,
+// providos, improvidos; os pendentes **vencidos** (prazo de 5 dias para decidir já
+// passado na data de referência) e a tempestividade das decisões (decidido até 5 dias
+// da interposição = no prazo). Taxa de provimento = providos / decididos. Reusa
+// protocol.read.
+export const getEsicAppealsSummary = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => AppealsSummaryInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "protocol.read");
+    const ref = data.data_referencia ?? new Date().toISOString().slice(0, 10);
+    const rows = await query<{
+      instancia: number;
+      pendentes: string;
+      providos: string;
+      improvidos: string;
+      pendentes_vencidos: string;
+      decididos_no_prazo: string;
+      decididos_fora_prazo: string;
+    }>(
+      `select instancia,
+         count(*) filter (where status='pendente')::text as pendentes,
+         count(*) filter (where status='provido')::text as providos,
+         count(*) filter (where status='improvido')::text as improvidos,
+         count(*) filter (
+           where status='pendente' and data_recurso + $3::int < $2::date
+         )::text as pendentes_vencidos,
+         count(*) filter (
+           where decidido_em is not null and decidido_em <= data_recurso + $3::int
+         )::text as decididos_no_prazo,
+         count(*) filter (
+           where decidido_em is not null and decidido_em > data_recurso + $3::int
+         )::text as decididos_fora_prazo
+       from public.esic_appeals
+       where tenant_id = $1
+       group by instancia
+       order by instancia`,
+      [data.tenant_id, ref, PRAZO_DECISAO_DIAS],
+    );
+    const porInstancia = [1, 2].map((instancia) => {
+      const r = rows.find((x) => Number(x.instancia) === instancia);
+      return {
+        instancia,
+        pendentes: Number(r?.pendentes ?? 0),
+        providos: Number(r?.providos ?? 0),
+        improvidos: Number(r?.improvidos ?? 0),
+        pendentes_vencidos: Number(r?.pendentes_vencidos ?? 0),
+        decididos_no_prazo: Number(r?.decididos_no_prazo ?? 0),
+        decididos_fora_prazo: Number(r?.decididos_fora_prazo ?? 0),
+      };
+    });
+    const soma = (k: keyof (typeof porInstancia)[number]) =>
+      porInstancia.reduce((s, i) => s + Number(i[k]), 0);
+    const providos = soma("providos");
+    const improvidos = soma("improvidos");
+    const decididos = providos + improvidos;
+    return {
+      data_referencia: ref,
+      prazo_decisao_dias: PRAZO_DECISAO_DIAS,
+      porInstancia,
+      totais: {
+        pendentes: soma("pendentes"),
+        pendentes_vencidos: soma("pendentes_vencidos"),
+        providos,
+        improvidos,
+        decididos_no_prazo: soma("decididos_no_prazo"),
+        decididos_fora_prazo: soma("decididos_fora_prazo"),
+        // Percentual de recursos providos entre os decididos (0 quando não há).
+        taxa_provimento:
+          decididos > 0 ? Number(((providos / decididos) * 100).toFixed(2)) : 0,
+      },
+    };
+  });
+
 const FileInput = z.object({
   tenant_id: z.string().uuid(),
   request_id: z.string().uuid(),

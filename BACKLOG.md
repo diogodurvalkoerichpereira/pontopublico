@@ -1711,7 +1711,19 @@ mantém o catálogo dos serviços do ente (descrição, requisitos, prazo, canai
 > 0 e canais —, despublicar é sempre permitido; `getCitizenServices` lista. Migration
 > `..._o5_09_citizen_services.sql`, reusa `protocol.*`; rota `/carta-servicos`. Teste
 > `tests/sprint-citizen-services.test.mjs` verificado por mutação (ignorar a completude ao
-> publicar derruba). Próximo: painel de decisão de recursos do e-SIC e dados abertos.
+> publicar derruba).
+
+**O5-10 — Painel de decisão dos recursos do e-SIC + estatística LAI art. 30 ✅.**
+`getEsicAppealsSummary` consolida os recursos por instância — pendentes, providos,
+improvidos, os pendentes **vencidos** (prazo de 5 dias para decidir, LAI art. 15 parágrafo
+único e art. 16 §1º, já passado na data de referência) e a tempestividade das decisões —
+com taxa de provimento; painel em `/esic`. `getEsicStatistics` produz o **relatório
+estatístico anual obrigatório** (LAI art. 30, III): pedidos recebidos, atendidos,
+indeferidos, em aberto, prorrogados e respondidos no prazo do exercício, mais os recursos
+por decisão — publicado em `/transparencia` ao lado dos dados abertos (que já cobriam
+despesa/receita, O5-02c). Read-only, sem migration; reusa `protocol.read` e
+`transparency.read`. Teste `tests/sprint-esic-statistics.test.mjs` verificado por mutação
+(prazo de decisão 5 → 50 dias apaga o vencido e torna tempestiva a decisão tardia — derruba).
 
 ### Onda 6 — Conformidade contínua ⚠️ (contínuo)
 

@@ -35,6 +35,7 @@ import {
   fileEsicAppeal,
   getEsicAppeals,
   decideEsicAppeal,
+  getEsicAppealsSummary,
 } from "@/lib/esic-appeals.functions";
 
 export const Route = createFileRoute("/esic")({ component: Page });
@@ -132,6 +133,16 @@ function Content() {
     queryKey: ["esic-summary", activeTenant?.id],
     enabled: Boolean(activeTenant),
     queryFn: () => loadSummary({ data: { tenant_id: activeTenant!.id } }),
+  });
+
+  // O5-10 — painel de decisão dos recursos (prazo de 5 dias, LAI art. 15-16).
+  // Chave sob "esic-appeals" para ser invalidada junto com a lista de recursos.
+  const loadAppealsSummary = useServerFn(getEsicAppealsSummary);
+  const { data: appealsSummary } = useQuery({
+    queryKey: ["esic-appeals", activeTenant?.id, "summary"],
+    enabled: Boolean(activeTenant),
+    queryFn: () =>
+      loadAppealsSummary({ data: { tenant_id: activeTenant!.id } }),
   });
 
   const refresh = () => {
@@ -425,6 +436,66 @@ function Content() {
           </tbody>
         </table>
       </div>
+
+      {appealsSummary &&
+        appealsSummary.totais.pendentes +
+          appealsSummary.totais.providos +
+          appealsSummary.totais.improvidos >
+          0 && (
+          <div className="rounded-xl border bg-card p-4">
+            <h2 className="font-bold">Decisão dos recursos</h2>
+            <p className="mb-3 text-xs text-muted-foreground">
+              Prazo legal de {appealsSummary.prazo_decisao_dias} dias para
+              decidir (LAI art. 15-16) · taxa de provimento{" "}
+              {appealsSummary.totais.taxa_provimento.toFixed(2)}%
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {appealsSummary.porInstancia.map((i) => (
+                <div key={i.instancia} className="rounded-lg border p-3">
+                  <div className="text-sm font-semibold">
+                    {i.instancia}ª instância
+                  </div>
+                  <div className="mt-1 grid grid-cols-3 gap-2 text-sm">
+                    <div>
+                      <div className="text-xs text-muted-foreground">
+                        Pendentes
+                      </div>
+                      <div
+                        className={`text-lg font-bold ${
+                          i.pendentes_vencidos > 0 ? "text-destructive" : ""
+                        }`}
+                      >
+                        {i.pendentes}
+                        {i.pendentes_vencidos > 0 && (
+                          <span className="text-xs font-normal">
+                            {" "}
+                            ({i.pendentes_vencidos} vencido(s))
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">
+                        Providos
+                      </div>
+                      <div className="text-lg font-bold">{i.providos}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">
+                        Improvidos
+                      </div>
+                      <div className="text-lg font-bold">{i.improvidos}</div>
+                    </div>
+                  </div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    Decididos no prazo: {i.decididos_no_prazo} · fora:{" "}
+                    {i.decididos_fora_prazo}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
       {appeals.length > 0 && (
         <div className="rounded-xl border bg-card overflow-x-auto">

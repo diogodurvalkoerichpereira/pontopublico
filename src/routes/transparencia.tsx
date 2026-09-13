@@ -11,6 +11,7 @@ import {
   getTransparencyReport,
   getTransparencyByFunction,
   getOpenDataTransparencia,
+  getEsicStatistics,
 } from "@/lib/transparency.functions";
 
 export const Route = createFileRoute("/transparencia")({ component: Page });
@@ -101,6 +102,14 @@ function Content() {
     queryFn: () =>
       loadByFunction({ data: { tenant_id: activeTenant!.id, exercicio: ano } }),
   });
+  // O5-10 — estatística do e-SIC (LAI art. 30, III), publicação anual obrigatória.
+  const loadEsicStats = useServerFn(getEsicStatistics);
+  const { data: esicStats } = useQuery({
+    queryKey: ["transparency-esic-stats", activeTenant?.id, ano],
+    enabled: Boolean(activeTenant),
+    queryFn: () =>
+      loadEsicStats({ data: { tenant_id: activeTenant!.id, exercicio: ano } }),
+  });
   if (!activeTenant) return null;
 
   const r = report as Report | undefined;
@@ -158,6 +167,48 @@ function Content() {
             <Card
               label="Resultado orçamentário"
               value={brl(r.resultado_orcamentario)}
+            />
+          </div>
+        </>
+      )}
+
+      {esicStats && (
+        <>
+          <h2 className="text-lg font-bold">
+            Acesso à informação — estatística do e-SIC (LAI art. 30, III)
+          </h2>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Card
+              label="Pedidos recebidos"
+              value={String(esicStats.pedidos.recebidos)}
+            />
+            <Card
+              label="Atendidos"
+              value={`${esicStats.pedidos.atendidos} (${esicStats.pedidos.taxa_atendimento.toFixed(2)}%)`}
+            />
+            <Card
+              label="Indeferidos"
+              value={String(esicStats.pedidos.indeferidos)}
+            />
+            <Card
+              label="Em aberto / prorrogados"
+              value={`${esicStats.pedidos.em_aberto} / ${esicStats.pedidos.prorrogados}`}
+            />
+            <Card
+              label="Respondidos no prazo"
+              value={String(esicStats.pedidos.respondidos_no_prazo)}
+            />
+            <Card
+              label="Recursos interpostos"
+              value={String(esicStats.recursos.interpostos)}
+            />
+            <Card
+              label="Recursos providos"
+              value={String(esicStats.recursos.providos)}
+            />
+            <Card
+              label="Recursos improvidos / pendentes"
+              value={`${esicStats.recursos.improvidos} / ${esicStats.recursos.pendentes}`}
             />
           </div>
         </>

@@ -238,3 +238,83 @@ export const getOpenDataTransparencia = createServerFn({ method: "POST" })
       },
     };
   });
+
+// O5-10 — Estatística do e-SIC (LAI art. 30, III: publicação anual obrigatória do
+// "relatório estatístico contendo a quantidade de pedidos de informação recebidos,
+// atendidos e indeferidos"). Por exercício de abertura do pedido: recebidos,
+// atendidos (respondidos), indeferidos, em aberto, prorrogados, respondidos no
+// prazo legal; e os recursos (LAI art. 15-16) por decisão. Agrega o que o e-SIC
+// (O5-04/O5-06) já registra; read-only, reusa transparency.read, sem tabela própria.
+export const getEsicStatistics = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => Input.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "transparency.read");
+
+    const pedidos = await queryOne<{
+      recebidos: string;
+      atendidos: string;
+      indeferidos: string;
+      em_aberto: string;
+      prorrogados: string;
+      no_prazo: string;
+    }>(
+      `select
+         count(*)::text as recebidos,
+         count(*) filter (where status='respondido')::text as atendidos,
+         count(*) filter (where status='indeferido')::text as indeferidos,
+         count(*) filter (where status in ('recebido','prorrogado'))::text as em_aberto,
+         count(*) filter (where prorrogado)::text as prorrogados,
+         count(*) filter (
+           where respondido_em is not null and respondido_em <= prazo_resposta
+         )::text as no_prazo
+       from public.esic_requests
+       where tenant_id = $1 and ano = $2`,
+      [data.tenant_id, data.exercicio],
+    );
+
+    const recursos = await queryOne<{
+      interpostos: string;
+      providos: string;
+      improvidos: string;
+      pendentes: string;
+    }>(
+      `select
+         count(*)::text as interpostos,
+         count(*) filter (where a.status='provido')::text as providos,
+         count(*) filter (where a.status='improvido')::text as improvidos,
+         count(*) filter (where a.status='pendente')::text as pendentes
+       from public.esic_appeals a
+       join public.esic_requests r on r.id = a.request_id and r.tenant_id = a.tenant_id
+       where a.tenant_id = $1 and r.ano = $2`,
+      [data.tenant_id, data.exercicio],
+    );
+
+    const recebidos = num(pedidos?.recebidos);
+    const atendidos = num(pedidos?.atendidos);
+    return {
+      formato: "estatistica-esic-lai-art-30",
+      exercicio: data.exercicio,
+      gerado_em: new Date().toISOString(),
+      pedidos: {
+        recebidos,
+        atendidos,
+        indeferidos: num(pedidos?.indeferidos),
+        em_aberto: num(pedidos?.em_aberto),
+        prorrogados: num(pedidos?.prorrogados),
+        respondidos_no_prazo: num(pedidos?.no_prazo),
+        // Percentual de pedidos atendidos sobre os recebidos (0 quando não há).
+        taxa_atendimento:
+          recebidos > 0
+            ? Number(((atendidos / recebidos) * 100).toFixed(2))
+            : 0,
+      },
+      recursos: {
+        interpostos: num(recursos?.interpostos),
+        providos: num(recursos?.providos),
+        improvidos: num(recursos?.improvidos),
+        pendentes: num(recursos?.pendentes),
+      },
+    };
+  });
