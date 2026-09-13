@@ -13,6 +13,7 @@ import {
   generateVacationPeriod,
   getVacationWorkspace,
   scheduleVacation,
+  cancelVacation,
   getVacationDeadlineAlerts,
 } from "@/lib/vacation.functions";
 type VacationAlert = {
@@ -32,6 +33,7 @@ function Page() {
     load = useServerFn(getVacationWorkspace),
     gen = useServerFn(generateVacationPeriod),
     schedule = useServerFn(scheduleVacation),
+    cancel = useServerFn(cancelVacation),
     loadAlerts = useServerFn(getVacationDeadlineAlerts),
     qc = useQueryClient();
   const { data } = useQuery({
@@ -203,14 +205,57 @@ function Page() {
           </div>
         )}
         <div className="rounded-2xl border bg-card p-5">
+          <h2 className="mb-3 font-bold">Frações programadas</h2>
           {data?.schedules.map((s: any) => (
-            <div key={s.id} className="flex justify-between border-b py-3">
+            <div
+              key={s.id}
+              className="flex flex-wrap items-center justify-between gap-2 border-b py-3"
+            >
               <span>
                 {s.start_date} — {s.end_date} · {s.days} dias
+                <span className="ml-2 rounded bg-muted px-2 py-0.5 text-xs capitalize text-muted-foreground">
+                  {s.status}
+                </span>
               </span>
-              <b>R$ {Number(s.total_amount).toFixed(2)}</b>
+              <div className="flex items-center gap-3">
+                <b>R$ {Number(s.total_amount).toFixed(2)}</b>
+                {(s.status === "programado" || s.status === "aprovado") && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={async () => {
+                      if (!window.confirm("Cancelar esta fração de férias?"))
+                        return;
+                      try {
+                        await cancel({
+                          data: {
+                            tenant_id: activeTenant.id,
+                            schedule_id: s.id,
+                            motivo: "Cancelado pela gestão",
+                          },
+                        });
+                        await refresh();
+                        toast.success("Fração cancelada — saldo liberado");
+                      } catch (error) {
+                        toast.error(
+                          error instanceof Error
+                            ? error.message
+                            : "Falha ao cancelar",
+                        );
+                      }
+                    }}
+                  >
+                    Cancelar
+                  </Button>
+                )}
+              </div>
             </div>
           ))}
+          {data?.schedules.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              Nenhuma fração programada.
+            </p>
+          )}
         </div>
       </section>
     </AppShell>

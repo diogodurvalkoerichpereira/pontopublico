@@ -173,8 +173,9 @@ export const depositVacationToPayroll = createServerFn({ method: "POST" })
         base_amount: string;
         bonus_amount: string;
         start_date: string;
+        status: string;
       }>(
-        `select period.employment_link_id, s.base_amount, s.bonus_amount, s.start_date::text
+        `select period.employment_link_id, s.base_amount, s.bonus_amount, s.start_date::text, s.status
          from public.vacation_schedules s
          join public.vacation_accrual_periods period on period.id=s.accrual_period_id
          where s.id=$1 and s.tenant_id=$2`,
@@ -182,6 +183,8 @@ export const depositVacationToPayroll = createServerFn({ method: "POST" })
       )
     )[0];
     if (!schedule) throw new Error("Agendamento de férias inválido");
+    if (schedule.status === "cancelado")
+      throw new Error("Agendamento cancelado não pode ser depositado");
 
     const rubricIds = [
       data.vacation_rubric_id,
@@ -237,6 +240,14 @@ export const depositVacationToPayroll = createServerFn({ method: "POST" })
             ],
           );
       }
+      // Depositada a remuneração, o agendamento vira 'pago': torna o depósito
+      // rastreável e trava o cancelamento (cancelVacation recusa 'pago'), evitando
+      // liberar o saldo de dias enquanto o dinheiro já está na folha.
+      await client.query(
+        `update public.vacation_schedules set status='pago'
+         where id=$1 and tenant_id=$2 and status<>'cancelado'`,
+        [data.schedule_id, data.tenant_id],
+      );
       await recordAudit(client, {
         tenantId: data.tenant_id,
         actorId: context.userId,
@@ -258,6 +269,54 @@ export const depositVacationToPayroll = createServerFn({ method: "POST" })
       base,
       bonus,
     };
+  });
+
+const CancelInput = z.object({
+  tenant_id: z.string().uuid(),
+  schedule_id: z.string().uuid(),
+  motivo: z.string().trim().min(3).max(500),
+});
+
+// O1-05d — Cancela um agendamento de férias ainda não pago (programado/aprovado),
+// liberando a fração e o saldo de dias do período aquisitivo — o trigger de validação já
+// exclui as frações 'cancelado' da contagem de três frações e da soma de dias, então o saldo
+// volta a ficar disponível para reagendar. Um agendamento 'pago' (depositado na folha),
+// 'em_gozo' ou 'concluido' não cancela por aqui: reverter exigiria estornar a folha. Reusa
+// vacation.manage.
+export const cancelVacation = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((v: unknown) => CancelInput.parse(v))
+  .handler(async ({ data, context }) => {
+    const a = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(a, "vacation.manage");
+    return withTransaction(async (client) => {
+      const schedule = (
+        await client.query<{ status: string }>(
+          `select status from public.vacation_schedules
+           where id=$1 and tenant_id=$2 for update`,
+          [data.schedule_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!schedule) throw new Error("Agendamento de férias inválido");
+      if (schedule.status !== "programado" && schedule.status !== "aprovado")
+        throw new Error(
+          "Só um agendamento programado ou aprovado (ainda não pago) pode ser cancelado",
+        );
+      await client.query(
+        `update public.vacation_schedules set status='cancelado'
+         where id=$1 and tenant_id=$2`,
+        [data.schedule_id, data.tenant_id],
+      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "cancelar_ferias",
+        resource: "vacation_schedules",
+        recordId: data.schedule_id,
+        after: { status: "cancelado", motivo: data.motivo },
+      });
+      return { id: data.schedule_id, status: "cancelado" };
+    });
   });
 
 const DeadlineInput = z.object({

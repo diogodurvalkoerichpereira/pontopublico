@@ -525,6 +525,20 @@ sem migration; `/rh/ferias` ganha o painel de alertas. Teste
 `tests/sprint-vacation-deadline.test.mjs` verificado por mutação (inverter a comparação do
 vencimento, ou remover o filtro de saldo devido, derruba).
 
+### O1-05d — Cancelamento de fração de férias (saldo liberado, folha protegida) ✅
+
+`cancelVacation` (`vacation.functions.ts`) cancela um agendamento **ainda não pago**
+(`programado`/`aprovado`), liberando a fração e o saldo de dias do período aquisitivo — o
+trigger `validate_vacation_schedule` já exclui as frações `cancelado` da contagem de três
+frações e da soma de dias, então reagendar o período inteiro volta a caber. Para que isso
+seja seguro, `depositVacationToPayroll` passa a mover o agendamento para `pago` ao depositar
+a remuneração na folha (ativando o status que existia no enum mas nada gravava): um `pago`
+não cancela por aqui (reverter exigiria estornar a folha) e um `cancelado` não deposita.
+Reusa `vacation.manage`, sem migration; `/rh/ferias` ganha a ação "Cancelar" por fração
+programada/aprovada e o status de cada fração. Teste `tests/sprint-vacation-cancel.test.mjs`
+verificado por mutação (não gravar `pago` no depósito deixa cancelar uma fração já
+depositada — derruba).
+
 ### O1-10 — Dependentes válidos na competência ✅
 
 `getValidDependents` (`family.functions.ts`) conta os dependentes do titular **vigentes** na
