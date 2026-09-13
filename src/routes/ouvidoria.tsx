@@ -2,7 +2,14 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { MessageSquareWarning, Plus, Reply, Star, Archive } from "lucide-react";
+import {
+  MessageSquareWarning,
+  Plus,
+  Reply,
+  Star,
+  Archive,
+  Search,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,6 +37,7 @@ import {
   respondManifestation,
   getOmbudsmanSummary,
   archiveManifestation,
+  analyzeManifestation,
 } from "@/lib/ombudsman.functions";
 import {
   getOmbudsmanSatisfaction,
@@ -90,6 +98,7 @@ function Content() {
   const loadSatisfaction = useServerFn(getOmbudsmanSatisfaction);
   const rate = useServerFn(rateManifestation);
   const archive = useServerFn(archiveManifestation);
+  const analyze = useServerFn(analyzeManifestation);
   const qc = useQueryClient();
 
   const [openDialog, setOpenDialog] = useState(false);
@@ -166,6 +175,21 @@ function Content() {
       refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Falha ao arquivar");
+    }
+  };
+
+  const doAnalyze = async (m: Manifestation) => {
+    if (!activeTenant) return;
+    try {
+      await analyze({
+        data: { tenant_id: activeTenant.id, manifestation_id: m.id },
+      });
+      toast.success("Manifestação em análise");
+      refresh();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Falha ao tomar em análise",
+      );
     }
   };
 
@@ -413,13 +437,24 @@ function Content() {
                 {canManage && (
                   <td className="p-3">
                     {(m.status === "recebida" || m.status === "em_analise") && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => openRespond(m)}
-                      >
-                        <Reply className="size-4" /> Responder
-                      </Button>
+                      <div className="flex gap-2 flex-wrap">
+                        {m.status === "recebida" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => doAnalyze(m)}
+                          >
+                            <Search className="size-4" /> Tomar em análise
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openRespond(m)}
+                        >
+                          <Reply className="size-4" /> Responder
+                        </Button>
+                      </div>
                     )}
                     {m.status === "respondida" && (
                       <div className="flex gap-2 flex-wrap">

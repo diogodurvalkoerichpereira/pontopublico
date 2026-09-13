@@ -298,3 +298,48 @@ export const archiveManifestation = createServerFn({ method: "POST" })
       return { id: data.manifestation_id, status: "arquivada" };
     });
   });
+
+const AnalyzeInput = z.object({
+  tenant_id: z.string().uuid(),
+  manifestation_id: z.string().uuid(),
+});
+
+// O5-03c — Toma a manifestação em análise (Lei 13.460). Só uma manifestação
+// **recebida** entra em análise (recebida → em_analise); já em análise, respondida
+// ou arquivada não retorna a esse estado. Torna alcançável o status `em_analise`,
+// que o ciclo previa e o painel já contava, mas nada transicionava. Reusa
+// protocol.manage.
+export const analyzeManifestation = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => AnalyzeInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "protocol.manage");
+    return withTransaction(async (client) => {
+      const manifestation = (
+        await client.query<{ status: string }>(
+          `select status from public.ombudsman_manifestations
+           where id=$1 and tenant_id=$2 for update`,
+          [data.manifestation_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!manifestation) throw new Error("Manifestação não encontrada");
+      if (manifestation.status !== "recebida")
+        throw new Error("Só uma manifestação recebida pode entrar em análise");
+      await client.query(
+        `update public.ombudsman_manifestations
+         set status='em_analise', updated_at=now()
+         where id=$1 and tenant_id=$2`,
+        [data.manifestation_id, data.tenant_id],
+      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "analyze",
+        resource: "ombudsman_manifestations",
+        recordId: data.manifestation_id,
+        after: { status: "em_analise" },
+      });
+      return { id: data.manifestation_id, status: "em_analise" };
+    });
+  });

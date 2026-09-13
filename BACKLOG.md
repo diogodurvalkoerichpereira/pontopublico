@@ -833,10 +833,11 @@ tesouraria: paga um empenho **liquidado** (Lei 4.320 — só o liquidado paga) p
 conta, numerando a OB por ente/exercício (linha-contador travada), gerando a saída
 bancária (saldo nunca negativo), levando o empenho a `pago` e contabilizando o evento
 de pagamento — tudo na mesma transação. Um empenho paga uma só vez (guarda de estágio
-+ `unique (tenant, commitment)`). `getBankOrders` lista; UI em `/ordens-bancarias`.
-Migration `..._o2_16_bank_orders.sql`, reusa `accounting.*`; teste
-`tests/sprint-bank-orders.test.mjs` verificado por mutação (somar em vez de subtrair o
-valor no saldo derruba). Próximo: MSC-SICONFI e a demonstração dos fluxos de caixa.
+
+- `unique (tenant, commitment)`). `getBankOrders` lista; UI em `/ordens-bancarias`.
+  Migration `..._o2_16_bank_orders.sql`, reusa `accounting.*`; teste
+  `tests/sprint-bank-orders.test.mjs` verificado por mutação (somar em vez de subtrair o
+  valor no saldo derruba). Próximo: MSC-SICONFI e a demonstração dos fluxos de caixa.
 
 **O2-16b — Cancelamento (estorno) de ordem bancária ✅.** `cancelBankOrder`
 (`bank-orders.functions.ts`, `accounting.manage`) estorna uma OB **paga**, na mesma
@@ -993,10 +994,11 @@ fixa, numa licitação **homologada**, a proposta de menor valor entre as classi
 `valor_homologado` — exige homologação e ao menos uma proposta classificada; a
 desclassificada mais barata não é adjudicada. `getProcurementProcesses` passa a devolver o
 vencedor e o valor homologado. Migration `..._o3_08c_procurement_award.sql` (ALTER aditivo
-+ FK vencedor), reusa `contracts.*`; `/licitacoes` ganha a ação Adjudicar e o vencedor na
-tabela. Teste `tests/sprint-procurement-award.test.mjs` verificado por mutação (adjudicar a
-desclassificada, ou adjudicar licitação aberta, derruba). Próximo: amarrar o vencedor
-adjudicado ao contrato (O3-09) e à ata de preços; PNCP (externo, homologação).
+
+- FK vencedor), reusa `contracts.*`; `/licitacoes` ganha a ação Adjudicar e o vencedor na
+  tabela. Teste `tests/sprint-procurement-award.test.mjs` verificado por mutação (adjudicar a
+  desclassificada, ou adjudicar licitação aberta, derruba). Próximo: amarrar o vencedor
+  adjudicado ao contrato (O3-09) e à ata de preços; PNCP (externo, homologação).
 
 **O3-09 — Vínculo contrato ↔ licitação (Lei 14.133) ✅.**
 `linkContractToProcurement` liga o contrato à licitação de origem
@@ -1420,6 +1422,16 @@ torna alcançável o status `arquivada`, que existia no enum mas nada transicion
 respondida. Teste `tests/sprint-ombudsman-archive.test.mjs` verificado por mutação (remover
 a guarda de estado deixa arquivar uma manifestação em aberto — derruba).
 
+**O5-03c — Tomar manifestação em análise (Lei 13.460) ✅.** `analyzeManifestation` move
+uma manifestação **recebida** para `em_analise`, tornando alcançável o status que o ciclo
+previa mas nada transicionava (espelho do furo que o O5-03b fechou para `arquivada`): antes,
+`openManifestation` criava `recebida`, `respondManifestation` aceitava recebida/em_analise e
+`archiveManifestation` exigia respondida, mas nenhuma transição entrava em `em_analise`. Só a
+recebida entra em análise; em_analise/respondida/arquivada recusam. Reusa `protocol.manage`,
+sem migration; `/ouvidoria` ganha a ação "Tomar em análise" por manifestação recebida. Teste
+`tests/sprint-ombudsman-analyze.test.mjs` verificado por mutação (remover a guarda de estado
+deixa qualquer status entrar em análise — derruba).
+
 **O5-08 — Indicador de tempestividade das respostas ✅.** `getResponseTimeliness`
 consolida, na ouvidoria e no e-SIC, quantas respostas saíram **no prazo legal** (data da
 resposta ≤ prazo) e o percentual — transparência ativa do desempenho (Lei 13.460/LAI).
@@ -1430,10 +1442,11 @@ de prazo derruba). Próximo: carta de serviços ao cidadão (Lei 13.460 art. 7º
 **O5-09 — Carta de Serviços ao Cidadão (Lei 13.460 art. 7º) ✅.** `saveCitizenService`
 mantém o catálogo dos serviços do ente (descrição, requisitos, prazo, canais, taxa; nome
 único); `publishCitizenService` só publica um serviço **completo** — com descrição, prazo
+
 > 0 e canais —, despublicar é sempre permitido; `getCitizenServices` lista. Migration
-`..._o5_09_citizen_services.sql`, reusa `protocol.*`; rota `/carta-servicos`. Teste
-`tests/sprint-citizen-services.test.mjs` verificado por mutação (ignorar a completude ao
-publicar derruba). Próximo: painel de decisão de recursos do e-SIC e dados abertos.
+> `..._o5_09_citizen_services.sql`, reusa `protocol.*`; rota `/carta-servicos`. Teste
+> `tests/sprint-citizen-services.test.mjs` verificado por mutação (ignorar a completude ao
+> publicar derruba). Próximo: painel de decisão de recursos do e-SIC e dados abertos.
 
 ### Onda 6 — Conformidade contínua ⚠️ (contínuo)
 
