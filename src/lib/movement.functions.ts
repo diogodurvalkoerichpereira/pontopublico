@@ -230,3 +230,84 @@ export const saveEmploymentMovement = createServerFn({ method: "POST" })
     });
     return { id: movementId, applied: applyNow, documentHash };
   });
+
+const ApplyDueInput = z.object({
+  tenant_id: z.string().uuid(),
+  data_referencia: z.string().date(),
+});
+
+// Aplica os atos de pessoal **programados** cuja data de efeito já chegou. Um movimento
+// registrado com `effective_date` futura fica pendente (`applied_at` nulo) e não altera o
+// vínculo — nada o aplicava depois. Esta rotina, na data de referência, aplica cada
+// pendente vencido (effective_date ≤ referência) em ordem cronológica: atualiza a lotação,
+// a situação e a data de desligamento do vínculo e carimba `applied_at`. Respeita o escopo
+// por unidade e reusa `movements.manage`.
+export const applyDueEmploymentMovements = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => ApplyDueInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    const scope = await loadTenantUnitScope(access, "movements.manage");
+    return withTransaction(async (client) => {
+      const pending = (
+        await client.query<{
+          id: string;
+          employment_link_id: string;
+          movement_type: string;
+          effective_date: string;
+          to_unit_id: string | null;
+          to_status: string | null;
+          from_unit_id: string | null;
+          from_status: string | null;
+        }>(
+          `select m.id, m.employment_link_id, m.movement_type, m.effective_date::text,
+             m.to_unit_id, m.to_status, m.from_unit_id, m.from_status
+           from public.employment_link_movements m
+           join public.employment_links el on el.id=m.employment_link_id
+           where m.tenant_id=$1 and m.applied_at is null
+             and m.effective_date <= $2::date
+             and ($3::boolean or el.unit_id = any($4::uuid[]))
+           order by m.effective_date, m.created_at
+           for update of m`,
+          [data.tenant_id, data.data_referencia, scope.global, scope.unitIds],
+        )
+      ).rows;
+
+      for (const m of pending) {
+        await client.query(
+          `update public.employment_links set
+             unit_id=case when $3::uuid is null then unit_id else $3 end,
+             status=case when $4::text is null then status else $4 end,
+             termination_date=case when $5='desligamento' then $6::date else termination_date end
+           where id=$1 and tenant_id=$2`,
+          [
+            m.employment_link_id,
+            data.tenant_id,
+            m.to_unit_id,
+            m.to_status,
+            m.movement_type,
+            m.effective_date,
+          ],
+        );
+        await client.query(
+          `update public.employment_link_movements set applied_at=now()
+           where id=$1 and tenant_id=$2`,
+          [m.id, data.tenant_id],
+        );
+        await recordAudit(client, {
+          tenantId: data.tenant_id,
+          actorId: context.userId,
+          action: "apply",
+          resource: "employment_link_movements",
+          recordId: m.id,
+          before: { unit_id: m.from_unit_id, status: m.from_status },
+          after: {
+            unit_id: m.to_unit_id,
+            status: m.to_status,
+            effective_date: m.effective_date,
+          },
+        });
+      }
+      return { aplicados: pending.length };
+    });
+  });

@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowRightLeft, FileCheck2, Plus } from "lucide-react";
+import { ArrowRightLeft, FileCheck2, Plus, CalendarCheck } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +21,7 @@ import { useAuth } from "@/lib/auth-context";
 import {
   getMovementWorkspace,
   saveEmploymentMovement,
+  applyDueEmploymentMovements,
 } from "@/lib/movement.functions";
 
 export const Route = createFileRoute("/rh/movimentacoes")({ component: Page });
@@ -53,6 +54,7 @@ function Content() {
   const { activeTenant } = useAuth();
   const loadWorkspace = useServerFn(getMovementWorkspace);
   const persist = useServerFn(saveEmploymentMovement);
+  const applyDue = useServerFn(applyDueEmploymentMovements);
   const qc = useQueryClient();
   const [linkId, setLinkId] = useState("");
   const [open, setOpen] = useState(false);
@@ -126,6 +128,28 @@ function Content() {
     }
   };
 
+  const runApplyDue = async () => {
+    if (!activeTenant) return;
+    try {
+      const r = await applyDue({
+        data: {
+          tenant_id: activeTenant.id,
+          data_referencia: new Date().toISOString().slice(0, 10),
+        },
+      });
+      await qc.invalidateQueries({
+        queryKey: ["movement-workspace", activeTenant.id],
+      });
+      toast.success(
+        r.aplicados > 0
+          ? `${r.aplicados} ato(s) programado(s) aplicado(s)`
+          : "Nenhum ato programado vencido",
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao aplicar");
+    }
+  };
+
   if (!activeTenant)
     return (
       <div className="rounded-xl border bg-amber-50 p-6">
@@ -147,10 +171,16 @@ function Content() {
           </div>
         </div>
         {data?.canManage && (
-          <Button onClick={() => setOpen(true)} disabled={!linkId}>
-            <Plus className="mr-1 size-4" />
-            Nova movimentação
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => void runApplyDue()}>
+              <CalendarCheck className="mr-1 size-4" />
+              Aplicar atos vencidos
+            </Button>
+            <Button onClick={() => setOpen(true)} disabled={!linkId}>
+              <Plus className="mr-1 size-4" />
+              Nova movimentação
+            </Button>
+          </div>
         )}
       </div>
       <div className="rounded-2xl border bg-card p-4 shadow-sm">

@@ -621,6 +621,16 @@ quitada/cancelada não entra. Reusa `people.read`, sem migration; `/consignacoes
 tabela de consignações ativas por tipo. Teste `tests/sprint-consignments-summary.test.mjs`
 verificado por mutação (incluir não-ativas derruba).
 
+**O1-11 — Aplicação de atos de pessoal programados ✅.** `applyDueEmploymentMovements`
+(`movement.functions.ts`) aplica os movimentos funcionais **programados** cuja data de efeito
+já chegou: `saveEmploymentMovement` registra um ato com `effective_date` futura como pendente
+(`applied_at` nulo, vínculo inalterado) e nada o aplicava depois — a rotina, na data de
+referência, aplica cada pendente vencido (effective_date ≤ referência) em ordem cronológica,
+atualiza lotação/situação/desligamento do vínculo e carimba `applied_at`, respeitando o
+escopo por unidade. Reusa `movements.manage`, sem migration; `/rh/movimentacoes` ganha a ação
+"Aplicar atos vencidos". Teste `tests/sprint-movement-apply-due.test.mjs` verificado por
+mutação (aplicar sem a cláusula de vencimento aplicaria também o ato futuro — derruba).
+
 ---
 
 ## Ondas 2–6 — épicos
