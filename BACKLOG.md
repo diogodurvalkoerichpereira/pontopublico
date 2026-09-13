@@ -730,6 +730,15 @@ interface: nova rota `/contabilidade` (balancete por exercício + razão por con
 Teste `tests/sprint-account-razao.test.mjs` verificado por mutação (inverter o sinal do lado
 no saldo, ou remover o filtro pela conta, derruba).
 
+**O2-05c — Balancete de verificação (fechamento) ✅.** `getBalancete` passa a devolver, além
+do saldo por conta, os **totais de débito e crédito** e o flag `conferido` (Σdébitos =
+Σcréditos) — a "verificação" do balancete de verificação (PCASP, Lei 4.320). A dupla partida
+já é garantida no lançamento (`postAccountingEntry` recusa desbalanceado), então `conferido` é
+a prova de fechamento do período que a lista crua de contas não afirmava. Read-only, reusa
+`accounting.read`, sem migration; `/contabilidade` ganha os totais no rodapé e o selo
+"confere/não confere". Teste `tests/sprint-accounting-ledger.test.mjs` estendido (verifica
+totais e `conferido`).
+
 **O2-06 — Contabilização automática por fato ✅.** Empenho, anulação, liquidação e
 pagamento geram lançamento contábil balanceado no razão (O2-05) na MESMA transação
 do fato. Como os códigos PCASP dependem do plano do ente, o roteiro é **configurável**

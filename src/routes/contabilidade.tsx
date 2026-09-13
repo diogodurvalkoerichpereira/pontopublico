@@ -78,7 +78,9 @@ function Content() {
       }),
   });
 
-  const rows = (balancete ?? []) as BalanceteRow[];
+  const rows = (balancete?.contas ?? []) as BalanceteRow[];
+  const totais = balancete?.totais;
+  const conferido = balancete?.conferido ?? true;
 
   return (
     <section className="space-y-6">
@@ -105,7 +107,22 @@ function Content() {
       </div>
 
       <div className="rounded-xl border bg-card overflow-x-auto">
-        <h2 className="font-bold p-3">Balancete</h2>
+        <div className="flex items-center justify-between p-3">
+          <h2 className="font-bold">Balancete de verificação</h2>
+          {totais && (
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-medium ${
+                conferido
+                  ? "bg-emerald-500/10 text-emerald-600"
+                  : "bg-destructive/10 text-destructive"
+              }`}
+            >
+              {conferido
+                ? "Confere (débitos = créditos)"
+                : "Não confere (débitos ≠ créditos)"}
+            </span>
+          )}
+        </div>
         <table className="w-full text-sm">
           <thead className="border-b bg-muted/40 text-left">
             <tr>
@@ -149,6 +166,23 @@ function Content() {
               </tr>
             )}
           </tbody>
+          {totais && rows.length > 0 && (
+            <tfoot className="border-t bg-muted/30 font-semibold">
+              <tr>
+                <td className="p-3">Totais</td>
+                <td className="p-3 text-right tabular-nums">
+                  {brl(totais.debito)}
+                </td>
+                <td className="p-3 text-right tabular-nums">
+                  {brl(totais.credito)}
+                </td>
+                <td className="p-3 text-right tabular-nums">
+                  {brl(totais.saldo)}
+                </td>
+                <td className="p-3" />
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
 

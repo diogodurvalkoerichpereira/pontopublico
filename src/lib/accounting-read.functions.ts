@@ -47,13 +47,17 @@ const BalanceteInput = z.object({
 });
 
 // Balancete: saldo por conta (Σdébito - Σcrédito) no exercício.
+// O2-05c — Balancete de VERIFICAÇÃO (PCASP, Lei 4.320): além do saldo por conta, devolve os
+// totais de débito e crédito e o flag `conferido` (Σdébitos = Σcréditos). A dupla partida é
+// garantida no lançamento (postAccountingEntry recusa desbalanceado), então `conferido` é a
+// prova de fechamento do período — que a lista crua de contas não afirmava. Read-only.
 export const getBalancete = createServerFn({ method: "POST" })
   .middleware([requireAuth])
   .validator((data: unknown) => BalanceteInput.parse(data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "accounting.read");
-    return query<{
+    const contas = await query<{
       conta: string;
       debito: string;
       credito: string;
@@ -70,6 +74,15 @@ export const getBalancete = createServerFn({ method: "POST" })
        order by l.conta`,
       [data.tenant_id, data.exercicio],
     );
+    const round2 = (v: number) => Number(v.toFixed(2));
+    const debito = round2(contas.reduce((s, c) => s + Number(c.debito), 0));
+    const credito = round2(contas.reduce((s, c) => s + Number(c.credito), 0));
+    return {
+      contas,
+      totais: { debito, credito, saldo: round2(debito - credito) },
+      // Balancete "bate" quando o total de débitos iguala o de créditos.
+      conferido: debito === credito,
+    };
   });
 
 const LedgerInput = z.object({

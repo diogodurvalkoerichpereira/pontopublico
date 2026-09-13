@@ -138,12 +138,16 @@ test("lançamento balanceado é escriturado; o balancete bate", async () => {
     data: { tenant_id: tenantId, exercicio: 2026 },
     context: ctx(),
   });
-  const byConta = new Map(bal.map((b) => [b.conta, b]));
+  const byConta = new Map(bal.contas.map((b) => [b.conta, b]));
   assert.equal(Number(byConta.get("6.2.2.1.1").saldo), 1000);
   assert.equal(Number(byConta.get("5.2.2.1.1").saldo), -1000);
   // O balancete inteiro soma zero (partidas dobradas).
-  const somaSaldos = bal.reduce((s, b) => s + Number(b.saldo), 0);
+  const somaSaldos = bal.contas.reduce((s, b) => s + Number(b.saldo), 0);
   assert.equal(somaSaldos, 0);
+  // Balancete de verificação: total de débitos = total de créditos → confere.
+  assert.equal(bal.totais.debito, 1000);
+  assert.equal(bal.totais.credito, 1000);
+  assert.equal(bal.conferido, true);
 });
 
 test("lançamento desbalanceado é recusado", async () => {
