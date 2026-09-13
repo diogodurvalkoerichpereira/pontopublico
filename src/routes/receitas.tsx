@@ -21,6 +21,7 @@ import {
   saveBudgetRevenue,
   recordRevenueCollection,
   getRevenueCollections,
+  reverseRevenueCollection,
 } from "@/lib/revenue.functions";
 
 export const Route = createFileRoute("/receitas")({ component: Page });
@@ -53,6 +54,7 @@ type Collection = {
   data_arrecadacao: string;
   valor: string;
   historico: string;
+  estornada: boolean;
 };
 
 const brl = (v: number | string) =>
@@ -65,6 +67,7 @@ function Content() {
   const save = useServerFn(saveBudgetRevenue);
   const collect = useServerFn(recordRevenueCollection);
   const loadCollections = useServerFn(getRevenueCollections);
+  const reverse = useServerFn(reverseRevenueCollection);
   const qc = useQueryClient();
 
   const [open, setOpen] = useState(false);
@@ -105,6 +108,25 @@ function Content() {
     qc.invalidateQueries({
       queryKey: ["revenue-collections", activeTenant?.id],
     });
+  };
+
+  const doReverse = async (c: Collection) => {
+    if (!activeTenant) return;
+    const motivo = window.prompt("Motivo do estorno da arrecadação:");
+    if (!motivo || motivo.trim().length < 3) return;
+    try {
+      await reverse({
+        data: {
+          tenant_id: activeTenant.id,
+          collection_id: c.id,
+          motivo: motivo.trim(),
+        },
+      });
+      toast.success("Arrecadação estornada");
+      refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao estornar");
+    }
   };
 
   const submitCreate = async () => {
@@ -293,22 +315,48 @@ function Content() {
                 <th className="p-3 font-semibold">Data</th>
                 <th className="p-3 font-semibold">Histórico</th>
                 <th className="p-3 font-semibold text-right">Valor</th>
+                {canManage && <th className="p-3 font-semibold">Ações</th>}
               </tr>
             </thead>
             <tbody>
               {((collections?.collections ?? []) as Collection[]).map((c) => (
-                <tr key={c.id} className="border-b last:border-0">
+                <tr
+                  key={c.id}
+                  className={`border-b last:border-0 ${
+                    c.estornada ? "text-muted-foreground line-through" : ""
+                  }`}
+                >
                   <td className="p-3">{c.data_arrecadacao}</td>
-                  <td className="p-3">{c.historico}</td>
+                  <td className="p-3">
+                    {c.historico}
+                    {c.estornada && (
+                      <Badge variant="outline" className="ml-2 no-underline">
+                        estornada
+                      </Badge>
+                    )}
+                  </td>
                   <td className="p-3 text-right tabular-nums">
                     {brl(c.valor)}
                   </td>
+                  {canManage && (
+                    <td className="p-3">
+                      {!c.estornada && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => doReverse(c)}
+                        >
+                          Estornar
+                        </Button>
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))}
               {(collections?.collections ?? []).length === 0 && (
                 <tr>
                   <td
-                    colSpan={3}
+                    colSpan={canManage ? 4 : 3}
                     className="p-6 text-center text-muted-foreground"
                   >
                     Nenhuma arrecadação lançada.

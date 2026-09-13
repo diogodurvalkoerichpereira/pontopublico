@@ -872,6 +872,17 @@ backend (O2-08) mas não tinham tela. Item de menu "Receitas" em Contabilidade e
 Teste `tests/sprint-revenue-collections.test.mjs` verificado por mutação (vazar o extrato de
 outra receita, ou remover a ordenação por data, derruba).
 
+**O2-08c — Estorno de arrecadação ✅.** `reverseRevenueCollection` reverte uma arrecadação
+lançada por engano (valor/data errados, duplicidade): marca a linha como `estornada`
+(append-only, com motivo — `revenue_collections.valor` tem check > 0, não cabe linha
+negativa) e **decrementa** o `valor_arrecadado` da receita, corrigindo a execução que antes
+ficava inflada para sempre; `getRevenueCollections` exclui a estornada do total efetivo (bate
+com o `valor_arrecadado`). Já estornada não estorna de novo. Migration
+`..._o2_08c_revenue_collection_reversal.sql` (ALTER aditivo: estornada/estornada_em/
+estorno_motivo), reusa `budget.manage`; `/receitas` ganha a ação "Estornar" no extrato. Teste
+`tests/sprint-revenue-reversal.test.mjs` verificado por mutação (não decrementar o arrecadado
+no estorno derruba).
+
 **O2-15 — Conciliação bancária ✅.** `reconcileTreasuryAccount` compara o saldo
 contábil (livro) de uma conta de tesouraria com o saldo do extrato numa data e
 registra a diferença (extrato − livro), uma por conta/data; `getTreasuryReconciliations`

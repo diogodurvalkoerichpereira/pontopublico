@@ -212,18 +212,89 @@ export const getRevenueCollections = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "budget.read");
-    const collections = await query<{
+    const rows = await query<{
       id: string;
       data_arrecadacao: string;
       valor: string;
       historico: string;
+      estornada: boolean;
     }>(
-      `select id, data_arrecadacao::text, valor::text, historico
+      `select id, data_arrecadacao::text, valor::text, historico, estornada
        from public.revenue_collections
        where tenant_id = $1 and revenue_id = $2
        order by data_arrecadacao, id`,
       [data.tenant_id, data.revenue_id],
     );
-    const total = collections.reduce((s, c) => s + Number(c.valor), 0);
+    const collections = rows.map((c) => ({
+      ...c,
+      estornada: Boolean(c.estornada),
+    }));
+    // Total efetivo (bate com valor_arrecadado): estornada não conta.
+    const total = collections
+      .filter((c) => !c.estornada)
+      .reduce((s, c) => s + Number(c.valor), 0);
     return { collections, total: Number(total.toFixed(2)) };
+  });
+
+const ReverseInput = z.object({
+  tenant_id: z.string().uuid(),
+  collection_id: z.string().uuid(),
+  motivo: z.string().trim().min(3).max(500),
+});
+
+// O2-08c — Estorno de arrecadação lançada por engano. Marca a arrecadação como estornada
+// (append-only: a linha fica, com motivo) e **decrementa** o `valor_arrecadado` da receita
+// pelo valor estornado, corrigindo a execução da receita — que antes ficava inflada para
+// sempre. Uma arrecadação já estornada não estorna de novo. Reusa budget.manage.
+export const reverseRevenueCollection = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => ReverseInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "budget.manage");
+    return withTransaction(async (client) => {
+      const collection = (
+        await client.query<{
+          revenue_id: string;
+          valor: string;
+          estornada: boolean;
+        }>(
+          `select revenue_id, valor::text, estornada
+           from public.revenue_collections
+           where id=$1 and tenant_id=$2 for update`,
+          [data.collection_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!collection) throw new Error("Arrecadação não encontrada");
+      if (collection.estornada) throw new Error("Arrecadação já estornada");
+      await client.query(
+        `update public.revenue_collections
+         set estornada=true, estornada_em=now(), estorno_motivo=$3
+         where id=$1 and tenant_id=$2`,
+        [data.collection_id, data.tenant_id, data.motivo],
+      );
+      await client.query(
+        `update public.budget_revenues
+         set valor_arrecadado = valor_arrecadado - $3, updated_at = now()
+         where id=$1 and tenant_id=$2`,
+        [collection.revenue_id, data.tenant_id, Number(collection.valor)],
+      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "estornar_arrecadacao",
+        resource: "revenue_collections",
+        recordId: data.collection_id,
+        after: {
+          revenue_id: collection.revenue_id,
+          valor: Number(collection.valor),
+          motivo: data.motivo,
+        },
+      });
+      return {
+        id: data.collection_id,
+        estornada: true,
+        valor: Number(collection.valor),
+      };
+    });
   });
