@@ -1082,6 +1082,16 @@ fora. Read-only, reusa `contracts.read`, sem migration; painel "Economia da lici
 `/licitacoes`. Teste `tests/sprint-procurement-savings.test.mjs` verificado por mutação
 (inverter o sinal da economia, homologado − estimado, derruba os totais).
 
+**O3-08e — Desclassificação de proposta no julgamento (Lei 14.133 art. 59) ✅.**
+`disqualifyProcurementProposal` marca uma proposta classificada como **desclassificada** (com
+motivo) numa licitação ainda **aberta** — ela deixa de concorrer, então a menor entre as
+classificadas (e a que seria adjudicada) passa a ser outra; antes só dava para entrar
+desclassificada no registro da proposta, não desclassificar depois na análise. Só em licitação
+aberta; proposta já desclassificada não desclassifica de novo. Reusa `contracts.manage`, sem
+migration; o diálogo de propostas do `/licitacoes` ganha a ação "Desclassificar". Teste
+`tests/sprint-procurement-disqualify.test.mjs` verificado por mutação (não gravar
+`desclassificada` deixa a proposta ainda vencer — derruba).
+
 **O3-09 — Vínculo contrato ↔ licitação (Lei 14.133) ✅.**
 `linkContractToProcurement` liga o contrato à licitação de origem
 (`procurement_contracts.procurement_process_id` → `procurement_processes`, O3-06);

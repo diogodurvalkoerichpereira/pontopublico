@@ -469,3 +469,62 @@ export const getProcurementSavings = createServerFn({ method: "POST" })
       },
     };
   });
+
+const DisqualifyInput = z.object({
+  tenant_id: z.string().uuid(),
+  process_id: z.string().uuid(),
+  proposal_id: z.string().uuid(),
+  motivo: z.string().trim().min(3).max(500),
+});
+
+// O3-08e — Desclassificação de proposta durante o julgamento (Lei 14.133 art. 59). Numa
+// licitação ainda **aberta**, marca uma proposta classificada como desclassificada, com
+// motivo — ela deixa de ser classificada e de concorrer à adjudicação (a menor entre as
+// classificadas passa a ser outra). Só numa licitação aberta; proposta já desclassificada
+// não desclassifica de novo. Reusa contracts.manage.
+export const disqualifyProcurementProposal = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => DisqualifyInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "contracts.manage");
+    return withTransaction(async (client) => {
+      const process = (
+        await client.query<{ status: string }>(
+          `select status from public.procurement_processes
+           where id=$1 and tenant_id=$2 for update`,
+          [data.process_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!process) throw new Error("Licitação não encontrada");
+      if (process.status !== "aberta")
+        throw new Error(
+          "Só numa licitação aberta uma proposta pode ser desclassificada",
+        );
+      const proposal = (
+        await client.query<{ desclassificada: boolean }>(
+          `select desclassificada from public.procurement_proposals
+           where id=$1 and process_id=$2 and tenant_id=$3 for update`,
+          [data.proposal_id, data.process_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!proposal) throw new Error("Proposta não encontrada");
+      if (proposal.desclassificada)
+        throw new Error("Proposta já desclassificada");
+      await client.query(
+        `update public.procurement_proposals
+         set desclassificada=true, motivo_desclassificacao=$3
+         where id=$1 and tenant_id=$2`,
+        [data.proposal_id, data.tenant_id, data.motivo],
+      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "disqualify_proposal",
+        resource: "procurement_proposals",
+        recordId: data.proposal_id,
+        after: { desclassificada: true, motivo: data.motivo },
+      });
+      return { id: data.proposal_id, desclassificada: true };
+    });
+  });

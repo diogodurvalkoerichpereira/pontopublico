@@ -39,6 +39,7 @@ import {
   adjudicateProcurementWinner,
   getProcurementSummary,
   getProcurementSavings,
+  disqualifyProcurementProposal,
 } from "@/lib/procurement.functions";
 
 export const Route = createFileRoute("/licitacoes")({ component: Page });
@@ -112,6 +113,7 @@ function Content() {
   const propose = useServerFn(recordProcurementProposal);
   const loadJudgment = useServerFn(getProcurementJudgment);
   const adjudicate = useServerFn(adjudicateProcurementWinner);
+  const disqualify = useServerFn(disqualifyProcurementProposal);
   const qc = useQueryClient();
 
   const [openDialog, setOpenDialog] = useState(false);
@@ -228,6 +230,28 @@ function Content() {
       data: { tenant_id: activeTenant.id, process_id: judgeProc.id },
     });
     setProposals(r.proposals as Proposal[]);
+  };
+
+  const doDisqualify = async (proposalId: string) => {
+    if (!activeTenant || !judgeProc) return;
+    const motivo = window.prompt("Motivo da desclassificação (art. 59):");
+    if (!motivo || motivo.trim().length < 3) return;
+    try {
+      await disqualify({
+        data: {
+          tenant_id: activeTenant.id,
+          process_id: judgeProc.id,
+          proposal_id: proposalId,
+          motivo: motivo.trim(),
+        },
+      });
+      toast.success("Proposta desclassificada");
+      await refreshJudgment();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Falha ao desclassificar",
+      );
+    }
   };
 
   const submitProposal = async () => {
@@ -604,6 +628,9 @@ function Content() {
                   <th className="p-2 font-semibold">Fornecedor</th>
                   <th className="p-2 font-semibold text-right">Valor</th>
                   <th className="p-2 font-semibold">Situação</th>
+                  {canManage && judgeProc?.status === "aberta" && (
+                    <th className="p-2 font-semibold">Ações</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -627,12 +654,27 @@ function Content() {
                         <Badge variant="secondary">classificada</Badge>
                       )}
                     </td>
+                    {canManage && judgeProc?.status === "aberta" && (
+                      <td className="p-2">
+                        {!p.desclassificada && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => doDisqualify(p.id)}
+                          >
+                            Desclassificar
+                          </Button>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))}
                 {proposals.length === 0 && (
                   <tr>
                     <td
-                      colSpan={4}
+                      colSpan={
+                        canManage && judgeProc?.status === "aberta" ? 5 : 4
+                      }
                       className="p-4 text-center text-muted-foreground"
                     >
                       Sem propostas.
