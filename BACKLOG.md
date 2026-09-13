@@ -559,6 +559,16 @@ mostra "válidos hoje" no cabeçalho de Dependentes. Teste
 `tests/sprint-valid-dependents.test.mjs` verificado por mutação (ignorar o início ou o fim
 da vigência derruba).
 
+**O1-10b — Rateio da pensão por morte na competência ✅.** `getPensionAllocation`
+(`family.functions.ts`) lista os **pensionistas vigentes** na data (mesmo critério de
+vigência dos dependentes) de um vínculo, com a cota de cada um, soma o **total percentual** e
+sinaliza rateio **completo** (=100%) ou **incompleto** (<100%) — a conferência do rateio que
+o cadastro (um pensionista por vez) não fazia (o teto de 100% já é imposto por trigger na
+gravação; `rateio_excedido` fica como flag defensiva). Read-only, reusa `family.read` (escopo
+por unidade via `assertPersonScope`), sem migration; `/rh/familia` mostra o rateio vigente no
+bloco de Pensionistas. Teste `tests/sprint-pension-allocation.test.mjs` verificado por mutação
+(ignorar o fim de vigência conta pensionista expirado e infla o total — derruba).
+
 ### O1-06 — eSocial real
 
 P0 · 3-6 semanas · ⚠️ pode exigir HSM para A3. Geração de XML, assinatura

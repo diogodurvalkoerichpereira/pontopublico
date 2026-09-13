@@ -23,6 +23,7 @@ import {
   saveDependent,
   savePensionBeneficiary,
   getValidDependents,
+  getPensionAllocation,
 } from "@/lib/family.functions";
 import { getPeopleRegistry } from "@/lib/people.functions";
 
@@ -111,12 +112,31 @@ function Content() {
       }),
   });
 
+  const pensionLinkId = data?.pensions[0]?.employment_link_id ?? "";
+  const loadAllocation = useServerFn(getPensionAllocation);
+  const { data: allocation } = useQuery({
+    queryKey: ["pension-allocation", activeTenant?.id, personId, pensionLinkId],
+    enabled: Boolean(activeTenant && personId && pensionLinkId),
+    queryFn: () =>
+      loadAllocation({
+        data: {
+          tenant_id: activeTenant!.id,
+          holder_person_id: personId,
+          employment_link_id: pensionLinkId,
+          data_referencia: new Date().toISOString().slice(0, 10),
+        },
+      }),
+  });
+
   const refresh = () => {
     qc.invalidateQueries({
       queryKey: ["family-workspace", activeTenant?.id, personId],
     });
     qc.invalidateQueries({
       queryKey: ["valid-dependents", activeTenant?.id, personId],
+    });
+    qc.invalidateQueries({
+      queryKey: ["pension-allocation", activeTenant?.id, personId],
     });
   };
   const submitDependent = async () => {
@@ -284,6 +304,23 @@ function Content() {
               </Button>
             )}
           </div>
+          {allocation && (
+            <div
+              className={`mb-3 rounded-lg border p-3 text-sm ${
+                allocation.rateio_completo
+                  ? "border-emerald-500/40 bg-emerald-500/5"
+                  : "border-amber-500/40 bg-amber-500/5"
+              }`}
+            >
+              Rateio percentual vigente hoje:{" "}
+              <b className="tabular-nums">{allocation.total_percentual}%</b>{" "}
+              {allocation.rateio_completo
+                ? "— rateio completo."
+                : allocation.rateio_excedido
+                  ? "— excede 100%."
+                  : "— rateio incompleto (falta distribuir)."}
+            </div>
+          )}
           <div className="space-y-2">
             {data?.pensions.map((item) => (
               <div key={item.id} className="rounded-xl border p-3">

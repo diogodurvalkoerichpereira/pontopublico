@@ -381,3 +381,78 @@ export const getValidDependents = createServerFn({ method: "POST" })
       total: Number(row.total),
     };
   });
+
+const PensionAllocationInput = z.object({
+  tenant_id: z.string().uuid(),
+  holder_person_id: z.string().uuid(),
+  employment_link_id: z.string().uuid(),
+  data_referencia: z.string().date(),
+});
+
+// O1-10b — Rateio da pensão por morte na competência. Lista os pensionistas **vigentes** na
+// data de referência (valid_from ≤ ref e (valid_to nulo ou ≥ ref)) de um vínculo, com a cota
+// de cada um (percentual ou valor fixo), e consolida o **total percentual** — sinalizando se
+// o rateio está **incompleto** (< 100%) ou **excede** 100%, o que a folha não pode ratear. É
+// a conferência do rateio que o cadastro (um pensionista por vez) não fazia. Read-only, reusa
+// family.read (escopo por unidade via assertPersonScope).
+export const getPensionAllocation = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => PensionAllocationInput.parse(data))
+  .handler(async ({ data, context }) => {
+    await assertPersonScope(
+      data.tenant_id,
+      data.holder_person_id,
+      context.userId,
+      "family.read",
+    );
+    const rows = await query<{
+      id: string;
+      beneficiary_person_id: string;
+      full_name: string;
+      calculation_type: string;
+      percentage: string | null;
+      fixed_amount: string | null;
+      priority: number;
+    }>(
+      `select b.id, b.beneficiary_person_id, p.full_name, b.calculation_type,
+         b.percentage::text, b.fixed_amount::text, b.priority
+       from public.pension_beneficiaries b
+       join public.persons p on p.id = b.beneficiary_person_id
+       join public.employment_links l on l.id = b.employment_link_id
+       where b.tenant_id = $1 and b.employment_link_id = $2
+         and l.person_id = $3
+         and b.valid_from <= $4::date
+         and (b.valid_to is null or b.valid_to >= $4::date)
+       order by b.priority, p.full_name`,
+      [
+        data.tenant_id,
+        data.employment_link_id,
+        data.holder_person_id,
+        data.data_referencia,
+      ],
+    );
+    const round2 = (v: number) => Number(v.toFixed(2));
+    const beneficiaries = rows.map((r) => ({
+      id: r.id,
+      beneficiary_person_id: r.beneficiary_person_id,
+      full_name: r.full_name,
+      calculation_type: r.calculation_type,
+      percentage: r.percentage === null ? null : Number(r.percentage),
+      fixed_amount: r.fixed_amount === null ? null : Number(r.fixed_amount),
+      priority: r.priority,
+    }));
+    const totalPercentual = round2(
+      beneficiaries.reduce((s, b) => s + (b.percentage ?? 0), 0),
+    );
+    const totalValorFixo = round2(
+      beneficiaries.reduce((s, b) => s + (b.fixed_amount ?? 0), 0),
+    );
+    return {
+      beneficiaries,
+      total_percentual: totalPercentual,
+      total_valor_fixo: totalValorFixo,
+      // Só avalia a completude do rateio percentual quando há cota percentual.
+      rateio_completo: totalPercentual === 100,
+      rateio_excedido: totalPercentual > 100,
+    };
+  });
