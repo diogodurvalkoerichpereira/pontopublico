@@ -1365,6 +1365,15 @@ peticiona nem integra ao Judiciário (integração externa). Migration
 `tests/sprint-fiscal-execution.test.mjs` verificado por mutação (aceitar CDA não ativa
 derruba).
 
+**O4-09b — Execução quitada baixa a CDA (coerência) ✅.** `updateFiscalExecutionStatus`, ao
+mover a execução para `quitada`, baixa a CDA vinculada (`cda_id`) para `quitada` na mesma
+transação: satisfeita a dívida na cobrança judicial, ela sai do **estoque em cobrança** (o
+saldo consolidado só soma CDAs ativas) — antes a CDA seguia `ativa` para sempre mesmo com a
+execução quitada. Andamentos não-terminais (suspensa) não tocam a CDA. Reusa `taxes.manage`,
+sem migration; o `/divida-ativa` já aciona o andamento. Teste (em
+`tests/sprint-fiscal-execution.test.mjs`) verificado por mutação (não propagar a baixa deixa
+a CDA ativa após a quitação — derruba).
+
 **O4-10 — Painel de Dívida Ativa (UI) ✅.** Rota `/divida-ativa` dá cara ao O4-08/O4-09:
 lista as CDAs (nº, exercício, valor inscrito, situação) com ação "Ajuizar", e as
 execuções fiscais (CDA, processo, valor, andamento) com transições suspender/quitar/

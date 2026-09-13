@@ -124,8 +124,8 @@ export const updateFiscalExecutionStatus = createServerFn({ method: "POST" })
     requireTenantPermission(access, "taxes.manage");
     return withTransaction(async (client) => {
       const exec = (
-        await client.query<{ status: string }>(
-          `select status from public.fiscal_executions
+        await client.query<{ status: string; cda_id: string }>(
+          `select status, cda_id from public.fiscal_executions
            where id=$1 and tenant_id=$2 for update`,
           [data.execution_id, data.tenant_id],
         )
@@ -144,6 +144,15 @@ export const updateFiscalExecutionStatus = createServerFn({ method: "POST" })
           data.observacao ?? null,
         ],
       );
+      // Execução quitada baixa a CDA: a dívida foi satisfeita na cobrança judicial,
+      // então sai do estoque em cobrança (o saldo consolidado só soma CDAs ativas).
+      if (data.status === "quitada") {
+        await client.query(
+          `update public.active_debt_certificates set status='quitada'
+           where id=$1 and tenant_id=$2 and status='ativa'`,
+          [exec.cda_id, data.tenant_id],
+        );
+      }
       await recordAudit(client, {
         tenantId: data.tenant_id,
         actorId: context.userId,

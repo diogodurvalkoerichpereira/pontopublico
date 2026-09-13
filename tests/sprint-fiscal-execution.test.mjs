@@ -181,3 +181,31 @@ test("só uma CDA ativa ajuíza; execução encerrada é terminal", async () => 
     /encerrada/i,
   );
 });
+
+const cdaStatus = async (cdaId) =>
+  (
+    await db.query(
+      "select status from public.active_debt_certificates where id=$1",
+      [cdaId],
+    )
+  ).rows[0].status;
+
+test("execução quitada baixa a CDA; suspensa não mexe na CDA", async () => {
+  // Suspender a execução não altera a CDA (segue ativa, no estoque em cobrança).
+  const cdaSusp = await seedCda(700, "ativa");
+  const rSusp = await file(cdaSusp);
+  await fn.updateFiscalExecutionStatus({
+    data: { tenant_id: tenantId, execution_id: rSusp.id, status: "suspensa" },
+    context: ctx(),
+  });
+  assert.equal(await cdaStatus(cdaSusp), "ativa");
+
+  // Quitar a execução baixa a CDA para 'quitada'.
+  const cdaQuit = await seedCda(900, "ativa");
+  const rQuit = await file(cdaQuit);
+  await fn.updateFiscalExecutionStatus({
+    data: { tenant_id: tenantId, execution_id: rQuit.id, status: "quitada" },
+    context: ctx(),
+  });
+  assert.equal(await cdaStatus(cdaQuit), "quitada");
+});
