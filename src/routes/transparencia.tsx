@@ -2,13 +2,15 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Eye } from "lucide-react";
+import { Download, Eye } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth-context";
 import {
   getTransparencyReport,
   getTransparencyByFunction,
+  getOpenDataTransparencia,
 } from "@/lib/transparency.functions";
 
 export const Route = createFileRoute("/transparencia")({ component: Page });
@@ -60,7 +62,32 @@ function Content() {
   const { activeTenant } = useAuth();
   const loadReport = useServerFn(getTransparencyReport);
   const loadByFunction = useServerFn(getTransparencyByFunction);
+  const loadOpenData = useServerFn(getOpenDataTransparencia);
   const [ano, setAno] = useState(new Date().getFullYear());
+  const [baixando, setBaixando] = useState(false);
+
+  const baixarDadosAbertos = async () => {
+    if (!activeTenant) return;
+    setBaixando(true);
+    try {
+      const payload = await loadOpenData({
+        data: { tenant_id: activeTenant.id, exercicio: ano },
+      });
+      const blob = new Blob([JSON.stringify(payload, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `dados-abertos-transparencia-${ano}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } finally {
+      setBaixando(false);
+    }
+  };
 
   const { data: report } = useQuery({
     queryKey: ["transparency-report", activeTenant?.id, ano],
@@ -93,13 +120,24 @@ function Content() {
             </p>
           </div>
         </div>
-        <div className="w-32">
-          <Label>Exercício</Label>
-          <Input
-            type="number"
-            value={ano}
-            onChange={(e) => setAno(Number(e.target.value))}
-          />
+        <div className="flex items-end gap-2">
+          <div className="w-32">
+            <Label>Exercício</Label>
+            <Input
+              type="number"
+              value={ano}
+              onChange={(e) => setAno(Number(e.target.value))}
+            />
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={baixarDadosAbertos}
+            disabled={baixando}
+          >
+            <Download className="size-3.5 mr-1" />
+            Dados abertos (JSON)
+          </Button>
         </div>
       </div>
 

@@ -1346,8 +1346,18 @@ prazo de 20 dias prorrogável +10 uma vez, ciclo recebido→prorrogado→respond
 indeferido, reusa `protocol.*`); O5-05 controle interno (CF art. 74, LRF —
 apontamentos de auditoria interna com recomendação/responsável/prazo e
 acompanhamento aberto→em_implementacao→implementado/nao_implementado, numeração
-por ano, reusa `analytics.*`). Pendente: assinatura ICP-Brasil, dados abertos
-publicáveis.
+por ano, reusa `analytics.*`). Pendente: assinatura ICP-Brasil.
+
+**O5-02c — Dados abertos do Portal da Transparência (LC 131/2009 §3º) ✅.**
+`getOpenDataTransparencia` (`transparency.functions.ts`) empacota, num payload
+autodescritivo (formato/versão/licença/ente/`gerado_em`), a despesa por função
+(O5-02b) e por credor e a receita do exercício já existentes — para download e
+reuso por terceiros (imprensa, pesquisa, TCE) em formato processável por
+máquina, sem depender de tela. Mesma regra de exclusão do empenho anulado do
+O5-02b; credor sem saldo empenhado não aparece. Read-only, reusa
+`transparency.read`, sem migration; `/transparencia` ganha o botão "Dados
+abertos (JSON)". Teste `tests/sprint-open-data-transparencia.test.mjs`
+verificado por mutação (incluir anulado no empenhado por credor derruba).
 
 **O5-02b — Despesa por função de governo + Portal da Transparência (UI) ✅.**
 `getTransparencyByFunction` (`transparency.functions.ts`) agrega a execução da despesa

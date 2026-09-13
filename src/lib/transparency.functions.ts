@@ -141,3 +141,100 @@ export const getTransparencyByFunction = createServerFn({ method: "POST" })
     );
     return { exercicio: data.exercicio, funcoes, totais };
   });
+
+// O5-02c — Dados abertos do Portal da Transparência (LC 131/2009 §3º: formato
+// aberto, processável por máquina). Empacota num único payload autodescritivo
+// (metadados de proveniência + licença) a execução da despesa por função e por
+// credor e a receita do exercício, já existentes (O5-02/O5-02b) — para download
+// e reuso por terceiros (imprensa, pesquisa, TCE) sem depender de tela. Credor
+// sem saldo empenhado não aparece, mesma regra do por-função. Read-only, reusa
+// transparency.read; sem tabela própria.
+export const getOpenDataTransparencia = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => Input.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "transparency.read");
+
+    const tenant = await queryOne<{
+      codigo: string;
+      nome: string;
+      cnpj: string | null;
+    }>(`select codigo, nome, cnpj from public.tenants where id = $1`, [
+      data.tenant_id,
+    ]);
+
+    const porFuncao = await query<{
+      funcao: string;
+      empenhado: string;
+      liquidado: string;
+      pago: string;
+    }>(
+      `select a.funcao,
+         coalesce(sum(c.valor) filter (where c.status <> 'anulado'),0)::text as empenhado,
+         coalesce(sum(c.valor) filter (where c.status in ('liquidado','pago')),0)::text as liquidado,
+         coalesce(sum(c.valor) filter (where c.status = 'pago'),0)::text as pago
+       from public.budget_commitments c
+       join public.budget_appropriations a on a.id = c.appropriation_id
+       where c.tenant_id = $1 and c.exercicio = $2
+       group by a.funcao
+       having coalesce(sum(c.valor) filter (where c.status <> 'anulado'),0) > 0
+       order by empenhado desc, a.funcao`,
+      [data.tenant_id, data.exercicio],
+    );
+
+    const porCredor = await query<{
+      credor: string;
+      qtd: string;
+      empenhado: string;
+      liquidado: string;
+      pago: string;
+    }>(
+      `select c.credor,
+         count(*) filter (where c.status <> 'anulado')::text as qtd,
+         coalesce(sum(c.valor) filter (where c.status <> 'anulado'),0)::text as empenhado,
+         coalesce(sum(c.valor) filter (where c.status in ('liquidado','pago')),0)::text as liquidado,
+         coalesce(sum(c.valor) filter (where c.status = 'pago'),0)::text as pago
+       from public.budget_commitments c
+       where c.tenant_id = $1 and c.exercicio = $2
+       group by c.credor
+       having coalesce(sum(c.valor) filter (where c.status <> 'anulado'),0) > 0
+       order by empenhado desc, c.credor`,
+      [data.tenant_id, data.exercicio],
+    );
+
+    const receita = await queryOne<{ previsto: string; arrecadado: string }>(
+      `select coalesce(sum(valor_previsto),0)::text as previsto,
+              coalesce(sum(valor_arrecadado),0)::text as arrecadado
+       from public.budget_revenues where tenant_id = $1 and exercicio = $2`,
+      [data.tenant_id, data.exercicio],
+    );
+
+    return {
+      formato: "dados-abertos-transparencia",
+      versao: "1.0",
+      licenca: "ODbL 1.0 — uso e redistribuição livres, com atribuição",
+      ente: tenant
+        ? { codigo: tenant.codigo, nome: tenant.nome, cnpj: tenant.cnpj }
+        : null,
+      exercicio: data.exercicio,
+      gerado_em: new Date().toISOString(),
+      despesa_por_funcao: porFuncao.map((r) => ({
+        funcao: r.funcao,
+        empenhado: num(r.empenhado),
+        liquidado: num(r.liquidado),
+        pago: num(r.pago),
+      })),
+      despesa_por_credor: porCredor.map((r) => ({
+        credor: r.credor,
+        quantidade_empenhos: num(r.qtd),
+        empenhado: num(r.empenhado),
+        liquidado: num(r.liquidado),
+        pago: num(r.pago),
+      })),
+      receita: {
+        previsto: num(receita?.previsto),
+        arrecadado: num(receita?.arrecadado),
+      },
+    };
+  });
