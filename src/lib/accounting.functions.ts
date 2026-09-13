@@ -93,7 +93,7 @@ export async function contabilizarEvento(params: {
   tenantId: string;
   exercicio: number;
   dataLancamento: string;
-  eventCode: "empenho" | "empenho_anulacao" | "liquidacao" | "pagamento";
+  eventCode: AccountingEventCode;
   valor: number;
   historico: string;
   sourceRef?: string | null;
@@ -128,14 +128,22 @@ export async function contabilizarEvento(params: {
   });
 }
 
+// Eventos contabilizáveis por roteiro. O3-11c acrescenta os três da baixa de bem
+// (depreciação acumulada, desincorporação do líquido como VPD, alienação como VPA).
+export const ACCOUNTING_EVENT_CODES = [
+  "empenho",
+  "empenho_anulacao",
+  "liquidacao",
+  "pagamento",
+  "baixa_bem_depreciacao",
+  "baixa_bem_desincorporacao",
+  "baixa_bem_alienacao",
+] as const;
+export type AccountingEventCode = (typeof ACCOUNTING_EVENT_CODES)[number];
+
 const SaveEventInput = z.object({
   tenant_id: z.string().uuid(),
-  event_code: z.enum([
-    "empenho",
-    "empenho_anulacao",
-    "liquidacao",
-    "pagamento",
-  ]),
+  event_code: z.enum(ACCOUNTING_EVENT_CODES),
   debit_account: z
     .string()
     .trim()

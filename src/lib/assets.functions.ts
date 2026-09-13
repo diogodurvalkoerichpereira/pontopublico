@@ -6,6 +6,7 @@ import { z } from "zod";
 import { query, queryOne, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
+import { contabilizarEvento } from "./accounting.functions";
 import {
   loadTenantAccess,
   requireTenantPermission,
@@ -499,6 +500,53 @@ export const disposeAsset = createServerFn({ method: "POST" })
           context.userId,
         ],
       );
+      // O3-11c — contabiliza a baixa pelo roteiro do ente (O2-06), em três eventos:
+      // a depreciação acumulada sai do imobilizado; o valor líquido desincorpora
+      // como VPD; o valor alienado entra como VPA. VPA − VPD = resultado da baixa.
+      // Sem mapeamento o evento não escritura (comportamento do O2-06).
+      const exercicio = Number(data.data_baixa.slice(0, 4));
+      const eventos: Array<
+        [
+          (
+            | "baixa_bem_depreciacao"
+            | "baixa_bem_desincorporacao"
+            | "baixa_bem_alienacao"
+          ),
+          number,
+          string,
+        ]
+      > = [
+        [
+          "baixa_bem_depreciacao",
+          Number(asset.depreciacao_acumulada),
+          "Baixa de bem — depreciação acumulada",
+        ],
+        [
+          "baixa_bem_desincorporacao",
+          valorLiquido,
+          "Baixa de bem — desincorporação do valor líquido (VPD)",
+        ],
+        [
+          "baixa_bem_alienacao",
+          data.valor_alienacao,
+          "Baixa de bem — alienação (VPA)",
+        ],
+      ];
+      let lancamentos = 0;
+      for (const [eventCode, valor, historico] of eventos) {
+        const posted = await contabilizarEvento({
+          client,
+          tenantId: data.tenant_id,
+          exercicio,
+          dataLancamento: data.data_baixa,
+          eventCode,
+          valor,
+          historico,
+          sourceRef: data.asset_id,
+          actorId: context.userId,
+        });
+        if (posted) lancamentos += 1;
+      }
       await recordAudit(client, {
         tenantId: data.tenant_id,
         actorId: context.userId,
@@ -509,9 +557,10 @@ export const disposeAsset = createServerFn({ method: "POST" })
           valor_liquido: valorLiquido,
           valor_alienacao: data.valor_alienacao,
           resultado,
+          lancamentos,
         },
       });
-      return { valor_liquido: valorLiquido, resultado };
+      return { valor_liquido: valorLiquido, resultado, lancamentos };
     });
   });
 

@@ -1163,7 +1163,8 @@ categoria, com total geral, considerando só material **ativo**. Migration
 acervo), reusa `materials.*`; `/almoxarifado` ganha o seletor de categoria, a coluna e os
 cartões de inventário. Teste `tests/sprint-material-inventory.test.mjs` verificado por
 mutação (somar só uma categoria no total, ou incluir o inativo, derruba).
-Próximo: ligar o material permanente adquirido à entrada de bem em patrimônio (O3-03).
+A ligação do material permanente adquirido à entrada de bem em patrimônio foi entregue em
+**O3-19** (`incorporateMaterialAsset`).
 
 **O3-16 — Transição de contrato (Lei 14.133 art. 137-139) ✅.** `transitionContract` move
 o contrato pela máquina de estados: vigente ↔ suspenso, e vigente/suspenso →
@@ -1294,8 +1295,21 @@ positivo, perda se negativo. Só um bem ativo baixa; a baixa é definitiva (não
 mais). Migration `..._o3_11_asset_disposal.sql` (ALTER aditivo: baixa_em, baixa_motivo,
 valor_alienacao, resultado_baixa, baixa_por); reusa `assets.*`; ação "Baixar" no
 `/patrimonio`. Teste `tests/sprint-asset-disposal.test.mjs` verificado por mutação
-(inverter para líquido − alienação derruba o sinal). Próximo: baixa contabilizada como
-VPD/VPA de alienação (evento contábil dedicado) e remessa ao PNCP (externo).
+(inverter para líquido − alienação derruba o sinal). Próximo: remessa ao PNCP (externo).
+
+**O3-11c — Baixa de bem contabilizada como VPD/VPA (PCASP) ✅.** `disposeAsset` passa a
+escriturar a baixa pelo **roteiro configurável do ente** (`accounting_event_accounts`,
+padrão do O2-06 — sem mapeamento o fato não contabiliza), em três eventos de duas linhas,
+na mesma transação: `baixa_bem_depreciacao` (D depreciação acumulada / C imobilizado),
+`baixa_bem_desincorporacao` (D VPD / C imobilizado, pelo valor líquido) e
+`baixa_bem_alienacao` (D disponibilidade / C VPA, pelo valor alienado). O imobilizado sai
+por inteiro e **VPA − VPD dos lançamentos = resultado da baixa** — fecha com a DVP
+(`getEquityStatement`). Migration `20260909680000_o3_11c_asset_disposal_events.sql` recria o
+check de `event_code` com os três códigos; `ACCOUNTING_EVENT_CODES` vira a fonte única do
+enum. `/patrimonio` informa quantos lançamentos foram ao razão (ou que não há roteiro).
+Teste `tests/sprint-asset-disposal-ledger.test.mjs` verificado por mutação (pular a
+desincorporação deixa VPA 8000 / VPD 0 — derruba). Pendente (O2-06b): tela para configurar
+o roteiro (`saveAccountingEventAccount` não tem UI; hoje só por SQL).
 
 **O3-11b — Demonstrativo de baixas e alienações do exercício ✅.** `getAssetDisposals`
 lista os bens baixados no período (por data de baixa) com valor de aquisição, depreciação

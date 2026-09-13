@@ -211,10 +211,15 @@ function Content() {
           valor_alienacao: Number(disposeForm.valor || 0),
         },
       });
+      // O3-11c: informa se a baixa foi ao razão pelo roteiro do ente.
       toast.success(
         `Bem baixado — resultado ${brl(r.resultado)} (${
           r.resultado >= 0 ? "ganho" : "perda"
-        })`,
+        })${
+          r.lancamentos
+            ? ` · ${r.lancamentos} lançamento(s) no razão`
+            : " · sem roteiro contábil configurado"
+        }`,
       );
       setDisposeTarget(null);
       refresh();
