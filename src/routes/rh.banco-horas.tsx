@@ -16,7 +16,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth-context";
-import { getTimeBank, postTimeBankEntry } from "@/lib/time-bank.functions";
+import {
+  getTimeBank,
+  getTimeBankBalances,
+  postTimeBankEntry,
+} from "@/lib/time-bank.functions";
 
 export const Route = createFileRoute("/rh/banco-horas")({ component: Page });
 
@@ -54,6 +58,7 @@ function Page() {
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
   const [minutes, setMinutes] = useState("");
 
+  const loadBalances = useServerFn(getTimeBankBalances);
   const { data } = useQuery({
     queryKey: ["time-bank", activeTenant?.id, linkFilter],
     enabled: !!activeTenant,
@@ -65,14 +70,21 @@ function Page() {
         },
       }),
   });
+  const { data: balances } = useQuery({
+    queryKey: ["time-bank-balances", activeTenant?.id],
+    enabled: !!activeTenant,
+    queryFn: () => loadBalances({ data: { tenant_id: activeTenant!.id } }),
+  });
   if (!activeTenant) return null;
 
   const entries = (data?.entries ?? []) as Entry[];
   const links = (data?.links ?? []) as LinkRef[];
   const canManage = data?.canManage ?? false;
 
-  const refresh = () =>
+  const refresh = () => {
     qc.invalidateQueries({ queryKey: ["time-bank", activeTenant.id] });
+    qc.invalidateQueries({ queryKey: ["time-bank-balances", activeTenant.id] });
+  };
 
   const lancar = async () => {
     if (!formLink) return toast.error("Escolha o servidor");
@@ -159,6 +171,52 @@ function Page() {
             <Button disabled={busy} onClick={lancar}>
               Lançar
             </Button>
+          </div>
+        )}
+
+        {balances && balances.balances.length > 0 && (
+          <div className="rounded-2xl border bg-card p-4 space-y-3">
+            <h2 className="font-bold">Posição atual do banco de horas</h2>
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className="rounded-lg border p-3">
+                <div className="text-xs text-muted-foreground">
+                  Credores / Devedores
+                </div>
+                <div className="text-lg font-bold tabular-nums">
+                  {balances.totais.credores} / {balances.totais.devedores}
+                </div>
+              </div>
+              <div className="rounded-lg border p-3">
+                <div className="text-xs text-muted-foreground">
+                  A compensar (credor)
+                </div>
+                <div className="text-lg font-bold tabular-nums text-emerald-600">
+                  {hm(balances.totais.saldo_positivo_min)}
+                </div>
+              </div>
+              <div className="rounded-lg border p-3">
+                <div className="text-xs text-muted-foreground">
+                  A repor (devedor)
+                </div>
+                <div className="text-lg font-bold tabular-nums text-destructive">
+                  {hm(balances.totais.saldo_negativo_min)}
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {balances.balances.map((b) => (
+                <span
+                  key={b.employment_link_id}
+                  className={`rounded-full border px-3 py-1 text-xs tabular-nums ${
+                    b.saldo_minutes < 0
+                      ? "text-destructive"
+                      : "text-emerald-600"
+                  }`}
+                >
+                  {b.full_name}: {hm(b.saldo_minutes)}
+                </span>
+              ))}
+            </div>
           </div>
         )}
 

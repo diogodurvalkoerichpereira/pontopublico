@@ -125,3 +125,66 @@ export const getTimeBank = createServerFn({ method: "POST" })
       canManage: access.permissions.includes("people.manage"),
     };
   });
+
+const BalancesInput = z.object({ tenant_id: z.string().uuid() });
+
+/** O1-03h — Posição atual do banco de horas por vínculo: o saldo ACUMULADO da última
+ *  competência lançada (credor se positivo, devedor se negativo), separando credores de
+ *  devedores e consolidando os minutos de cada lado — a visão que a razão completa (mês a
+ *  mês) não resume, para o RH ver quem está positivo/negativo de relance. Guard people.read. */
+export const getTimeBankBalances = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => BalancesInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "people.read");
+    // O saldo atual é o balance_after da competência mais recente de cada vínculo.
+    const rows = await query<{
+      employment_link_id: string;
+      registration_number: string | null;
+      full_name: string;
+      reference_month: string;
+      saldo_minutes: number;
+    }>(
+      `select distinct on (t.employment_link_id)
+         t.employment_link_id, l.registration_number, p.full_name,
+         to_char(t.reference_month, 'YYYY-MM') as reference_month,
+         t.balance_after as saldo_minutes
+       from public.time_bank_entries t
+       join public.employment_links l on l.id = t.employment_link_id
+       join public.persons p on p.id = l.person_id
+       where t.tenant_id = $1
+       order by t.employment_link_id, t.reference_month desc`,
+      [data.tenant_id],
+    );
+    const balances = rows.map((r) => ({
+      ...r,
+      saldo_minutes: Number(r.saldo_minutes),
+    }));
+    const totais = balances.reduce(
+      (acc, b) => {
+        if (b.saldo_minutes > 0) {
+          acc.credores += 1;
+          acc.saldo_positivo_min += b.saldo_minutes;
+        } else if (b.saldo_minutes < 0) {
+          acc.devedores += 1;
+          acc.saldo_negativo_min += b.saldo_minutes;
+        }
+        return acc;
+      },
+      {
+        credores: 0,
+        devedores: 0,
+        saldo_positivo_min: 0,
+        saldo_negativo_min: 0,
+      },
+    );
+    return {
+      balances,
+      totais: {
+        ...totais,
+        saldo_liquido_min:
+          totais.saldo_positivo_min + totais.saldo_negativo_min,
+      },
+    };
+  });

@@ -427,6 +427,15 @@ servidor. Teste `tests/sprint-bank-from-apuracao.test.mjs` verificado por mutaç
 **Pendente nesta linha** (registrado): escala **rotativa** (ciclo de N dias) e
 aposentar a leitura user-scoped de `time_entries` em favor das marcações multi-tenant.
 
+**O1-03h — Posição atual do banco de horas por servidor ✅.** `getTimeBankBalances`
+(`time-bank.functions.ts`) devolve, por vínculo, o **saldo acumulado da última competência
+lançada** (credor se positivo, devedor se negativo — via `distinct on` ordenado por
+competência desc) e consolida credores × devedores e os minutos de cada lado — a posição de
+relance que a razão mês a mês (`getTimeBank`) não resume. Vínculo sem lançamento não aparece.
+Read-only, reusa `people.read`, sem migration; `/rh/banco-horas` ganha o painel "Posição
+atual". Teste `tests/sprint-time-bank-balances.test.mjs` verificado por mutação (pegar a
+primeira competência em vez da última derruba o saldo atual).
+
 ### O1-03g — Resumo mensal da apuração de ponto por servidor ✅
 
 `getApuracaoResumoMensal` (`time-clock.functions.ts`) consolida, para a competência, a
