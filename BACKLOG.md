@@ -1345,6 +1345,16 @@ de arrecadação → dívida ativa → parcelamento. Pendente (externo/homologa�
 nacional; emissão da CND com autenticação e layout do ente; execução fiscal
 integrada ao Judiciário.
 
+**O4-06b — Base de cálculo do ITBI arbitrada pelo valor venal (CTN art. 148) ✅.**
+`launchItbi` passa a calcular o imposto sobre a **maior** entre o valor declarado da
+transmissão e o valor venal do imóvel no cadastro imobiliário: antes, o crédito saía só do
+valor declarado, então declarar abaixo do venal reduzia o imposto — furo de arrecadação
+clássico do ITBI. Devolve `base_calculo` e `arbitrado` (base veio do venal) e grava os dois
+valores e a base na auditoria; `/tributos` avisa no lançamento quando a base foi arbitrada.
+Sem migration; reusa `taxes.manage`. Teste `tests/sprint-itbi.test.mjs` verificado por
+mutação (fixar `arbitrado=false` — base sempre o declarado — lança 2.000 em vez de 4.000 e
+derruba).
+
 **O4-04b — Resumo do cadastro imobiliário (base do IPTU) ✅.** `getRealEstateSummary`
 consolida a contagem de imóveis por situação (ativo/baixado) e, dos **ativos**, o valor
 venal total e a área construída — a **base tributável** do IPTU; imóvel baixado não integra

@@ -401,7 +401,12 @@ function Content() {
           vencimento: hoje(),
         },
       });
-      toast.success(`ITBI lançado: ${brl(r.valor)}`);
+      // O4-06b: avisa quando a base foi arbitrada pelo valor venal (CTN art. 148).
+      toast.success(
+        r.arbitrado
+          ? `ITBI lançado: ${brl(r.valor)} — base arbitrada pelo valor venal (${brl(r.base_calculo)})`
+          : `ITBI lançado: ${brl(r.valor)}`,
+      );
       setItbiOpen(false);
       setValorTransmissao("");
       refresh();

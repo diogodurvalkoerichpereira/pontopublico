@@ -25,7 +25,10 @@ const Input = z.object({
   vencimento: z.string().date(),
 });
 
-// Lança o ITBI de uma transmissão: crédito = valor da transmissão × alíquota (%).
+// Lança o ITBI de uma transmissão: crédito = base de cálculo × alíquota (%).
+// O4-06b — a base é a MAIOR entre o valor declarado da transmissão e o valor
+// venal do imóvel (arbitramento, CTN art. 148): declarar abaixo do venal não
+// reduz o imposto. Devolve `base_calculo` e `arbitrado` (base veio do venal).
 export const launchItbi = createServerFn({ method: "POST" })
   .middleware([requireAuth])
   .validator((data: unknown) => Input.parse(data))
@@ -38,8 +41,9 @@ export const launchItbi = createServerFn({ method: "POST" })
         await client.query<{
           inscricao_imobiliaria: string;
           status: string;
+          valor_venal: string;
         }>(
-          `select inscricao_imobiliaria, status
+          `select inscricao_imobiliaria, status, valor_venal::text
            from public.real_estate_properties where id=$1 and tenant_id=$2`,
           [data.property_id, data.tenant_id],
         )
@@ -56,9 +60,11 @@ export const launchItbi = createServerFn({ method: "POST" })
       );
       if (dup.rows.length)
         throw new Error("ITBI já lançado para esta transmissão");
-      const valor = Number(
-        ((data.valor_transmissao * data.aliquota) / 100).toFixed(2),
-      );
+      // Base arbitrada: o venal prevalece quando o declarado fica abaixo dele.
+      const valorVenal = Number(property.valor_venal);
+      const arbitrado = valorVenal > data.valor_transmissao;
+      const baseCalculo = arbitrado ? valorVenal : data.valor_transmissao;
+      const valor = Number(((baseCalculo * data.aliquota) / 100).toFixed(2));
       if (valor <= 0) throw new Error("Valor do ITBI calculado é zero");
       const creditId = randomUUID();
       await client.query(
@@ -87,10 +93,18 @@ export const launchItbi = createServerFn({ method: "POST" })
         after: {
           property_id: data.property_id,
           valor_transmissao: data.valor_transmissao,
+          valor_venal: valorVenal,
+          base_calculo: baseCalculo,
+          arbitrado,
           aliquota: data.aliquota,
           valor,
         },
       });
-      return { credit_id: creditId, valor };
+      return {
+        credit_id: creditId,
+        valor,
+        base_calculo: baseCalculo,
+        arbitrado,
+      };
     });
   });

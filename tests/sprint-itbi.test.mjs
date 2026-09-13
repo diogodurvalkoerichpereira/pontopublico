@@ -142,10 +142,12 @@ const launch = (propertyId, valor, aliquota, data = "2026-03-15") =>
     context: ctx(),
   });
 
-test("ITBI = valor da transmissão × alíquota; não duplica a transmissão", async () => {
-  const p = await seedProperty("INS-T-1");
-  const r = await launch(p, 300000, 2); // 2% de 300000 = 6000
+test("ITBI = base × alíquota; base arbitrada pelo venal (O4-06b); não duplica", async () => {
+  const p = await seedProperty("INS-T-1"); // valor venal = 200000
+  const r = await launch(p, 300000, 2); // declarado 300000 > venal → base 300000; 2% = 6000
   assert.equal(r.valor, 6000);
+  assert.equal(r.base_calculo, 300000);
+  assert.equal(r.arbitrado, false);
   const credit = (
     await db.query(
       `select tributo, valor_lancado::text, inscricao from public.tax_credits where id=$1`,
@@ -159,7 +161,18 @@ test("ITBI = valor da transmissão × alíquota; não duplica a transmissão", a
   // Mesma transmissão (mesma data) não lança de novo.
   await assert.rejects(launch(p, 300000, 2), /já lançado/);
 
-  // Outra transmissão (outra data) do mesmo imóvel é permitida.
+  // Outra transmissão (outra data) do mesmo imóvel é permitida — e, declarada
+  // ABAIXO do venal (100000 < 200000), a base é arbitrada pelo venal (CTN art.
+  // 148): 2% de 200000 = 4000, não 2000.
   const r2 = await launch(p, 100000, 2, "2026-08-01");
-  assert.equal(r2.valor, 2000);
+  assert.equal(r2.valor, 4000);
+  assert.equal(r2.base_calculo, 200000);
+  assert.equal(r2.arbitrado, true);
+  const lancado = (
+    await db.query(
+      `select valor_lancado::text from public.tax_credits where id=$1`,
+      [r2.credit_id],
+    )
+  ).rows[0];
+  assert.equal(lancado.valor_lancado, "4000.00");
 });
