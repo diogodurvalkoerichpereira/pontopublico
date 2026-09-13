@@ -909,7 +909,19 @@ de pagamento — tudo na mesma transação. Um empenho paga uma só vez (guarda 
 - `unique (tenant, commitment)`). `getBankOrders` lista; UI em `/ordens-bancarias`.
   Migration `..._o2_16_bank_orders.sql`, reusa `accounting.*`; teste
   `tests/sprint-bank-orders.test.mjs` verificado por mutação (somar em vez de subtrair o
-  valor no saldo derruba). Próximo: MSC-SICONFI e a demonstração dos fluxos de caixa.
+  valor no saldo derruba). Próximo: MSC-SICONFI (externo).
+
+**O2-17 — Demonstração dos Fluxos de Caixa (DFC, MCASP) ✅.** `getCashFlowStatement`
+classifica, no exercício, a arrecadação (líquida de estornos) e a despesa paga em
+**operacional** (receitas correntes/transferências × despesas correntes, inclusive juros da
+dívida 3.2), **investimento** (alienação 2.2 e amortização de empréstimos concedidos 2.3 ×
+investimentos 4.4 e inversões 4.5) e **financiamento** (operações de crédito 2.1 × amortização
+da dívida 4.6), pela natureza codificada da receita/despesa. Apura a geração líquida de
+caixa e a **concilia** com a variação do caixa da tesouraria (caixa final − inicial pelos
+movimentos); `conciliado=false` acusa saída/entrada de caixa sem contrapartida orçamentária.
+Read-only, reusa `budget.read`, sem migration; bloco DFC em `/balancos` com selo de
+conciliação. Teste `tests/sprint-cash-flow-statement.test.mjs` verificado por mutação
+(classificar a amortização 4.6 como investimento derruba os dois fluxos).
 
 **O2-16b — Cancelamento (estorno) de ordem bancária ✅.** `cancelBankOrder`
 (`bank-orders.functions.ts`, `accounting.manage`) estorna uma OB **paga**, na mesma

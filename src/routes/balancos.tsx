@@ -10,6 +10,7 @@ import { getBudgetBalance } from "@/lib/budget-balance.functions";
 import { getCashAvailability } from "@/lib/cash-availability.functions";
 import { getEquityStatement } from "@/lib/equity-statement.functions";
 import { getFinancialBalance } from "@/lib/financial-balance.functions";
+import { getCashFlowStatement } from "@/lib/cash-flow-statement.functions";
 
 export const Route = createFileRoute("/balancos")({ component: Page });
 
@@ -85,6 +86,17 @@ function Content() {
     enabled: Boolean(activeTenant) && /^\d{4}$/.test(exercicio),
     queryFn: () =>
       loadFinancial({
+        data: { tenant_id: activeTenant!.id, exercicio: Number(exercicio) },
+      }),
+  });
+
+  // O2-17 — DFC (MCASP): fluxos operacional/investimento/financiamento do exercício.
+  const loadCashFlow = useServerFn(getCashFlowStatement);
+  const { data: dfc } = useQuery({
+    queryKey: ["cash-flow-statement", activeTenant?.id, exercicio],
+    enabled: Boolean(activeTenant) && /^\d{4}$/.test(exercicio),
+    queryFn: () =>
+      loadCashFlow({
         data: { tenant_id: activeTenant!.id, exercicio: Number(exercicio) },
       }),
   });
@@ -198,6 +210,54 @@ function Content() {
               {brl(resultadoFinanceiro)}
             </span>
           </div>
+        </div>
+      </div>
+
+      <div className="rounded-xl border bg-card p-4 space-y-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <h2 className="font-bold">Demonstração dos fluxos de caixa (DFC)</h2>
+          {dfc && (
+            <span
+              className={`text-xs font-semibold rounded-full px-2 py-0.5 ${
+                dfc.conciliado
+                  ? "bg-emerald-100 text-emerald-700"
+                  : "bg-red-100 text-red-700"
+              }`}
+            >
+              {dfc.conciliado
+                ? "conciliada com o caixa"
+                : "não concilia com o caixa"}
+            </span>
+          )}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {(
+            [
+              ["Operacional", dfc?.operacional],
+              ["Investimento", dfc?.investimento],
+              ["Financiamento", dfc?.financiamento],
+            ] as const
+          ).map(([titulo, f]) => (
+            <div key={titulo}>
+              <h3 className="text-sm font-semibold mb-1">{titulo}</h3>
+              <Row label="Ingressos" value={f?.ingressos ?? 0} />
+              <Row label="Desembolsos" value={f?.desembolsos ?? 0} />
+              <Row label="Fluxo líquido" value={f?.liquido ?? 0} strong />
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8">
+          <Row
+            label="Geração líquida de caixa"
+            value={dfc?.geracao_liquida ?? 0}
+            strong
+          />
+          <Row label="Caixa inicial" value={dfc?.caixa_inicial ?? 0} />
+          <Row
+            label="Variação do caixa (tesouraria)"
+            value={dfc?.variacao_caixa ?? 0}
+          />
+          <Row label="Caixa final" value={dfc?.caixa_final ?? 0} strong />
         </div>
       </div>
 
