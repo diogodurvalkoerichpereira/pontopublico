@@ -21,18 +21,24 @@ export const getProperties = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "taxes.read");
+    // O4-04d — devolve o registro completo (documento e áreas) para a tela de
+    // cadastro poder editar sem segunda consulta.
     const properties = await query<{
       id: string;
       inscricao_imobiliaria: string;
       proprietario: string;
+      proprietario_documento: string;
       endereco: string;
       valor_venal: string;
+      area_terreno: string | null;
+      area_construida: string | null;
       status: string;
       beneficio_iptu: string | null;
       beneficio_iptu_motivo: string | null;
     }>(
-      `select id, inscricao_imobiliaria, proprietario, endereco,
-         valor_venal::text, status, beneficio_iptu, beneficio_iptu_motivo
+      `select id, inscricao_imobiliaria, proprietario, proprietario_documento,
+         endereco, valor_venal::text, area_terreno::text, area_construida::text,
+         status, beneficio_iptu, beneficio_iptu_motivo
        from public.real_estate_properties
        where tenant_id = $1 order by inscricao_imobiliaria`,
       [data.tenant_id],

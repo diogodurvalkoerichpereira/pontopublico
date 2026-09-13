@@ -1311,6 +1311,16 @@ Teste `tests/sprint-asset-disposal-ledger.test.mjs` verificado por mutação (pu
 desincorporação deixa VPA 8000 / VPD 0 — derruba). Pendente (O2-06b): tela para configurar
 o roteiro (`saveAccountingEventAccount` não tem UI; hoje só por SQL).
 
+**O4-04d — Página do cadastro imobiliário ✅.** Rota `/imoveis` dá tela ao O4-04:
+lista os imóveis (inscrição, proprietário/documento, endereço, valor venal, situação e
+selo de imunidade/isenção), cadastra e **edita por id** (`savePropertyRegistration`,
+inclusive baixa do imóvel), concede/encerra o benefício de IPTU (`setPropertyTaxBenefit`,
+O4-04c) e mostra o resumo da base tributável (`getRealEstateSummary`); item de menu em
+Tributos. `getProperties` passa a devolver o registro completo (documento e áreas) para
+editar sem segunda consulta. Teste `tests/sprint-real-estate.test.mjs` ganha o caso
+"lista o registro completo e edita por id", verificado por mutação (retirar
+`proprietario_documento` do select derruba).
+
 **O3-11b — Demonstrativo de baixas e alienações do exercício ✅.** `getAssetDisposals`
 lista os bens baixados no período (por data de baixa) com valor de aquisição, depreciação
 acumulada, valor líquido contábil, valor de alienação e o resultado apurado; consolida

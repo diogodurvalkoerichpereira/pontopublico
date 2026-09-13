@@ -445,6 +445,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     });
   if (hasTenantPermission("taxes.read"))
     items.push({
+      to: "/imoveis",
+      label: "Cadastro imobiliário",
+      icon: Landmark,
+      section: "Contabilidade e Finanças",
+    });
+  if (hasTenantPermission("taxes.read"))
+    items.push({
       to: "/divida-ativa",
       label: "Dívida ativa",
       icon: Scale,

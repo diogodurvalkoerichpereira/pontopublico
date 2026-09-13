@@ -188,3 +188,60 @@ test("alíquota fracionada calcula e arredonda", async () => {
   });
   assert.equal(r.valor, 1604.93);
 });
+
+// O4-04d — a tela de cadastro edita a partir da própria listagem: getProperties
+// devolve o registro completo (documento, áreas, situação, benefício) e a edição
+// por id preserva a inscrição e atualiza os demais campos.
+test("cadastro lista o registro completo e edita por id", async () => {
+  const { id } = await fn.savePropertyRegistration({
+    data: {
+      tenant_id: tenantId,
+      inscricao_imobiliaria: "INS-400",
+      proprietario: "Beltrano",
+      proprietario_documento: "99988877766",
+      endereco: "Av. B, 200",
+      valor_venal: 250000,
+      area_terreno: 360,
+      area_construida: 120.5,
+    },
+    context: ctx(),
+  });
+  const lista = await fn.getProperties({
+    data: { tenant_id: tenantId },
+    context: ctx(),
+  });
+  const p = lista.properties.find((x) => x.id === id);
+  assert.equal(p.proprietario_documento, "99988877766");
+  assert.equal(p.area_terreno, "360.00");
+  assert.equal(p.area_construida, "120.50");
+  assert.equal(p.status, "ativo");
+  assert.equal(p.beneficio_iptu, null);
+
+  // Edição por id: baixa o imóvel e corrige o venal, mantendo a inscrição.
+  await fn.savePropertyRegistration({
+    data: {
+      tenant_id: tenantId,
+      id,
+      inscricao_imobiliaria: "INS-400",
+      proprietario: "Beltrano",
+      proprietario_documento: "99988877766",
+      endereco: "Av. B, 200",
+      valor_venal: 260000,
+      area_terreno: 360,
+      area_construida: 120.5,
+      status: "baixado",
+    },
+    context: ctx(),
+  });
+  const depois = (
+    await fn.getProperties({ data: { tenant_id: tenantId }, context: ctx() })
+  ).properties.find((x) => x.id === id);
+  assert.equal(depois.valor_venal, "260000.00");
+  assert.equal(depois.status, "baixado");
+  assert.equal(
+    (
+      await fn.getProperties({ data: { tenant_id: tenantId }, context: ctx() })
+    ).properties.filter((x) => x.inscricao_imobiliaria === "INS-400").length,
+    1,
+  );
+});
