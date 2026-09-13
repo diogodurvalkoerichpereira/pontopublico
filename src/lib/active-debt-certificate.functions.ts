@@ -287,3 +287,69 @@ export const cancelActiveDebtCertificate = createServerFn({ method: "POST" })
       return { id: data.certificate_id, status: "cancelada" };
     });
   });
+
+const AgingInput = z.object({
+  tenant_id: z.string().uuid(),
+  ano_referencia: z.number().int().min(2000).max(2200),
+});
+
+// O4-14b — Aging (idade) do estoque da dívida ativa. Distribui as CDAs em cobrança
+// (status 'ativa') por **exercício de origem** e por **faixa etária** (idade = ano de
+// referência − exercício): no exercício, 1–2, 3–5 e mais de 5 anos — a base para a provisão
+// para perdas (PDD, NBC TSP) e para priorizar a cobrança, que a consolidação por
+// contribuinte não dá. Só CDA ativa é estoque. Read-only, reusa taxes.read.
+export const getActiveDebtAging = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => AgingInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "taxes.read");
+    const rows = await query<{
+      exercicio: number;
+      quantidade: string;
+      valor: string;
+    }>(
+      `select exercicio, count(*)::text as quantidade,
+         coalesce(sum(valor_inscrito),0)::text as valor
+       from public.active_debt_certificates
+       where tenant_id = $1 and status = 'ativa'
+       group by exercicio
+       order by exercicio`,
+      [data.tenant_id],
+    );
+    const round2 = (v: number) => Number(v.toFixed(2));
+    const porExercicio = rows.map((r) => ({
+      exercicio: r.exercicio,
+      quantidade: Number(r.quantidade),
+      valor: round2(Number(r.valor)),
+      idade: data.ano_referencia - r.exercicio,
+    }));
+    const faixa = (idade: number) =>
+      idade <= 0
+        ? "no_exercicio"
+        : idade <= 2
+          ? "de_1_a_2"
+          : idade <= 5
+            ? "de_3_a_5"
+            : "mais_de_5";
+    const faixas = {
+      no_exercicio: { quantidade: 0, valor: 0 },
+      de_1_a_2: { quantidade: 0, valor: 0 },
+      de_3_a_5: { quantidade: 0, valor: 0 },
+      mais_de_5: { quantidade: 0, valor: 0 },
+    };
+    for (const e of porExercicio) {
+      const f = faixas[faixa(e.idade)];
+      f.quantidade += e.quantidade;
+      f.valor = round2(f.valor + e.valor);
+    }
+    return {
+      ano_referencia: data.ano_referencia,
+      porExercicio,
+      faixas,
+      total: {
+        quantidade: porExercicio.reduce((s, e) => s + e.quantidade, 0),
+        valor: round2(porExercicio.reduce((s, e) => s + e.valor, 0)),
+      },
+    };
+  });

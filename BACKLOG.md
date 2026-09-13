@@ -1429,6 +1429,15 @@ tabela por contribuinte. Teste `tests/sprint-active-debt-by-taxpayer.test.mjs` v
 por mutação (somar quitada/cancelada no saldo em cobrança derruba). Próximo: consolidação
 da receita de dívida ativa nos balanços.
 
+**O4-14b — Aging (idade) do estoque da dívida ativa ✅.** `getActiveDebtAging` distribui as
+CDAs **em cobrança** (status `ativa`) por exercício de origem e por **faixa etária** (idade =
+ano de referência − exercício): no exercício, 1–2, 3–5 e mais de 5 anos — a base para a
+provisão para perdas (PDD, NBC TSP) e para priorizar a cobrança, que a consolidação por
+contribuinte não dá. Só CDA ativa é estoque. Read-only, reusa `taxes.read`, sem migration;
+`/divida-ativa` ganha o painel de faixas etárias. Teste
+`tests/sprint-active-debt-aging.test.mjs` verificado por mutação (incluir CDA não-ativa infla
+o estoque — derruba).
+
 ### Onda 5 — Apoio, controle e transparência (10-14 sem)
 
 Protocolo e processo eletrônico com ICP-Brasil · e-SIC/LAI · controle interno ·

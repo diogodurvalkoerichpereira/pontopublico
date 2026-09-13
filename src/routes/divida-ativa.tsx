@@ -19,6 +19,7 @@ import { useAuth } from "@/lib/auth-context";
 import {
   getActiveDebtCertificates,
   getActiveDebtByTaxpayer,
+  getActiveDebtAging,
   settleActiveDebtCertificate,
   cancelActiveDebtCertificate,
 } from "@/lib/active-debt-certificate.functions";
@@ -106,6 +107,19 @@ function Content() {
   const contribuintes = (byTaxpayer?.contribuintes ?? []) as TaxpayerDebt[];
   const saldoEmCobranca = byTaxpayer?.saldoEmCobranca ?? 0;
 
+  const loadAging = useServerFn(getActiveDebtAging);
+  const { data: aging } = useQuery({
+    queryKey: ["active-debt-aging", activeTenant?.id],
+    enabled: Boolean(activeTenant),
+    queryFn: () =>
+      loadAging({
+        data: {
+          tenant_id: activeTenant!.id,
+          ano_referencia: new Date().getFullYear(),
+        },
+      }),
+  });
+
   const cdas = (cdaData?.certificates ?? []) as Cda[];
   const executions = useMemo(
     () => (execData?.executions ?? []) as Execution[],
@@ -124,6 +138,7 @@ function Content() {
     qc.invalidateQueries({
       queryKey: ["active-debt-by-taxpayer", activeTenant?.id],
     });
+    qc.invalidateQueries({ queryKey: ["active-debt-aging", activeTenant?.id] });
   };
 
   const doSettle = async (c: Cda) => {
@@ -221,6 +236,34 @@ function Content() {
         </div>
         <div className="text-2xl font-bold">{brl(saldoEmCobranca)}</div>
       </div>
+
+      {aging && aging.total.quantidade > 0 && (
+        <div className="rounded-xl border bg-card p-4">
+          <h2 className="font-bold">Idade da dívida ativa (aging)</h2>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Estoque em cobrança por faixa etária — base da provisão para perdas
+            (NBC TSP).
+          </p>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {[
+              { rotulo: "No exercício", f: aging.faixas.no_exercicio },
+              { rotulo: "1 a 2 anos", f: aging.faixas.de_1_a_2 },
+              { rotulo: "3 a 5 anos", f: aging.faixas.de_3_a_5 },
+              { rotulo: "Mais de 5 anos", f: aging.faixas.mais_de_5 },
+            ].map(({ rotulo, f }) => (
+              <div key={rotulo} className="rounded-lg border p-3">
+                <div className="text-xs text-muted-foreground">{rotulo}</div>
+                <div className="text-lg font-bold tabular-nums">
+                  {brl(f.valor)}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {f.quantidade} CDA(s)
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {contribuintes.length > 0 && (
         <div className="rounded-xl border bg-card overflow-x-auto">
