@@ -1302,6 +1302,17 @@ homologação/ferramenta do ente). Migration `..._o4_08_active_debt_certificate.
 `tests/sprint-active-debt-certificate.test.mjs` verificado por mutação (usar o valor
 lançado em vez do saldo derruba). Próximo: execução fiscal (ajuizamento) sobre a CDA.
 
+**O4-08b/c — Baixa da CDA por quitação e cancelamento ✅.**
+`settleActiveDebtCertificate` baixa (status `quitada`) uma CDA **ativa** somente quando o
+crédito de origem está integralmente pago (saldo devedor ≤ 0) — tira-a do **estoque em
+cobrança** (o saldo consolidado só soma CDAs ativas), fechando a incoerência de manter em
+cobrança um crédito já quitado; `cancelActiveDebtCertificate` cancela (status `cancelada`)
+uma CDA ativa por prescrição/decadência/erro (motivo na trilha), sem extinguir o crédito de
+origem. Ambas ativam os status que existiam no enum mas nada gravava; uma CDA não-ativa não
+transita de novo. Reusam `taxes.manage`, sem migration; ações "Quitar" e "Cancelar" no
+`/divida-ativa`. Teste `tests/sprint-active-debt-settle-cancel.test.mjs` verificado por
+mutação (permitir quitar com saldo devedor derruba).
+
 **O4-11 — Rescisão do parcelamento por inadimplência ✅.** `rescindInstallmentPlan`
 rescinde o plano **ativo** quando há pelo menos `limite_atraso` parcelas vencidas e não
 pagas na data de referência (padrão 3); abaixo do limiar recusa; um plano já

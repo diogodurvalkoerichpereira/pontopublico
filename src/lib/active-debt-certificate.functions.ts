@@ -184,3 +184,106 @@ export const emitActiveDebtCertificate = createServerFn({ method: "POST" })
       return { id, numero, valor_inscrito: saldo };
     });
   });
+
+const SettleInput = z.object({
+  tenant_id: z.string().uuid(),
+  certificate_id: z.string().uuid(),
+});
+
+// O4-08b — Baixa a CDA por quitação. Só uma CDA **ativa** cujo crédito de origem esteja
+// integralmente pago (saldo devedor ≤ 0) passa a 'quitada' — deixa o estoque em cobrança
+// (o saldo consolidado só soma CDAs ativas), fechando a incoerência de manter em cobrança
+// um crédito já pago. Ativa o status 'quitada' que existia no enum mas nada gravava. Reusa
+// taxes.manage.
+export const settleActiveDebtCertificate = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => SettleInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "taxes.manage");
+    return withTransaction(async (client) => {
+      const cda = (
+        await client.query<{ status: string; credit_id: string }>(
+          `select status, credit_id from public.active_debt_certificates
+           where id=$1 and tenant_id=$2 for update`,
+          [data.certificate_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!cda) throw new Error("CDA não encontrada");
+      if (cda.status !== "ativa")
+        throw new Error("Só uma CDA ativa pode ser baixada por quitação");
+      const credit = (
+        await client.query<{ valor_lancado: string; valor_pago: string }>(
+          `select valor_lancado::text, valor_pago::text
+           from public.tax_credits where id=$1 and tenant_id=$2`,
+          [cda.credit_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!credit) throw new Error("Crédito tributário não encontrado");
+      const saldo = Number(
+        (Number(credit.valor_lancado) - Number(credit.valor_pago)).toFixed(2),
+      );
+      if (saldo > 0)
+        throw new Error(
+          "A CDA só é baixada quando o crédito está integralmente pago",
+        );
+      await client.query(
+        `update public.active_debt_certificates set status='quitada'
+         where id=$1 and tenant_id=$2`,
+        [data.certificate_id, data.tenant_id],
+      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "quitar_cda",
+        resource: "active_debt_certificates",
+        recordId: data.certificate_id,
+        after: { status: "quitada" },
+      });
+      return { id: data.certificate_id, status: "quitada" };
+    });
+  });
+
+const CancelInput = z.object({
+  tenant_id: z.string().uuid(),
+  certificate_id: z.string().uuid(),
+  motivo: z.string().trim().min(3).max(500),
+});
+
+// O4-08c — Cancela (baixa por cancelamento) uma CDA ativa: prescrição/decadência, erro de
+// inscrição ou determinação judicial (Lei 6.830). A CDA sai do estoque em cobrança; o
+// crédito de origem segue seu próprio ciclo (o cancelamento da inscrição não o extingue
+// automaticamente). Ativa o status 'cancelada'. Reusa taxes.manage.
+export const cancelActiveDebtCertificate = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => CancelInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "taxes.manage");
+    return withTransaction(async (client) => {
+      const cda = (
+        await client.query<{ status: string }>(
+          `select status from public.active_debt_certificates
+           where id=$1 and tenant_id=$2 for update`,
+          [data.certificate_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!cda) throw new Error("CDA não encontrada");
+      if (cda.status !== "ativa")
+        throw new Error("Só uma CDA ativa pode ser cancelada");
+      await client.query(
+        `update public.active_debt_certificates set status='cancelada'
+         where id=$1 and tenant_id=$2`,
+        [data.certificate_id, data.tenant_id],
+      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "cancelar_cda",
+        resource: "active_debt_certificates",
+        recordId: data.certificate_id,
+        after: { status: "cancelada", motivo: data.motivo },
+      });
+      return { id: data.certificate_id, status: "cancelada" };
+    });
+  });

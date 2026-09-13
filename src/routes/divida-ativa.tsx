@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Scale, Gavel } from "lucide-react";
+import { Scale, Gavel, CheckCircle2, Ban } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,8 @@ import { useAuth } from "@/lib/auth-context";
 import {
   getActiveDebtCertificates,
   getActiveDebtByTaxpayer,
+  settleActiveDebtCertificate,
+  cancelActiveDebtCertificate,
 } from "@/lib/active-debt-certificate.functions";
 import {
   getFiscalExecutions,
@@ -78,6 +80,8 @@ function Content() {
   const loadExecs = useServerFn(getFiscalExecutions);
   const file = useServerFn(fileFiscalExecution);
   const updateStatus = useServerFn(updateFiscalExecutionStatus);
+  const settle = useServerFn(settleActiveDebtCertificate);
+  const cancelCda = useServerFn(cancelActiveDebtCertificate);
   const qc = useQueryClient();
 
   const [target, setTarget] = useState<Cda | null>(null);
@@ -120,6 +124,39 @@ function Content() {
     qc.invalidateQueries({
       queryKey: ["active-debt-by-taxpayer", activeTenant?.id],
     });
+  };
+
+  const doSettle = async (c: Cda) => {
+    if (!activeTenant) return;
+    if (!window.confirm("Baixar a CDA por quitação do crédito?")) return;
+    try {
+      await settle({
+        data: { tenant_id: activeTenant.id, certificate_id: c.id },
+      });
+      toast.success("CDA baixada (quitada)");
+      refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao baixar");
+    }
+  };
+
+  const doCancel = async (c: Cda) => {
+    if (!activeTenant) return;
+    const motivo = window.prompt("Motivo do cancelamento da CDA:");
+    if (!motivo || motivo.trim().length < 3) return;
+    try {
+      await cancelCda({
+        data: {
+          tenant_id: activeTenant.id,
+          certificate_id: c.id,
+          motivo: motivo.trim(),
+        },
+      });
+      toast.success("CDA cancelada");
+      refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao cancelar");
+    }
   };
 
   const submitFile = async () => {
@@ -253,17 +290,35 @@ function Content() {
                 </td>
                 {canManage && (
                   <td className="p-3">
-                    {c.status === "ativa" && !ajuizadas.has(c.numero) && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setTarget(c);
-                          setProcesso("");
-                        }}
-                      >
-                        <Gavel className="size-4" /> Ajuizar
-                      </Button>
+                    {c.status === "ativa" && (
+                      <div className="flex gap-2 flex-wrap">
+                        {!ajuizadas.has(c.numero) && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setTarget(c);
+                              setProcesso("");
+                            }}
+                          >
+                            <Gavel className="size-4" /> Ajuizar
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => doSettle(c)}
+                        >
+                          <CheckCircle2 className="size-4" /> Quitar
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => doCancel(c)}
+                        >
+                          <Ban className="size-4" /> Cancelar
+                        </Button>
+                      </div>
                     )}
                   </td>
                 )}
