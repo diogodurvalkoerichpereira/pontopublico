@@ -2,7 +2,13 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Building, Plus, TrendingDown, Archive } from "lucide-react";
+import {
+  Building,
+  Plus,
+  TrendingDown,
+  Archive,
+  ScrollText,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,6 +29,7 @@ import {
   depreciateAllAssets,
   disposeAsset,
   getPatrimonySummary,
+  getAssetDisposals,
 } from "@/lib/assets.functions";
 
 export const Route = createFileRoute("/patrimonio")({ component: Page });
@@ -94,9 +101,29 @@ function Content() {
     queryFn: () => loadSummary({ data: { tenant_id: activeTenant!.id } }),
   });
 
+  const ano = new Date().getFullYear();
+  const [periodo, setPeriodo] = useState({
+    from: `${ano}-01-01`,
+    to: `${ano}-12-31`,
+  });
+  const loadDisposals = useServerFn(getAssetDisposals);
+  const { data: disposals } = useQuery({
+    queryKey: ["asset-disposals", activeTenant?.id, periodo.from, periodo.to],
+    enabled: Boolean(activeTenant),
+    queryFn: () =>
+      loadDisposals({
+        data: {
+          tenant_id: activeTenant!.id,
+          from: periodo.from,
+          to: periodo.to,
+        },
+      }),
+  });
+
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["assets", activeTenant?.id] });
     qc.invalidateQueries({ queryKey: ["patrimony-summary", activeTenant?.id] });
+    qc.invalidateQueries({ queryKey: ["asset-disposals", activeTenant?.id] });
   };
 
   const runDepreciateAll = async () => {
@@ -330,6 +357,134 @@ function Content() {
             )}
           </tbody>
         </table>
+      </div>
+
+      <div className="rounded-xl border bg-card p-4 space-y-4">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <ScrollText className="size-5 text-primary" />
+            <div>
+              <h2 className="font-bold">
+                Demonstrativo de baixas e alienações
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Resultado das baixas no período (NBC TSP)
+              </p>
+            </div>
+          </div>
+          <div className="flex items-end gap-2">
+            <div>
+              <Label className="text-xs">De</Label>
+              <Input
+                type="date"
+                value={periodo.from}
+                onChange={(e) =>
+                  setPeriodo((p) => ({ ...p, from: e.target.value }))
+                }
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Até</Label>
+              <Input
+                type="date"
+                value={periodo.to}
+                onChange={(e) =>
+                  setPeriodo((p) => ({ ...p, to: e.target.value }))
+                }
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="rounded-lg border p-3">
+            <div className="text-xs text-muted-foreground">Líquido baixado</div>
+            <div className="text-lg font-bold tabular-nums">
+              {brl(disposals?.totais.valor_liquido ?? 0)}
+            </div>
+          </div>
+          <div className="rounded-lg border p-3">
+            <div className="text-xs text-muted-foreground">Alienação</div>
+            <div className="text-lg font-bold tabular-nums">
+              {brl(disposals?.totais.valor_alienacao ?? 0)}
+            </div>
+          </div>
+          <div className="rounded-lg border p-3">
+            <div className="text-xs text-muted-foreground">Ganhos / Perdas</div>
+            <div className="text-lg font-bold tabular-nums">
+              <span className="text-emerald-600">
+                {brl(disposals?.totais.ganhos ?? 0)}
+              </span>{" "}
+              /{" "}
+              <span className="text-destructive">
+                {brl(disposals?.totais.perdas ?? 0)}
+              </span>
+            </div>
+          </div>
+          <div className="rounded-lg border p-3">
+            <div className="text-xs text-muted-foreground">
+              Resultado líquido
+            </div>
+            <div
+              className={`text-lg font-bold tabular-nums ${
+                (disposals?.totais.resultado_liquido ?? 0) >= 0
+                  ? "text-emerald-600"
+                  : "text-destructive"
+              }`}
+            >
+              {brl(disposals?.totais.resultado_liquido ?? 0)}
+            </div>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b bg-muted/40 text-left">
+              <tr>
+                <th className="p-2 font-semibold">Baixa</th>
+                <th className="p-2 font-semibold">Tombamento</th>
+                <th className="p-2 font-semibold">Descrição</th>
+                <th className="p-2 font-semibold text-right">Líquido</th>
+                <th className="p-2 font-semibold text-right">Alienação</th>
+                <th className="p-2 font-semibold text-right">Resultado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(disposals?.disposals ?? []).map((d) => (
+                <tr key={d.id} className="border-b last:border-0">
+                  <td className="p-2 tabular-nums">{d.baixa_em}</td>
+                  <td className="p-2 font-medium">{d.tombamento}</td>
+                  <td className="p-2">{d.descricao}</td>
+                  <td className="p-2 text-right tabular-nums">
+                    {brl(d.valor_liquido)}
+                  </td>
+                  <td className="p-2 text-right tabular-nums">
+                    {brl(d.valor_alienacao)}
+                  </td>
+                  <td
+                    className={`p-2 text-right tabular-nums ${
+                      d.resultado_baixa >= 0
+                        ? "text-emerald-600"
+                        : "text-destructive"
+                    }`}
+                  >
+                    {brl(d.resultado_baixa)}
+                  </td>
+                </tr>
+              ))}
+              {(disposals?.disposals ?? []).length === 0 && (
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="p-4 text-center text-muted-foreground"
+                  >
+                    Nenhuma baixa no período.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>

@@ -514,3 +514,76 @@ export const disposeAsset = createServerFn({ method: "POST" })
       return { valor_liquido: valorLiquido, resultado };
     });
   });
+
+const DisposalsInput = z.object({
+  tenant_id: z.string().uuid(),
+  from: z.string().date(),
+  to: z.string().date(),
+});
+
+// O3-11b — Demonstrativo de baixas/alienações do exercício. Lista os bens baixados no
+// período (por data de baixa) com valor de aquisição, depreciação acumulada, valor líquido
+// contábil (aquisição − depreciação), valor de alienação e o resultado apurado na baixa;
+// consolida ganhos, perdas e o resultado líquido — o efeito das alienações nas variações
+// patrimoniais (NBC TSP), que a baixa registrava um bem por vez e nada totalizava. Read-only.
+export const getAssetDisposals = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => DisposalsInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "assets.read");
+    const rows = await query<{
+      id: string;
+      tombamento: string | null;
+      descricao: string;
+      baixa_em: string;
+      baixa_motivo: string | null;
+      valor_aquisicao: string;
+      depreciacao_acumulada: string;
+      valor_liquido: string;
+      valor_alienacao: string;
+      resultado_baixa: string;
+    }>(
+      `select id, tombamento, descricao, baixa_em::text as baixa_em, baixa_motivo,
+         valor_aquisicao::text, depreciacao_acumulada::text,
+         (valor_aquisicao - depreciacao_acumulada)::text as valor_liquido,
+         coalesce(valor_alienacao,0)::text as valor_alienacao,
+         coalesce(resultado_baixa,0)::text as resultado_baixa
+       from public.patrimony_assets
+       where tenant_id=$1 and status='baixado'
+         and baixa_em between $2::date and $3::date
+       order by baixa_em, id`,
+      [data.tenant_id, data.from, data.to],
+    );
+    const totais = rows.reduce(
+      (acc, r) => {
+        const resultado = Number(r.resultado_baixa);
+        acc.valor_liquido = round2(acc.valor_liquido + Number(r.valor_liquido));
+        acc.valor_alienacao = round2(
+          acc.valor_alienacao + Number(r.valor_alienacao),
+        );
+        if (resultado >= 0) acc.ganhos = round2(acc.ganhos + resultado);
+        else acc.perdas = round2(acc.perdas + resultado);
+        return acc;
+      },
+      { valor_liquido: 0, valor_alienacao: 0, ganhos: 0, perdas: 0 },
+    );
+    return {
+      disposals: rows.map((r) => ({
+        id: r.id,
+        tombamento: r.tombamento,
+        descricao: r.descricao,
+        baixa_em: r.baixa_em,
+        baixa_motivo: r.baixa_motivo,
+        valor_aquisicao: round2(Number(r.valor_aquisicao)),
+        depreciacao_acumulada: round2(Number(r.depreciacao_acumulada)),
+        valor_liquido: round2(Number(r.valor_liquido)),
+        valor_alienacao: round2(Number(r.valor_alienacao)),
+        resultado_baixa: round2(Number(r.resultado_baixa)),
+      })),
+      totais: {
+        ...totais,
+        resultado_liquido: round2(totais.ganhos + totais.perdas),
+      },
+    };
+  });

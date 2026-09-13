@@ -1173,6 +1173,16 @@ valor_alienacao, resultado_baixa, baixa_por); reusa `assets.*`; ação "Baixar" 
 (inverter para líquido − alienação derruba o sinal). Próximo: baixa contabilizada como
 VPD/VPA de alienação (evento contábil dedicado) e remessa ao PNCP (externo).
 
+**O3-11b — Demonstrativo de baixas e alienações do exercício ✅.** `getAssetDisposals`
+lista os bens baixados no período (por data de baixa) com valor de aquisição, depreciação
+acumulada, valor líquido contábil, valor de alienação e o resultado apurado; consolida
+**ganhos** (resultado ≥ 0) e **perdas** (resultado < 0) separadamente e o **resultado
+líquido** — o efeito das alienações nas variações patrimoniais (NBC TSP), que a baixa
+registrava um bem por vez e nada totalizava. Read-only, reusa `assets.read`, sem migration;
+painel com seletor de período no `/patrimonio`. Teste
+`tests/sprint-asset-disposals-report.test.mjs` verificado por mutação (somar a perda nos
+ganhos, sem separar por sinal, derruba o resultado líquido).
+
 ### Onda 4 — Tributação e Receita (14-20 sem)
 
 Cadastros imobiliário/mobiliário · IPTU, ISS, ITBI · dívida ativa (CDA, execução
