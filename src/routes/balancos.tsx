@@ -11,6 +11,7 @@ import { getCashAvailability } from "@/lib/cash-availability.functions";
 import { getEquityStatement } from "@/lib/equity-statement.functions";
 import { getFinancialBalance } from "@/lib/financial-balance.functions";
 import { getCashFlowStatement } from "@/lib/cash-flow-statement.functions";
+import { getTaxRevenueByOrigin } from "@/lib/taxes.functions";
 
 export const Route = createFileRoute("/balancos")({ component: Page });
 
@@ -97,6 +98,18 @@ function Content() {
     enabled: Boolean(activeTenant) && /^\d{4}$/.test(exercicio),
     queryFn: () =>
       loadCashFlow({
+        data: { tenant_id: activeTenant!.id, exercicio: Number(exercicio) },
+      }),
+  });
+
+  // O4-14c — arrecadação tributária por origem (corrente × dívida ativa).
+  const canReadTaxes = hasTenantPermission("taxes.read");
+  const loadTaxOrigin = useServerFn(getTaxRevenueByOrigin);
+  const { data: taxOrigin } = useQuery({
+    queryKey: ["tax-revenue-origin", activeTenant?.id, exercicio],
+    enabled: Boolean(activeTenant) && canReadTaxes && /^\d{4}$/.test(exercicio),
+    queryFn: () =>
+      loadTaxOrigin({
         data: { tenant_id: activeTenant!.id, exercicio: Number(exercicio) },
       }),
   });
@@ -305,6 +318,29 @@ function Content() {
               </span>
             </div>
           </div>
+        </div>
+      )}
+
+      {canReadTaxes && (
+        <div className="rounded-xl border bg-card p-4">
+          <h2 className="font-bold">Arrecadação tributária por origem</h2>
+          <p className="mb-2 text-xs text-muted-foreground">
+            Cobrança corrente × receita de dívida ativa (Lei 6.830), pela origem
+            gravada em cada pagamento.
+          </p>
+          <Row
+            label="Cobrança corrente"
+            value={taxOrigin?.totais.corrente ?? 0}
+          />
+          <Row
+            label="Receita de dívida ativa"
+            value={taxOrigin?.totais.divida_ativa ?? 0}
+          />
+          <Row
+            label="Total arrecadado"
+            value={taxOrigin?.totais.total ?? 0}
+            strong
+          />
         </div>
       )}
 

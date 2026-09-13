@@ -28,6 +28,7 @@ import {
   fileFiscalExecution,
   updateFiscalExecutionStatus,
 } from "@/lib/fiscal-execution.functions";
+import { getTaxRevenueByOrigin } from "@/lib/taxes.functions";
 
 export const Route = createFileRoute("/divida-ativa")({ component: Page });
 
@@ -120,6 +121,20 @@ function Content() {
       }),
   });
 
+  // O4-14c — receita de dívida ativa arrecadada no exercício corrente.
+  const loadOrigin = useServerFn(getTaxRevenueByOrigin);
+  const { data: origin } = useQuery({
+    queryKey: ["tax-revenue-origin", activeTenant?.id],
+    enabled: Boolean(activeTenant),
+    queryFn: () =>
+      loadOrigin({
+        data: {
+          tenant_id: activeTenant!.id,
+          exercicio: new Date().getFullYear(),
+        },
+      }),
+  });
+
   const cdas = (cdaData?.certificates ?? []) as Cda[];
   const executions = useMemo(
     () => (execData?.executions ?? []) as Execution[],
@@ -139,6 +154,9 @@ function Content() {
       queryKey: ["active-debt-by-taxpayer", activeTenant?.id],
     });
     qc.invalidateQueries({ queryKey: ["active-debt-aging", activeTenant?.id] });
+    qc.invalidateQueries({
+      queryKey: ["tax-revenue-origin", activeTenant?.id],
+    });
   };
 
   const doSettle = async (c: Cda) => {
@@ -264,6 +282,20 @@ function Content() {
           </div>
         </div>
       )}
+
+      <div className="rounded-xl border bg-card p-4">
+        <div className="text-sm text-muted-foreground">
+          Receita de dívida ativa arrecadada em{" "}
+          {origin?.exercicio ?? new Date().getFullYear()}
+        </div>
+        <div className="text-2xl font-bold">
+          {brl(origin?.totais.divida_ativa ?? 0)}
+          <span className="text-sm font-normal text-muted-foreground">
+            {" "}
+            — de {brl(origin?.totais.total ?? 0)} arrecadados no total
+          </span>
+        </div>
+      </div>
 
       {contribuintes.length > 0 && (
         <div className="rounded-xl border bg-card overflow-x-auto">

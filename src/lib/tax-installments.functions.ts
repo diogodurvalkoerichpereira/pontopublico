@@ -239,11 +239,15 @@ export const payInstallment = createServerFn({ method: "POST" })
          set status='paga', paga_em=$3::date where id=$1 and tenant_id=$2`,
         [data.installment_id, data.tenant_id, data.data_pagamento],
       );
-      // Registra a arrecadação da parcela no crédito.
+      // Registra a arrecadação da parcela no crédito. O4-14c — a origem vem da
+      // situação do crédito NESTE momento (antes de eventualmente quitar): parcela
+      // de crédito inscrito é receita de dívida ativa.
       await client.query(
         `insert into public.tax_payments
-           (id, tenant_id, credit_id, data_pagamento, valor, created_by)
-         values ($1,$2,$3,$4,$5,$6)`,
+           (id, tenant_id, credit_id, data_pagamento, valor, created_by, origem)
+         values ($1,$2,$3,$4,$5,$6,
+           (select case when status='divida_ativa' then 'divida_ativa' else 'corrente' end
+            from public.tax_credits where id=$3 and tenant_id=$2))`,
         [
           randomUUID(),
           data.tenant_id,

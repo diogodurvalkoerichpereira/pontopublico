@@ -133,6 +133,61 @@ export const getTaxCredits = createServerFn({ method: "POST" })
     };
   });
 
+const RevenueByOriginInput = z.object({
+  tenant_id: z.string().uuid(),
+  exercicio: z.number().int().min(2000).max(2200),
+});
+
+// O4-14c — Arrecadação tributária do exercício por ORIGEM: cobrança corrente ×
+// receita de dívida ativa (pagamentos — avulsos ou de parcelas — feitos com o
+// crédito inscrito), por tributo e no total. É a receita de dívida ativa que os
+// balanços precisam e que a situação do crédito não preserva (quitado apaga o
+// status). Read-only, reusa taxes.read.
+export const getTaxRevenueByOrigin = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => RevenueByOriginInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "taxes.read");
+    const rows = await query<{
+      tributo: string;
+      corrente: string;
+      divida_ativa: string;
+    }>(
+      `select c.tributo,
+         coalesce(sum(p.valor) filter (where p.origem='corrente'),0)::text as corrente,
+         coalesce(sum(p.valor) filter (where p.origem='divida_ativa'),0)::text as divida_ativa
+       from public.tax_payments p
+       join public.tax_credits c on c.id = p.credit_id and c.tenant_id = p.tenant_id
+       where p.tenant_id = $1 and extract(year from p.data_pagamento) = $2
+       group by c.tributo
+       order by c.tributo`,
+      [data.tenant_id, data.exercicio],
+    );
+    const n2 = (v: number) => Number(v.toFixed(2));
+    const tributos = rows.map((r) => {
+      const corrente = Number(r.corrente);
+      const dividaAtiva = Number(r.divida_ativa);
+      return {
+        tributo: r.tributo,
+        corrente: n2(corrente),
+        divida_ativa: n2(dividaAtiva),
+        total: n2(corrente + dividaAtiva),
+      };
+    });
+    const corrente = n2(tributos.reduce((s, t) => s + t.corrente, 0));
+    const dividaAtiva = n2(tributos.reduce((s, t) => s + t.divida_ativa, 0));
+    return {
+      exercicio: data.exercicio,
+      tributos,
+      totais: {
+        corrente,
+        divida_ativa: dividaAtiva,
+        total: n2(corrente + dividaAtiva),
+      },
+    };
+  });
+
 const LaunchInput = z.object({
   tenant_id: z.string().uuid(),
   tributo: z.enum(["IPTU", "ISS", "ITBI", "TAXA", "COSIP"]),
@@ -230,16 +285,21 @@ export const recordTaxPayment = createServerFn({ method: "POST" })
       );
       const quitado = novoPago >= Number(credit.valor_lancado);
       const id = randomUUID();
+      // O4-14c — a origem fica gravada no pagamento: crédito inscrito em dívida
+      // ativa arrecada como receita de dívida ativa; senão, cobrança corrente.
+      const origem =
+        credit.status === "divida_ativa" ? "divida_ativa" : "corrente";
       await client.query(
         `insert into public.tax_payments
-           (id, tenant_id, credit_id, data_pagamento, valor, created_by)
-         values ($1,$2,$3,$4,$5,$6)`,
+           (id, tenant_id, credit_id, data_pagamento, valor, origem, created_by)
+         values ($1,$2,$3,$4,$5,$6,$7)`,
         [
           id,
           data.tenant_id,
           data.credit_id,
           data.data_pagamento,
           data.valor,
+          origem,
           context.userId,
         ],
       );

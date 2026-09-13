@@ -1527,6 +1527,21 @@ contribuinte não dá. Só CDA ativa é estoque. Read-only, reusa `taxes.read`, 
 `tests/sprint-active-debt-aging.test.mjs` verificado por mutação (incluir CDA não-ativa infla
 o estoque — derruba).
 
+**O4-14c — Receita de dívida ativa consolidada nos balanços ✅.** Cada pagamento tributário
+passa a gravar a **origem** no momento em que é feito: `divida_ativa` se o crédito estava
+inscrito, `corrente` caso contrário — tanto no pagamento avulso (`recordTaxPayment`) quanto
+na parcela (`payInstallment`). Antes essa informação era irrecuperável (o crédito quitado
+perde o status de dívida ativa) e os balanços não viam a receita de dívida ativa.
+`getTaxRevenueByOrigin` consolida a arrecadação do exercício por tributo e origem (corrente ×
+dívida ativa, com totais). Migration aditiva `20260909690000_o4_14c_tax_payment_origin.sql`
+(`tax_payments.origem` com check; pagamentos anteriores ficam `corrente` — classificação
+desconhecida, assumida). `/balancos` ganha o bloco "Arrecadação tributária por origem" e
+`/divida-ativa` o cartão da receita de dívida ativa do exercício. Teste
+`tests/sprint-tax-revenue-origin.test.mjs` verificado por mutação (gravar sempre `corrente`
+zera a receita de dívida ativa — derruba). Observação registrada: `settleActiveDebtCertificate`
+baixa a CDA sem gerar pagamento no crédito (pré-existente; a arrecadação da CDA entra por
+`recordTaxPayment`/parcela, como já era).
+
 ### Onda 5 — Apoio, controle e transparência (10-14 sem)
 
 Protocolo e processo eletrônico com ICP-Brasil · e-SIC/LAI · controle interno ·
