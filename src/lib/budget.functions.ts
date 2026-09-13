@@ -13,7 +13,7 @@ import {
   loadTenantAccess,
   requireTenantPermission,
 } from "./tenant-access.server";
-import { contabilizarEvento } from "./accounting.functions";
+import { contabilizarEvento } from "./accounting.server";
 
 const GetInput = z.object({
   tenant_id: z.string().uuid(),

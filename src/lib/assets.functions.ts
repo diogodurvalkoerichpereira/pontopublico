@@ -6,7 +6,7 @@ import { z } from "zod";
 import { query, queryOne, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
-import { contabilizarEvento } from "./accounting.functions";
+import { contabilizarEvento } from "./accounting.server";
 import {
   loadTenantAccess,
   requireTenantPermission,

@@ -9,7 +9,7 @@ import { z } from "zod";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
-import { contabilizarEvento, postEntry } from "./accounting.functions";
+import { contabilizarEvento, postEntry } from "./accounting.server";
 import {
   loadTenantAccess,
   requireTenantPermission,

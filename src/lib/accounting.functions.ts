@@ -1,145 +1,22 @@
 // O2-05 — Razão contábil em partidas dobradas (núcleo PCASP). Todo lançamento tem
-// linhas de débito e crédito que SE IGUALAM — a `postEntry` recusa desbalanceado.
-// O helper `postEntry(client, ...)` é reusado pelos roteiros de contabilização
-// automática (empenho/liquidação/pagamento) dentro da mesma transação do fato.
+// linhas de débito e crédito que SE IGUALAM — a `postEntry` (accounting.server.ts)
+// recusa desbalanceado. Este arquivo expõe só server functions + configuração do
+// roteiro; os helpers de escrituração vivem em accounting.server.ts e os códigos de
+// evento em accounting-events.ts (puro), para o cliente poder importar daqui.
 import { createServerFn } from "@tanstack/react-start";
-import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
+import { postEntry } from "./accounting.server";
+import { ACCOUNTING_EVENT_CODES } from "./accounting-events";
 import {
   loadTenantAccess,
   requireTenantPermission,
 } from "./tenant-access.server";
 
-const round2 = (value: number) => Number(value.toFixed(2));
-
-export type EntryLine = { conta: string; lado: "D" | "C"; valor: number };
-
-export type PostEntryInput = {
-  client: import("pg").PoolClient;
-  tenantId: string;
-  exercicio: number;
-  dataLancamento: string;
-  historico: string;
-  lines: EntryLine[];
-  source: string;
-  sourceRef?: string | null;
-  actorId: string;
-};
-
-// Escritura um lançamento balanceado (Σdébito = Σcrédito). Transação do chamador.
-export async function postEntry(input: PostEntryInput) {
-  if (input.lines.length < 2)
-    throw new Error("Lançamento exige ao menos um débito e um crédito");
-  const totalD = round2(
-    input.lines.filter((l) => l.lado === "D").reduce((s, l) => s + l.valor, 0),
-  );
-  const totalC = round2(
-    input.lines.filter((l) => l.lado === "C").reduce((s, l) => s + l.valor, 0),
-  );
-  if (totalD !== totalC)
-    throw new Error(
-      `Lançamento desbalanceado: débito ${totalD.toFixed(2)} ≠ crédito ${totalC.toFixed(2)}`,
-    );
-  if (totalD <= 0) throw new Error("Lançamento sem valor");
-
-  const { client } = input;
-  const id = randomUUID();
-  await client.query(
-    `insert into public.accounting_entries
-       (id, tenant_id, exercicio, data_lancamento, historico, source, source_ref,
-        valor, created_by)
-     values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-    [
-      id,
-      input.tenantId,
-      input.exercicio,
-      input.dataLancamento,
-      input.historico,
-      input.source,
-      input.sourceRef ?? null,
-      totalD,
-      input.actorId,
-    ],
-  );
-  for (const line of input.lines) {
-    await client.query(
-      `insert into public.accounting_entry_lines
-         (tenant_id, entry_id, conta, lado, valor)
-       values ($1,$2,$3,$4,$5)`,
-      [input.tenantId, id, line.conta, line.lado, round2(line.valor)],
-    );
-  }
-  await recordAudit(client, {
-    tenantId: input.tenantId,
-    actorId: input.actorId,
-    action: "post_entry",
-    resource: "accounting_entries",
-    recordId: id,
-    after: { historico: input.historico, valor: totalD, source: input.source },
-  });
-  return { id, valor: totalD };
-}
-
-// O2-06 — contabilização automática dirigida por configuração. Lê o mapeamento
-// conta débito/crédito do evento (`accounting_event_accounts`) e, se existir,
-// escritura o lançamento balanceado do fato na MESMA transação. Sem mapeamento, o
-// fato não contabiliza (devolve null) — o ente decide o roteiro. Reusado pelas
-// funções de empenho/liquidação/pagamento (budget.functions).
-export async function contabilizarEvento(params: {
-  client: import("pg").PoolClient;
-  tenantId: string;
-  exercicio: number;
-  dataLancamento: string;
-  eventCode: AccountingEventCode;
-  valor: number;
-  historico: string;
-  sourceRef?: string | null;
-  actorId: string;
-}) {
-  if (params.valor <= 0) return null;
-  const mapping = (
-    await params.client.query<{
-      debit_account: string;
-      credit_account: string;
-    }>(
-      `select debit_account, credit_account
-       from public.accounting_event_accounts
-       where tenant_id = $1 and event_code = $2`,
-      [params.tenantId, params.eventCode],
-    )
-  ).rows[0];
-  if (!mapping) return null;
-  return postEntry({
-    client: params.client,
-    tenantId: params.tenantId,
-    exercicio: params.exercicio,
-    dataLancamento: params.dataLancamento,
-    historico: params.historico,
-    lines: [
-      { conta: mapping.debit_account, lado: "D", valor: params.valor },
-      { conta: mapping.credit_account, lado: "C", valor: params.valor },
-    ],
-    source: `evento:${params.eventCode}`,
-    sourceRef: params.sourceRef ?? null,
-    actorId: params.actorId,
-  });
-}
-
-// Eventos contabilizáveis por roteiro. O3-11c acrescenta os três da baixa de bem
-// (depreciação acumulada, desincorporação do líquido como VPD, alienação como VPA).
-export const ACCOUNTING_EVENT_CODES = [
-  "empenho",
-  "empenho_anulacao",
-  "liquidacao",
-  "pagamento",
-  "baixa_bem_depreciacao",
-  "baixa_bem_desincorporacao",
-  "baixa_bem_alienacao",
-] as const;
-export type AccountingEventCode = (typeof ACCOUNTING_EVENT_CODES)[number];
+export { ACCOUNTING_EVENT_CODES } from "./accounting-events";
+export type { AccountingEventCode } from "./accounting-events";
 
 const SaveEventInput = z.object({
   tenant_id: z.string().uuid(),
@@ -186,6 +63,43 @@ export const saveAccountingEventAccount = createServerFn({ method: "POST" })
       });
     });
     return { ok: true };
+  });
+
+const TenantInput = z.object({ tenant_id: z.string().uuid() });
+
+// O2-06b — Roteiros contábeis configurados do ente: para cada evento
+// contabilizável, a conta de débito e a de crédito (ou nada, quando o ente ainda
+// não decidiu o roteiro — o fato então não escritura, regra do O2-06). Devolve a
+// lista completa de eventos para a tela mostrar os não mapeados. Reusa accounting.read.
+export const getAccountingEventAccounts = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => TenantInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "accounting.read");
+    const rows = await query<{
+      event_code: string;
+      debit_account: string;
+      credit_account: string;
+    }>(
+      `select event_code, debit_account, credit_account
+       from public.accounting_event_accounts
+       where tenant_id = $1`,
+      [data.tenant_id],
+    );
+    const roteiros = ACCOUNTING_EVENT_CODES.map((event_code) => {
+      const r = rows.find((x) => x.event_code === event_code);
+      return {
+        event_code,
+        debit_account: r?.debit_account ?? null,
+        credit_account: r?.credit_account ?? null,
+        configurado: Boolean(r),
+      };
+    });
+    return {
+      roteiros,
+      canManage: access.permissions.includes("accounting.manage"),
+    };
   });
 
 const PostInput = z.object({

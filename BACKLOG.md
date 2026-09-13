@@ -1308,8 +1308,25 @@ por inteiro e **VPA − VPD dos lançamentos = resultado da baixa** — fecha co
 check de `event_code` com os três códigos; `ACCOUNTING_EVENT_CODES` vira a fonte única do
 enum. `/patrimonio` informa quantos lançamentos foram ao razão (ou que não há roteiro).
 Teste `tests/sprint-asset-disposal-ledger.test.mjs` verificado por mutação (pular a
-desincorporação deixa VPA 8000 / VPD 0 — derruba). Pendente (O2-06b): tela para configurar
-o roteiro (`saveAccountingEventAccount` não tem UI; hoje só por SQL).
+desincorporação deixa VPA 8000 / VPD 0 — derruba). A tela do roteiro é o O2-06b.
+
+**O2-06b — Tela dos roteiros contábeis (accounting_event_accounts) ✅.** O roteiro do
+O2-06 (conta de débito/crédito por evento: empenho, anulação, liquidação, pagamento e os
+três da baixa de bem do O3-11c) só entrava por SQL — `saveAccountingEventAccount` não tinha
+tela, então na prática nenhum fato contabilizava automaticamente. `getAccountingEventAccounts`
+lista **todos** os eventos contabilizáveis marcando os configurados e os sem roteiro
+(`ACCOUNTING_EVENT_CODES` é a fonte única); `/contabilidade` ganha o painel "Roteiros
+contábeis" com edição por evento (upsert: um roteiro por ente/evento). Sem migration; reusa
+`accounting.read`/`accounting.manage`. Teste `tests/sprint-accounting-event-accounts.test.mjs`
+verificado por mutação (trocar o upsert por `do nothing` deixa o segundo save sem efeito —
+derruba).
+Efeito colateral corrigido no caminho: ao importar `accounting.functions.ts` numa rota pela
+primeira vez, os helpers exportados **puros** (`postEntry`/`contabilizarEvento`, que usam
+`node:crypto` e `audit.server`) iam para o bundle do navegador e quebravam o build. Eles
+foram movidos para `accounting.server.ts` (só servidor) e os códigos de evento para
+`accounting-events.ts` (puro); `accounting.functions.ts` fica só com server functions.
+Regra derivada, registrada no CLAUDE.md: `*.functions.ts` não exporta helper puro que
+dependa de módulo de servidor.
 
 **O4-04d — Página do cadastro imobiliário ✅.** Rota `/imoveis` dá tela ao O4-04:
 lista os imóveis (inscrição, proprietário/documento, endereço, valor venal, situação e

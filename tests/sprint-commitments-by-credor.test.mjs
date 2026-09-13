@@ -76,7 +76,7 @@ function stubPlugin() {
         [/(^|\/)data\.functions$/, dataStub],
         [/(^|\/)tenant-access\.server$/, taStub],
         [/(^|\/)audit\.server$/, auditStub],
-        [/(^|\/)accounting\.functions$/, acctStub],
+        [/(^|\/)accounting\.(functions|server)$/, acctStub],
       ];
       for (const [filter, path] of map)
         b.onResolve({ filter }, () => ({ path, external: true }));

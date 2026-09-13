@@ -1,8 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { BookOpen } from "lucide-react";
+import { BookOpen, Route as RouteIcon } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,6 +18,27 @@ import {
   getBalancete,
   getAccountLedger,
 } from "@/lib/accounting-read.functions";
+import {
+  getAccountingEventAccounts,
+  saveAccountingEventAccount,
+} from "@/lib/accounting.functions";
+
+// O2-06b — rótulos dos eventos contabilizáveis por roteiro.
+const EVENTO_LABEL: Record<string, string> = {
+  empenho: "Empenho",
+  empenho_anulacao: "Anulação de empenho",
+  liquidacao: "Liquidação",
+  pagamento: "Pagamento",
+  baixa_bem_depreciacao: "Baixa de bem — depreciação acumulada",
+  baixa_bem_desincorporacao: "Baixa de bem — desincorporação (VPD)",
+  baixa_bem_alienacao: "Baixa de bem — alienação (VPA)",
+};
+type Roteiro = {
+  event_code: string;
+  debit_account: string | null;
+  credit_account: string | null;
+  configurado: boolean;
+};
 
 export const Route = createFileRoute("/contabilidade")({ component: Page });
 
@@ -56,6 +78,59 @@ function Content() {
   const loadLedger = useServerFn(getAccountLedger);
   const [ano, setAno] = useState(String(new Date().getFullYear()));
   const [conta, setConta] = useState<string | null>(null);
+
+  // O2-06b — roteiros contábeis (conta débito/crédito por evento).
+  const qc = useQueryClient();
+  const loadRoteiros = useServerFn(getAccountingEventAccounts);
+  const saveRoteiro = useServerFn(saveAccountingEventAccount);
+  const { data: roteirosData } = useQuery({
+    queryKey: ["accounting-event-accounts", activeTenant?.id],
+    enabled: Boolean(activeTenant),
+    queryFn: () => loadRoteiros({ data: { tenant_id: activeTenant!.id } }),
+  });
+  const roteiros = (roteirosData?.roteiros ?? []) as Roteiro[];
+  const canManageRoteiros = roteirosData?.canManage ?? false;
+  const [edicao, setEdicao] = useState<
+    Record<string, { d: string; c: string }>
+  >({});
+  const [salvando, setSalvando] = useState<string | null>(null);
+  const campo = (r: Roteiro) =>
+    edicao[r.event_code] ?? {
+      d: r.debit_account ?? "",
+      c: r.credit_account ?? "",
+    };
+  const gravarRoteiro = async (r: Roteiro) => {
+    if (!activeTenant) return;
+    const v = campo(r);
+    setSalvando(r.event_code);
+    try {
+      await saveRoteiro({
+        data: {
+          tenant_id: activeTenant.id,
+          event_code: r.event_code as
+            | "empenho"
+            | "empenho_anulacao"
+            | "liquidacao"
+            | "pagamento"
+            | "baixa_bem_depreciacao"
+            | "baixa_bem_desincorporacao"
+            | "baixa_bem_alienacao",
+          debit_account: v.d.trim(),
+          credit_account: v.c.trim(),
+        },
+      });
+      toast.success(
+        `Roteiro gravado: ${EVENTO_LABEL[r.event_code] ?? r.event_code}`,
+      );
+      qc.invalidateQueries({
+        queryKey: ["accounting-event-accounts", activeTenant.id],
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao gravar");
+    } finally {
+      setSalvando(null);
+    }
+  };
 
   const { data: balancete } = useQuery({
     queryKey: ["balancete", activeTenant?.id, ano],
@@ -104,6 +179,100 @@ function Content() {
             onChange={(e) => setAno(e.target.value)}
           />
         </div>
+      </div>
+
+      {/* O2-06b — Roteiros contábeis (O2-06): sem roteiro o fato não escritura */}
+      <div className="rounded-xl border bg-card overflow-x-auto">
+        <div className="p-3">
+          <h2 className="font-bold flex items-center gap-2">
+            <RouteIcon className="size-4" /> Roteiros contábeis
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            Conta de débito e de crédito por evento (PCASP). Evento sem roteiro
+            não escritura automaticamente — o ente decide o roteiro.
+          </p>
+        </div>
+        <table className="w-full text-sm">
+          <thead className="border-b bg-muted/40 text-left">
+            <tr>
+              <th className="p-3 font-semibold">Evento</th>
+              <th className="p-3 font-semibold">Débito</th>
+              <th className="p-3 font-semibold">Crédito</th>
+              <th className="p-3 font-semibold">Situação</th>
+              {canManageRoteiros && <th className="p-3 font-semibold" />}
+            </tr>
+          </thead>
+          <tbody>
+            {roteiros.map((r) => (
+              <tr key={r.event_code} className="border-b last:border-0">
+                <td className="p-3 font-medium">
+                  {EVENTO_LABEL[r.event_code] ?? r.event_code}
+                </td>
+                <td className="p-3">
+                  {canManageRoteiros ? (
+                    <Input
+                      className="h-8 font-mono"
+                      placeholder="ex.: 1.1.1.1"
+                      value={campo(r).d}
+                      onChange={(e) =>
+                        setEdicao((m) => ({
+                          ...m,
+                          [r.event_code]: { ...campo(r), d: e.target.value },
+                        }))
+                      }
+                    />
+                  ) : (
+                    <span className="font-mono">{r.debit_account ?? "—"}</span>
+                  )}
+                </td>
+                <td className="p-3">
+                  {canManageRoteiros ? (
+                    <Input
+                      className="h-8 font-mono"
+                      placeholder="ex.: 2.1.1.1"
+                      value={campo(r).c}
+                      onChange={(e) =>
+                        setEdicao((m) => ({
+                          ...m,
+                          [r.event_code]: { ...campo(r), c: e.target.value },
+                        }))
+                      }
+                    />
+                  ) : (
+                    <span className="font-mono">{r.credit_account ?? "—"}</span>
+                  )}
+                </td>
+                <td className="p-3">
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                      r.configurado
+                        ? "bg-emerald-500/10 text-emerald-600"
+                        : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    {r.configurado ? "configurado" : "sem roteiro"}
+                  </span>
+                </td>
+                {canManageRoteiros && (
+                  <td className="p-3">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={
+                        salvando === r.event_code ||
+                        !campo(r).d.trim() ||
+                        !campo(r).c.trim()
+                      }
+                      onClick={() => gravarRoteiro(r)}
+                    >
+                      Gravar
+                    </Button>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       <div className="rounded-xl border bg-card overflow-x-auto">
