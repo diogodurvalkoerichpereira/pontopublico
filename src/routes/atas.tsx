@@ -37,6 +37,7 @@ import {
   closePriceRegistration,
   getPriceRegistrationSummary,
   getPriceRegistrationDraws,
+  getExpiringPriceRegistrations,
 } from "@/lib/price-registration.functions";
 import { getProcurementProcesses } from "@/lib/procurement.functions";
 
@@ -129,6 +130,19 @@ function Content() {
     enabled: Boolean(activeTenant),
     queryFn: () => loadSummary({ data: { tenant_id: activeTenant!.id } }),
   });
+  const loadExpiring = useServerFn(getExpiringPriceRegistrations);
+  const { data: expiring } = useQuery({
+    queryKey: ["price-registration-expiring", activeTenant?.id],
+    enabled: Boolean(activeTenant),
+    queryFn: () =>
+      loadExpiring({
+        data: {
+          tenant_id: activeTenant!.id,
+          data_referencia: new Date().toISOString().slice(0, 10),
+          dias_alerta: 30,
+        },
+      }),
+  });
 
   const registrations = (data?.registrations ?? []) as Registration[];
   const items = (data?.items ?? []) as Item[];
@@ -152,6 +166,9 @@ function Content() {
     });
     qc.invalidateQueries({
       queryKey: ["price-registration-summary", activeTenant?.id],
+    });
+    qc.invalidateQueries({
+      queryKey: ["price-registration-expiring", activeTenant?.id],
     });
   };
 
@@ -305,6 +322,37 @@ function Content() {
               {brl(summary.saldoAConsumir)}
             </div>
           </div>
+        </div>
+      )}
+
+      {expiring && expiring.registrations.length > 0 && (
+        <div className="rounded-xl border bg-card p-4">
+          <h2 className="mb-1 font-bold">Vigência das atas (Lei 14.133)</h2>
+          <p className="mb-3 text-sm text-muted-foreground">
+            {expiring.vencidas} vencida(s) · {expiring.aVencer} a vencer em{" "}
+            {expiring.dias} dias. Ata vencida não admite mais consumo —
+            encerre-a.
+          </p>
+          {expiring.registrations.map((a) => (
+            <div
+              key={a.id}
+              className="flex flex-wrap justify-between gap-2 border-b py-2 text-sm last:border-0"
+            >
+              <span>
+                Ata {a.numero}/{a.ano} — {a.fornecedor}
+              </span>
+              <b
+                className={
+                  a.dias_para_vencer < 0 ? "text-destructive" : "text-primary"
+                }
+              >
+                {a.dias_para_vencer < 0
+                  ? `vencida há ${-a.dias_para_vencer} dias`
+                  : `vence em ${a.dias_para_vencer} dias`}{" "}
+                ({a.vigencia_fim})
+              </b>
+            </div>
+          ))}
         </div>
       )}
 

@@ -1201,6 +1201,16 @@ consumos de uma ata em ordem cronológica com o item e consolida o total consumi
 ata. Teste `tests/sprint-price-registration-draws.test.mjs` verificado por mutação (não
 gravar o consumo, ou valorar sem o preço, derruba).
 
+**O3-12e — Alerta de vigência das atas (Lei 14.133 art. 84) ✅.**
+`getExpiringPriceRegistrations` lista as atas ainda com status `vigente` já **vencidas**
+(`vigencia_fim` < referência → não admitem mais consumo, mas seguem `vigente` e deveriam ser
+encerradas) ou que **vencem** dentro da janela de alerta (padrão 30 dias), com
+`dias_para_vencer` (negativo = vencida) e a contagem de vencidas × a vencer — o mesmo padrão
+dos alertas de contrato e do período concessivo de férias. Read-only, reusa `contracts.read`,
+sem migration; `/atas` ganha o painel de alertas de vigência. Teste
+`tests/sprint-price-registration-expiring.test.mjs` verificado por mutação (remover o filtro
+`status='vigente'` inclui atas encerradas — derruba).
+
 **O3-13 — Painel de Registro de Preços (UI) ✅.** Rota `/atas` dá cara ao O3-12: lista as
 atas com seus itens (registrada × consumida × saldo), ação "Consumir" por item (respeita o
 saldo e a vigência) e "Nova ata" a partir de uma licitação homologada. Reusa

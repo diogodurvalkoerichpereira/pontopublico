@@ -402,3 +402,45 @@ export const getPriceRegistrationDraws = createServerFn({ method: "POST" })
       totalConsumido,
     };
   });
+
+const ExpiringInput = z.object({
+  tenant_id: z.string().uuid(),
+  data_referencia: z.string().date(),
+  dias_alerta: z.number().int().min(1).max(365).default(30),
+});
+
+// O3-12e — Alerta de vigência das atas de registro de preços (Lei 14.133 art. 84). Lista as
+// atas ainda com status 'vigente' que já **venceram** (vigencia_fim < referência → não
+// admitem mais consumo, mas seguem 'vigente' e deveriam ser encerradas) ou que **vencem**
+// dentro da janela de alerta (padrão 30 dias). `dias_para_vencer` negativo = vencida; conta
+// vencidas × a vencer. Read-only, reusa contracts.read.
+export const getExpiringPriceRegistrations = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => ExpiringInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "contracts.read");
+    const registrations = await query<{
+      id: string;
+      numero: string;
+      ano: number;
+      fornecedor: string;
+      vigencia_fim: string;
+      dias_para_vencer: number;
+    }>(
+      `select id, numero, ano, fornecedor, vigencia_fim::text,
+         (vigencia_fim - $2::date)::int as dias_para_vencer
+       from public.price_registrations
+       where tenant_id = $1 and status = 'vigente'
+         and vigencia_fim <= ($2::date + ($3 || ' days')::interval)
+       order by vigencia_fim, numero`,
+      [data.tenant_id, data.data_referencia, data.dias_alerta],
+    );
+    const vencidas = registrations.filter((r) => r.dias_para_vencer < 0).length;
+    return {
+      registrations,
+      dias: data.dias_alerta,
+      vencidas,
+      aVencer: registrations.length - vencidas,
+    };
+  });
