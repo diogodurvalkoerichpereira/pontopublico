@@ -1313,6 +1313,16 @@ transita de novo. Reusam `taxes.manage`, sem migration; ações "Quitar" e "Canc
 `/divida-ativa`. Teste `tests/sprint-active-debt-settle-cancel.test.mjs` verificado por
 mutação (permitir quitar com saldo devedor derruba).
 
+**O4-03b — Regularidade com ressalva por parcelamento (CPEN, CTN art. 151/206) ✅.**
+`checkTaxClearance` passa a marcar como `suspenso` o débito com **parcelamento ativo**
+(exigibilidade suspensa, CTN art. 151, VI): se **todos** os débitos em aberto estão
+suspensos, a situação é `regular_com_ressalva` — a base da certidão positiva com efeito de
+negativa (CPEN, CTN art. 206) —; havendo ao menos um exigível, segue `com_debitos`.
+Parcelamento rescindido/quitado não suspende. Devolve `saldo_suspenso` além do `saldo_total`.
+Read-only, reusa `taxes.read`, sem migration; segue base (não emite certidão oficial). Teste
+`tests/sprint-tax-clearance-cpen.test.mjs` verificado por mutação (contar plano não-ativo faz
+um rescindido suspender o débito — derruba).
+
 **O4-11 — Rescisão do parcelamento por inadimplência ✅.** `rescindInstallmentPlan`
 rescinde o plano **ativo** quando há pelo menos `limite_atraso` parcelas vencidas e não
 pagas na data de referência (padrão 3); abaixo do limiar recusa; um plano já
