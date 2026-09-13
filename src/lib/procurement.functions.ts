@@ -397,3 +397,75 @@ export const adjudicateProcurementWinner = createServerFn({ method: "POST" })
       };
     });
   });
+
+const SavingsInput = z.object({
+  tenant_id: z.string().uuid(),
+  ano: z.number().int().min(2000).max(2200).optional(),
+});
+
+// O3-08d — Economia da licitação (Lei 14.133, princípio da eficiência). Para os certames
+// já adjudicados (valor homologado definido), a economia = valor estimado − valor
+// homologado e o percentual sobre o estimado; consolida o estimado, o homologado e a
+// economia totais, com o percentual agregado. O painel geral só somava o estimado de TODOS
+// os processos (não só os adjudicados), então subtrair de lá não dava a economia real —
+// aqui a base é a mesma nos dois lados. Read-only, reusa contracts.read.
+export const getProcurementSavings = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => SavingsInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "contracts.read");
+    const rows = await query<{
+      id: string;
+      numero: string;
+      ano: number;
+      modalidade: string;
+      objeto: string;
+      valor_estimado: string;
+      valor_homologado: string;
+      homologado_em: string | null;
+    }>(
+      `select id, numero, ano, modalidade, objeto,
+         valor_estimado::text, valor_homologado::text, homologado_em::text
+       from public.procurement_processes
+       where tenant_id = $1 and valor_homologado is not null
+         and ($2::int is null or ano = $2)
+       order by homologado_em desc nulls last, ano desc, numero`,
+      [data.tenant_id, data.ano ?? null],
+    );
+    const round2 = (v: number) => Number(v.toFixed(2));
+    const processos = rows.map((r) => {
+      const estimado = Number(r.valor_estimado);
+      const homologado = Number(r.valor_homologado);
+      const economia = round2(estimado - homologado);
+      return {
+        id: r.id,
+        numero: r.numero,
+        ano: r.ano,
+        modalidade: r.modalidade,
+        objeto: r.objeto,
+        valor_estimado: round2(estimado),
+        valor_homologado: round2(homologado),
+        economia,
+        // Percentual da economia sobre o estimado (0 quando estimado é 0).
+        percentual: estimado > 0 ? round2((economia / estimado) * 100) : 0,
+      };
+    });
+    const totalEstimado = round2(
+      processos.reduce((s, p) => s + p.valor_estimado, 0),
+    );
+    const totalHomologado = round2(
+      processos.reduce((s, p) => s + p.valor_homologado, 0),
+    );
+    const totalEconomia = round2(totalEstimado - totalHomologado);
+    return {
+      processos,
+      totais: {
+        estimado: totalEstimado,
+        homologado: totalHomologado,
+        economia: totalEconomia,
+        percentual:
+          totalEstimado > 0 ? round2((totalEconomia / totalEstimado) * 100) : 0,
+      },
+    };
+  });

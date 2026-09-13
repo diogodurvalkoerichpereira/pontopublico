@@ -1014,6 +1014,16 @@ vencedor e o valor homologado. Migration `..._o3_08c_procurement_award.sql` (ALT
   desclassificada, ou adjudicar licitação aberta, derruba). Próximo: amarrar o vencedor
   adjudicado ao contrato (O3-09) e à ata de preços; PNCP (externo, homologação).
 
+**O3-08d — Economia da licitação (Lei 14.133, eficiência) ✅.** `getProcurementSavings`
+lista os certames já **adjudicados** (valor homologado definido) com a economia = valor
+estimado − valor homologado e o percentual sobre o estimado, e consolida
+estimado/homologado/economia totais com o percentual agregado. O painel geral só somava o
+estimado de **todos** os processos (não só os adjudicados), então subtrair de lá não dava a
+economia real — aqui os dois lados partem da mesma base; certame sem valor homologado fica de
+fora. Read-only, reusa `contracts.read`, sem migration; painel "Economia da licitação" no
+`/licitacoes`. Teste `tests/sprint-procurement-savings.test.mjs` verificado por mutação
+(inverter o sinal da economia, homologado − estimado, derruba os totais).
+
 **O3-09 — Vínculo contrato ↔ licitação (Lei 14.133) ✅.**
 `linkContractToProcurement` liga o contrato à licitação de origem
 (`procurement_contracts.procurement_process_id` → `procurement_processes`, O3-06);

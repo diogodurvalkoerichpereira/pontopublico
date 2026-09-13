@@ -2,7 +2,14 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Gavel, Plus, Flag, ListOrdered, Trophy } from "lucide-react";
+import {
+  Gavel,
+  Plus,
+  Flag,
+  ListOrdered,
+  Trophy,
+  PiggyBank,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -31,6 +38,7 @@ import {
   getProcurementJudgment,
   adjudicateProcurementWinner,
   getProcurementSummary,
+  getProcurementSavings,
 } from "@/lib/procurement.functions";
 
 export const Route = createFileRoute("/licitacoes")({ component: Page });
@@ -150,10 +158,20 @@ function Content() {
     queryFn: () => loadSummary({ data: { tenant_id: activeTenant!.id } }),
   });
 
+  const loadSavings = useServerFn(getProcurementSavings);
+  const { data: savings } = useQuery({
+    queryKey: ["procurement-savings", activeTenant?.id],
+    enabled: Boolean(activeTenant),
+    queryFn: () => loadSavings({ data: { tenant_id: activeTenant!.id } }),
+  });
+
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["procurement", activeTenant?.id] });
     qc.invalidateQueries({
       queryKey: ["procurement-summary", activeTenant?.id],
+    });
+    qc.invalidateQueries({
+      queryKey: ["procurement-savings", activeTenant?.id],
     });
   };
 
@@ -333,6 +351,44 @@ function Content() {
             </div>
             <div className="text-2xl font-bold">
               {summary.porStatus.fracassada + summary.porStatus.deserta}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {savings && savings.processos.length > 0 && (
+        <div className="rounded-xl border bg-card p-4">
+          <div className="flex items-center gap-2">
+            <PiggyBank className="size-5 text-emerald-600" />
+            <h2 className="font-bold">Economia da licitação (Lei 14.133)</h2>
+          </div>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Estimado − homologado nos certames já adjudicados.
+          </p>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="rounded-lg border p-3">
+              <div className="text-xs text-muted-foreground">Estimado</div>
+              <div className="text-lg font-bold tabular-nums">
+                {brl(savings.totais.estimado)}
+              </div>
+            </div>
+            <div className="rounded-lg border p-3">
+              <div className="text-xs text-muted-foreground">Homologado</div>
+              <div className="text-lg font-bold tabular-nums">
+                {brl(savings.totais.homologado)}
+              </div>
+            </div>
+            <div className="rounded-lg border p-3">
+              <div className="text-xs text-muted-foreground">Economia</div>
+              <div className="text-lg font-bold tabular-nums text-emerald-600">
+                {brl(savings.totais.economia)}
+              </div>
+            </div>
+            <div className="rounded-lg border p-3">
+              <div className="text-xs text-muted-foreground">% economia</div>
+              <div className="text-lg font-bold tabular-nums text-emerald-600">
+                {savings.totais.percentual.toFixed(2)}%
+              </div>
             </div>
           </div>
         </div>
