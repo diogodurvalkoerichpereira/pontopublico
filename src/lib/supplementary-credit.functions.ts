@@ -46,6 +46,71 @@ export const getSupplementaryCredits = createServerFn({ method: "POST" })
     };
   });
 
+const ExcessInput = z.object({
+  tenant_id: z.string().uuid(),
+  exercicio: z.number().int().min(2000).max(2200),
+});
+
+// O2-22b — Excesso de arrecadação disponível por fonte (Lei 4.320 art. 43, II). Por fonte de
+// recurso do exercício: previsto, arrecadado, o **excesso** (arrecadado − previsto, só quando
+// positivo), o já **utilizado** em créditos suplementares e o **disponível** (excesso −
+// utilizado) — o lastro que `openSupplementaryCredit` consome, exposto para consulta antes de
+// abrir o crédito. Fonte sem excesso não aparece. Read-only, reusa budget.read.
+export const getExcessRevenueAvailable = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => ExcessInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "budget.read");
+    const receitas = await query<{
+      fonte_recurso: string;
+      previsto: string;
+      arrecadado: string;
+    }>(
+      `select fonte_recurso,
+         coalesce(sum(valor_previsto),0)::text as previsto,
+         coalesce(sum(valor_arrecadado),0)::text as arrecadado
+       from public.budget_revenues
+       where tenant_id=$1 and exercicio=$2
+       group by fonte_recurso`,
+      [data.tenant_id, data.exercicio],
+    );
+    const usados = await query<{ fonte_recurso: string; utilizado: string }>(
+      `select fonte_recurso, coalesce(sum(valor),0)::text as utilizado
+       from public.budget_supplementary_credits
+       where tenant_id=$1 and exercicio=$2
+       group by fonte_recurso`,
+      [data.tenant_id, data.exercicio],
+    );
+    const round2 = (v: number) => Number(v.toFixed(2));
+    const utilizadoPorFonte = new Map(
+      usados.map((u) => [u.fonte_recurso, Number(u.utilizado)]),
+    );
+    const fontes = receitas
+      .map((r) => {
+        const previsto = Number(r.previsto);
+        const arrecadado = Number(r.arrecadado);
+        const excesso = round2(arrecadado - previsto);
+        const utilizado = utilizadoPorFonte.get(r.fonte_recurso) ?? 0;
+        return {
+          fonte_recurso: r.fonte_recurso,
+          previsto: round2(previsto),
+          arrecadado: round2(arrecadado),
+          excesso,
+          utilizado: round2(utilizado),
+          disponivel: round2(excesso - utilizado),
+        };
+      })
+      // Só fontes com excesso de arrecadação lastreiam crédito suplementar.
+      .filter((f) => f.excesso > 0)
+      .sort((a, b) => b.disponivel - a.disponivel);
+    return {
+      exercicio: data.exercicio,
+      fontes,
+      totalDisponivel: round2(fontes.reduce((s, f) => s + f.disponivel, 0)),
+    };
+  });
+
 const OpenInput = z.object({
   tenant_id: z.string().uuid(),
   destino_id: z.string().uuid(),

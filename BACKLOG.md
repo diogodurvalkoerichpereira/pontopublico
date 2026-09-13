@@ -827,6 +827,15 @@ registra o crédito com justificativa. `getSupplementaryCredits` lista. Migratio
 `tests/sprint-supplementary-credit.test.mjs` verificado por mutação (inverter o teto do
 excesso derruba). Próximo (UI): abertura de crédito suplementar no `/orcamento`.
 
+**O2-22b — Excesso de arrecadação disponível por fonte ✅.** `getExcessRevenueAvailable`
+consolida, por fonte de recurso do exercício, o previsto, o arrecadado, o **excesso**
+(arrecadado − previsto, só quando positivo), o já **utilizado** em créditos suplementares e o
+**disponível** (excesso − utilizado) — o lastro que `openSupplementaryCredit` consome, exposto
+para consulta **antes** de abrir o crédito; fonte sem excesso (déficit/zero) não aparece.
+Read-only, reusa `budget.read`, sem migration; o diálogo de crédito suplementar no
+`/orcamento` mostra o disponível por fonte. Teste `tests/sprint-excess-revenue.test.mjs`
+verificado por mutação (inverter o cálculo do excesso zera as fontes — derruba).
+
 **O2-23 — Contingenciamento / limitação de empenho (LRF art. 9) ✅.**
 `contingenciarDotacao` bloqueia parte de uma dotação **ativa** sem alterar o orçado, e o
 bloqueio **nunca invade o já empenhado** (empenhado + bloqueado ≤ orçado);

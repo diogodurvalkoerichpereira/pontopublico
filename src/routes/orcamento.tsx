@@ -33,7 +33,10 @@ import {
   getDisbursementProgress,
 } from "@/lib/disbursement-schedule.functions";
 import { contingenciarDotacao } from "@/lib/budget-contingency.functions";
-import { openSupplementaryCredit } from "@/lib/supplementary-credit.functions";
+import {
+  openSupplementaryCredit,
+  getExcessRevenueAvailable,
+} from "@/lib/supplementary-credit.functions";
 
 const MESES = [
   "Jan",
@@ -160,12 +163,25 @@ function Content() {
       }),
   });
 
+  const loadExcess = useServerFn(getExcessRevenueAvailable);
+  const { data: excess } = useQuery({
+    queryKey: ["excess-revenue", activeTenant?.id, scheduleYear],
+    enabled: Boolean(activeTenant) && /^\d{4}$/.test(scheduleYear),
+    queryFn: () =>
+      loadExcess({
+        data: { tenant_id: activeTenant!.id, exercicio: Number(scheduleYear) },
+      }),
+  });
+
   const refreshSchedule = () => {
     qc.invalidateQueries({
       queryKey: ["disbursement-schedule", activeTenant?.id, scheduleYear],
     });
     qc.invalidateQueries({
       queryKey: ["disbursement-progress", activeTenant?.id, scheduleYear],
+    });
+    qc.invalidateQueries({
+      queryKey: ["excess-revenue", activeTenant?.id, scheduleYear],
     });
   };
 
@@ -653,6 +669,33 @@ function Content() {
               Crédito suplementar (excesso de arrecadação)
             </DialogTitle>
           </DialogHeader>
+          {excess && (
+            <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+              <div className="mb-1 font-medium">
+                Excesso de arrecadação disponível ({scheduleYear})
+              </div>
+              {excess.fontes.length === 0 ? (
+                <p className="text-muted-foreground">
+                  Nenhuma fonte com excesso de arrecadação.
+                </p>
+              ) : (
+                <ul className="space-y-0.5">
+                  {excess.fontes.map((f) => (
+                    <li
+                      key={f.fonte_recurso}
+                      className="flex justify-between tabular-nums"
+                    >
+                      <span>Fonte {f.fonte_recurso}</span>
+                      <span>
+                        disponível <b>{brl(f.disponivel)}</b> de{" "}
+                        {brl(f.excesso)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
           <div className="space-y-3">
             <div>
               <Label>Dotação de destino</Label>
