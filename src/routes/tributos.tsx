@@ -46,6 +46,7 @@ import { emitActiveDebtCertificate } from "@/lib/active-debt-certificate.functio
 import {
   getProperties,
   launchIptu,
+  launchIptuBatch,
   getRealEstateSummary,
 } from "@/lib/real-estate.functions";
 import { getServiceTaxpayers, launchIss } from "@/lib/service-tax.functions";
@@ -116,6 +117,7 @@ function Content() {
   const emitCda = useServerFn(emitActiveDebtCertificate);
   const cancelCredit = useServerFn(cancelTaxCredit);
   const launch = useServerFn(launchIptu);
+  const launchLote = useServerFn(launchIptuBatch);
   const doLaunchIss = useServerFn(launchIss);
   const doLaunchItbi = useServerFn(launchItbi);
   const qc = useQueryClient();
@@ -125,6 +127,7 @@ function Content() {
   const [payValor, setPayValor] = useState("");
 
   const [iptuOpen, setIptuOpen] = useState(false);
+  const [iptuLote, setIptuLote] = useState(false);
   const [propertyId, setPropertyId] = useState("");
   const [exercicio, setExercicio] = useState(String(new Date().getFullYear()));
   const [aliquota, setAliquota] = useState("1");
@@ -319,19 +322,36 @@ function Content() {
   };
 
   const submitIptu = async () => {
-    if (!activeTenant || !propertyId) return;
+    if (!activeTenant) return;
+    if (!iptuLote && !propertyId) return;
     setBusy(true);
     try {
-      const r = await launch({
-        data: {
-          tenant_id: activeTenant.id,
-          property_id: propertyId,
-          exercicio: Number(exercicio),
-          aliquota: Number(aliquota),
-          vencimento,
-        },
-      });
-      toast.success(`IPTU lançado: ${brl(r.valor)}`);
+      if (iptuLote) {
+        const r = await launchLote({
+          data: {
+            tenant_id: activeTenant.id,
+            exercicio: Number(exercicio),
+            aliquota: Number(aliquota),
+            vencimento,
+          },
+        });
+        toast.success(
+          `IPTU do exercício lançado: ${r.lancados} imóvel(is), total ${brl(
+            r.total_valor,
+          )}${r.ignorados ? ` (${r.ignorados} ignorado(s))` : ""}`,
+        );
+      } else {
+        const r = await launch({
+          data: {
+            tenant_id: activeTenant.id,
+            property_id: propertyId,
+            exercicio: Number(exercicio),
+            aliquota: Number(aliquota),
+            vencimento,
+          },
+        });
+        toast.success(`IPTU lançado: ${brl(r.valor)}`);
+      }
       setIptuOpen(false);
       refresh();
     } catch (error) {
@@ -409,12 +429,23 @@ function Content() {
             <Button
               variant="outline"
               onClick={() => {
+                setIptuLote(false);
                 setPropertyId(properties[0]?.id ?? "");
                 setIptuOpen(true);
               }}
               disabled={properties.length === 0}
             >
               <Home className="size-4" /> Lançar IPTU
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIptuLote(true);
+                setIptuOpen(true);
+              }}
+              disabled={properties.length === 0}
+            >
+              <Home className="size-4" /> IPTU do exercício (lote)
             </Button>
             <Button
               variant="outline"
@@ -704,25 +735,35 @@ function Content() {
       <Dialog open={iptuOpen} onOpenChange={setIptuOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Lançar IPTU</DialogTitle>
+            <DialogTitle>
+              {iptuLote ? "Lançar IPTU do exercício (lote)" : "Lançar IPTU"}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <div>
-              <Label>Imóvel</Label>
-              <Select value={propertyId} onValueChange={setPropertyId}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {properties.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.inscricao_imobiliaria} — {p.proprietario} (
-                      {brl(p.valor_venal)})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {iptuLote ? (
+              <p className="text-sm text-muted-foreground">
+                Gera o IPTU de todos os imóveis ativos sem lançamento no
+                exercício (valor venal × alíquota). Imóveis já lançados são
+                mantidos.
+              </p>
+            ) : (
+              <div>
+                <Label>Imóvel</Label>
+                <Select value={propertyId} onValueChange={setPropertyId}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {properties.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.inscricao_imobiliaria} — {p.proprietario} (
+                        {brl(p.valor_venal)})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <Label>Exercício</Label>

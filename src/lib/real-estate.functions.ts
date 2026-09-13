@@ -241,3 +241,97 @@ export const launchIptu = createServerFn({ method: "POST" })
       return { credit_id: creditId, valor };
     });
   });
+
+const IptuBatchInput = z.object({
+  tenant_id: z.string().uuid(),
+  exercicio: z.number().int().min(2000).max(2200),
+  aliquota: z.number().positive().max(15),
+  vencimento: z.string().date(),
+});
+
+// O4-04b — Lançamento em massa do IPTU do exercício. Gera o crédito (valor venal ×
+// alíquota) de TODOS os imóveis ativos que ainda não têm IPTU lançado no exercício —
+// a rotina de abertura do exercício, que o lançamento avulso (um imóvel por vez) não
+// cobria. Imóvel já lançado ou com valor calculado ≤ 0 é ignorado (não bloqueia o lote).
+// Devolve quantos foram lançados, quantos foram ignorados e o total lançado. Reusa
+// taxes.manage.
+export const launchIptuBatch = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => IptuBatchInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "taxes.manage");
+    return withTransaction(async (client) => {
+      // Imóveis ativos sem IPTU do exercício (compara inscrição sem diferenciar caixa).
+      const pendentes = (
+        await client.query<{
+          id: string;
+          inscricao_imobiliaria: string;
+          proprietario: string;
+          proprietario_documento: string;
+          valor_venal: string;
+        }>(
+          `select p.id, p.inscricao_imobiliaria, p.proprietario,
+             p.proprietario_documento, p.valor_venal::text
+           from public.real_estate_properties p
+           where p.tenant_id=$1 and p.status='ativo'
+             and not exists (
+               select 1 from public.tax_credits tc
+               where tc.tenant_id=p.tenant_id and tc.tributo='IPTU'
+                 and tc.exercicio=$2
+                 and lower(tc.inscricao)=lower(p.inscricao_imobiliaria)
+             )
+           order by p.inscricao_imobiliaria, p.id`,
+          [data.tenant_id, data.exercicio],
+        )
+      ).rows;
+
+      let lancados = 0;
+      let ignorados = 0;
+      let totalValor = 0;
+      for (const p of pendentes) {
+        const valor = Number(
+          ((Number(p.valor_venal) * data.aliquota) / 100).toFixed(2),
+        );
+        // Sem base de cálculo (valor venal zerado) não gera crédito.
+        if (valor <= 0) {
+          ignorados += 1;
+          continue;
+        }
+        await client.query(
+          `insert into public.tax_credits
+             (id, tenant_id, tributo, exercicio, contribuinte, contribuinte_documento,
+              inscricao, valor_lancado, vencimento, created_by)
+           values ($1,$2,'IPTU',$3,$4,$5,$6,$7,$8,$9)`,
+          [
+            randomUUID(),
+            data.tenant_id,
+            data.exercicio,
+            p.proprietario,
+            p.proprietario_documento,
+            p.inscricao_imobiliaria,
+            valor,
+            data.vencimento,
+            context.userId,
+          ],
+        );
+        lancados += 1;
+        totalValor = Number((totalValor + valor).toFixed(2));
+      }
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "launch_iptu_batch",
+        resource: "tax_credits",
+        recordId: data.tenant_id,
+        after: {
+          exercicio: data.exercicio,
+          aliquota: data.aliquota,
+          lancados,
+          ignorados,
+          total_valor: totalValor,
+        },
+      });
+      return { lancados, ignorados, total_valor: totalValor };
+    });
+  });

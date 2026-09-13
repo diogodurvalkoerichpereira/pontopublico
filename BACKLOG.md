@@ -1323,6 +1323,14 @@ Read-only, reusa `taxes.read`, sem migration; segue base (não emite certidão o
 `tests/sprint-tax-clearance-cpen.test.mjs` verificado por mutação (contar plano não-ativo faz
 um rescindido suspender o débito — derruba).
 
+**O4-04b — Lançamento em massa do IPTU do exercício ✅.** `launchIptuBatch` gera o crédito
+(valor venal × alíquota) de **todos** os imóveis ativos que ainda não têm IPTU no exercício —
+a rotina de abertura do exercício que o lançamento avulso (um imóvel por vez) não cobria.
+Imóvel baixado, já lançado ou com valor calculado ≤ 0 é ignorado (não bloqueia o lote);
+devolve lançados, ignorados e o total lançado. Reusa `taxes.manage`, sem migration; ação
+"IPTU do exercício (lote)" no `/tributos`. Teste `tests/sprint-iptu-batch.test.mjs` verificado
+por mutação (remover o ÷100 da alíquota infla o valor — derruba o total).
+
 **O4-11 — Rescisão do parcelamento por inadimplência ✅.** `rescindInstallmentPlan`
 rescinde o plano **ativo** quando há pelo menos `limite_atraso` parcelas vencidas e não
 pagas na data de referência (padrão 3); abaixo do limiar recusa; um plano já
