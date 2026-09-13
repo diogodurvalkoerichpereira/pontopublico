@@ -105,11 +105,13 @@ export const getManifestations = createServerFn({ method: "POST" })
       anonima: boolean;
       status: string;
       prazo_resposta: string;
+      prazo_prorrogado: boolean;
       respondida_em: string | null;
       created_at: string;
     }>(
       `select id, ano, numero::text, tipo, canal, anonima, status,
-         prazo_resposta::text, respondida_em::text, created_at::text
+         prazo_resposta::text, prazo_prorrogado, respondida_em::text,
+         created_at::text
        from public.ombudsman_manifestations
        where tenant_id = $1 and ($2::int is null or ano = $2)
        order by ano desc, numero desc`,
@@ -296,6 +298,85 @@ export const archiveManifestation = createServerFn({ method: "POST" })
         after: { status: "arquivada" },
       });
       return { id: data.manifestation_id, status: "arquivada" };
+    });
+  });
+
+const ExtendInput = z.object({
+  tenant_id: z.string().uuid(),
+  manifestation_id: z.string().uuid(),
+  justificativa: z.string().trim().min(3).max(5000),
+  // Lei 13.460 art. 17: prorrogacao "por igual periodo" (30 dias); parametrizavel.
+  prazo_dias: z.number().int().min(1).max(365).default(30),
+});
+
+// O5-03d — Prorroga o prazo de resposta (Lei 13.460 art. 17). O prazo e
+// prorrogavel de forma justificada **uma unica vez**: soma `prazo_dias` ao
+// prazo vigente, grava a justificativa e marca `prazo_prorrogado`. So uma
+// manifestacao em aberto (recebida/em_analise) prorroga; ja prorrogada,
+// respondida ou arquivada nao prorroga de novo. Reusa protocol.manage.
+export const extendManifestationDeadline = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => ExtendInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "protocol.manage");
+    return withTransaction(async (client) => {
+      const manifestation = (
+        await client.query<{
+          status: string;
+          prazo_prorrogado: boolean;
+          prazo_resposta: string;
+        }>(
+          `select status, prazo_prorrogado, prazo_resposta::text
+           from public.ombudsman_manifestations
+           where id=$1 and tenant_id=$2 for update`,
+          [data.manifestation_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!manifestation) throw new Error("Manifestação não encontrada");
+      if (
+        manifestation.status !== "recebida" &&
+        manifestation.status !== "em_analise"
+      )
+        throw new Error(
+          "Só uma manifestação em aberto pode ter o prazo prorrogado",
+        );
+      if (manifestation.prazo_prorrogado)
+        throw new Error("O prazo já foi prorrogado uma vez");
+      const novoPrazoData = new Date(
+        `${manifestation.prazo_resposta}T00:00:00Z`,
+      );
+      novoPrazoData.setUTCDate(novoPrazoData.getUTCDate() + data.prazo_dias);
+      const novoPrazo = novoPrazoData.toISOString().slice(0, 10);
+      const hoje = new Date().toISOString().slice(0, 10);
+      await client.query(
+        `update public.ombudsman_manifestations
+         set prazo_resposta=$3::date, prazo_prorrogado=true,
+             prorrogado_em=$4::date, prorrogacao_justificativa=$5,
+             updated_at=now()
+         where id=$1 and tenant_id=$2`,
+        [
+          data.manifestation_id,
+          data.tenant_id,
+          novoPrazo,
+          hoje,
+          data.justificativa,
+        ],
+      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "extend_deadline",
+        resource: "ombudsman_manifestations",
+        recordId: data.manifestation_id,
+        before: { prazo_resposta: manifestation.prazo_resposta },
+        after: { prazo_resposta: novoPrazo },
+      });
+      return {
+        id: data.manifestation_id,
+        prazo_resposta: novoPrazo,
+        prazo_prorrogado: true,
+      };
     });
   });
 

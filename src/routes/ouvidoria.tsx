@@ -9,6 +9,7 @@ import {
   Star,
   Archive,
   Search,
+  CalendarClock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +39,7 @@ import {
   getOmbudsmanSummary,
   archiveManifestation,
   analyzeManifestation,
+  extendManifestationDeadline,
 } from "@/lib/ombudsman.functions";
 import {
   getOmbudsmanSatisfaction,
@@ -68,6 +70,7 @@ type Manifestation = {
   anonima: boolean;
   status: string;
   prazo_resposta: string;
+  prazo_prorrogado: boolean;
   respondida_em: string | null;
 };
 
@@ -99,6 +102,7 @@ function Content() {
   const rate = useServerFn(rateManifestation);
   const archive = useServerFn(archiveManifestation);
   const analyze = useServerFn(analyzeManifestation);
+  const extendDeadline = useServerFn(extendManifestationDeadline);
   const qc = useQueryClient();
 
   const [openDialog, setOpenDialog] = useState(false);
@@ -108,6 +112,9 @@ function Content() {
 
   const [rateTarget, setRateTarget] = useState<Manifestation | null>(null);
   const [nota, setNota] = useState("5");
+
+  const [extendTarget, setExtendTarget] = useState<Manifestation | null>(null);
+  const [justificativa, setJustificativa] = useState("");
 
   const [tipo, setTipo] = useState("reclamacao");
   const [canal, setCanal] = useState("web");
@@ -190,6 +197,29 @@ function Content() {
       toast.error(
         error instanceof Error ? error.message : "Falha ao tomar em análise",
       );
+    }
+  };
+
+  const submitExtend = async () => {
+    if (!activeTenant || !extendTarget) return;
+    setBusy(true);
+    try {
+      await extendDeadline({
+        data: {
+          tenant_id: activeTenant.id,
+          manifestation_id: extendTarget.id,
+          justificativa: justificativa.trim(),
+        },
+      });
+      toast.success("Prazo prorrogado (Lei 13.460 art. 17)");
+      setExtendTarget(null);
+      refresh();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Falha ao prorrogar",
+      );
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -428,7 +458,14 @@ function Content() {
                   )}
                 </td>
                 <td className="p-3 capitalize">{m.canal}</td>
-                <td className="p-3 tabular-nums">{m.prazo_resposta}</td>
+                <td className="p-3 tabular-nums">
+                  {m.prazo_resposta}
+                  {m.prazo_prorrogado && (
+                    <Badge variant="outline" className="ml-2">
+                      prorrogado
+                    </Badge>
+                  )}
+                </td>
                 <td className="p-3">
                   <Badge variant={statusVariant[m.status] ?? "secondary"}>
                     {m.status.replace("_", " ")}
@@ -454,6 +491,18 @@ function Content() {
                         >
                           <Reply className="size-4" /> Responder
                         </Button>
+                        {!m.prazo_prorrogado && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setExtendTarget(m);
+                              setJustificativa("");
+                            }}
+                          >
+                            <CalendarClock className="size-4" /> Prorrogar prazo
+                          </Button>
+                        )}
                       </div>
                     )}
                     {m.status === "respondida" && (
@@ -615,6 +664,47 @@ function Content() {
           <DialogFooter>
             <Button onClick={submitRate} disabled={busy}>
               Registrar avaliação
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Prorrogar prazo (Lei 13.460 art. 17) */}
+      <Dialog
+        open={Boolean(extendTarget)}
+        onOpenChange={(o) => !o && setExtendTarget(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Prorrogar prazo — {extendTarget?.numero}/{extendTarget?.ano}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              O prazo é prorrogável de forma justificada uma única vez, por
+              igual período (Lei 13.460 art. 17). Prazo atual:{" "}
+              <span className="tabular-nums font-medium">
+                {extendTarget?.prazo_resposta}
+              </span>
+              .
+            </p>
+            <div>
+              <Label>Justificativa</Label>
+              <textarea
+                className="w-full rounded-md border bg-background p-2 text-sm"
+                rows={4}
+                value={justificativa}
+                onChange={(e) => setJustificativa(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={submitExtend}
+              disabled={busy || justificativa.trim().length < 3}
+            >
+              Prorrogar prazo
             </Button>
           </DialogFooter>
         </DialogContent>

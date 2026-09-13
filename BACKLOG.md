@@ -1611,6 +1611,17 @@ sem migration; `/ouvidoria` ganha a ação "Tomar em análise" por manifestaçã
 `tests/sprint-ombudsman-analyze.test.mjs` verificado por mutação (remover a guarda de estado
 deixa qualquer status entrar em análise — derruba).
 
+**O5-03d — Prorrogação do prazo de resposta da ouvidoria (Lei 13.460 art. 17) ✅.**
+`extendManifestationDeadline` soma o período (default 30 dias, "por igual período") ao prazo
+vigente, marca `prazo_prorrogado` e grava a justificativa — o prazo é prorrogável de forma
+justificada **uma única vez**, então a segunda prorrogação é recusada; só uma manifestação
+em aberto (recebida/em_analise) prorroga (respondida/arquivada recusam). Migration aditiva
+`20260909660000_o5_03d_ombudsman_deadline_extension.sql` acrescenta `prazo_prorrogado`,
+`prorrogado_em` e `prorrogacao_justificativa`; reusa `protocol.manage`. `getManifestations`
+passa a devolver `prazo_prorrogado` e `/ouvidoria` ganha a ação "Prorrogar prazo" (some após
+a prorrogação, com o selo "prorrogado" no prazo). Teste `tests/sprint-ombudsman-extend.test.mjs`
+verificado por mutação (não marcar `prazo_prorrogado=true` deixa prorrogar de novo — derruba).
+
 **O5-08 — Indicador de tempestividade das respostas ✅.** `getResponseTimeliness`
 consolida, na ouvidoria e no e-SIC, quantas respostas saíram **no prazo legal** (data da
 resposta ≤ prazo) e o percentual — transparência ativa do desempenho (Lei 13.460/LAI).
