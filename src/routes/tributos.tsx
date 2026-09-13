@@ -48,6 +48,7 @@ import {
   launchIptu,
   launchIptuBatch,
   getRealEstateSummary,
+  setPropertyTaxBenefit,
 } from "@/lib/real-estate.functions";
 import { getServiceTaxpayers, launchIss } from "@/lib/service-tax.functions";
 import { launchItbi } from "@/lib/itbi.functions";
@@ -84,6 +85,7 @@ type Property = {
   proprietario: string;
   valor_venal: string;
   status: string;
+  beneficio_iptu: string | null;
 };
 type Taxpayer = {
   id: string;
@@ -144,6 +146,13 @@ function Content() {
   const [adquirenteDoc, setAdquirenteDoc] = useState("");
   const [valorTransmissao, setValorTransmissao] = useState("");
   const [aliquotaItbi, setAliquotaItbi] = useState("2");
+
+  // O4-04c — imunidade/isenção de IPTU do imóvel.
+  const doSetBenefit = useServerFn(setPropertyTaxBenefit);
+  const [benefitOpen, setBenefitOpen] = useState(false);
+  const [benefitPropertyId, setBenefitPropertyId] = useState("");
+  const [beneficio, setBeneficio] = useState("imunidade");
+  const [beneficioMotivo, setBeneficioMotivo] = useState("");
 
   const [busy, setBusy] = useState(false);
 
@@ -338,7 +347,9 @@ function Content() {
         toast.success(
           `IPTU do exercício lançado: ${r.lancados} imóvel(is), total ${brl(
             r.total_valor,
-          )}${r.ignorados ? ` (${r.ignorados} ignorado(s))` : ""}`,
+          )}${r.ignorados ? ` (${r.ignorados} ignorado(s))` : ""}${
+            r.isentos ? ` · ${r.isentos} imune(s)/isento(s) fora do lote` : ""
+          }`,
         );
       } else {
         const r = await launch({
@@ -380,6 +391,32 @@ function Content() {
       refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Falha ao lançar");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitBenefit = async (encerrar: boolean) => {
+    if (!activeTenant || !benefitPropertyId) return;
+    setBusy(true);
+    try {
+      await doSetBenefit({
+        data: {
+          tenant_id: activeTenant.id,
+          property_id: benefitPropertyId,
+          beneficio: encerrar ? null : (beneficio as "imunidade" | "isencao"),
+          motivo: beneficioMotivo.trim(),
+        },
+      });
+      toast.success(
+        encerrar
+          ? "Benefício encerrado: o imóvel volta a lançar IPTU"
+          : `${beneficio === "imunidade" ? "Imunidade" : "Isenção"} de IPTU concedida`,
+      );
+      setBenefitOpen(false);
+      refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao gravar");
     } finally {
       setBusy(false);
     }
@@ -471,6 +508,18 @@ function Content() {
               disabled={properties.length === 0}
             >
               <ArrowLeftRight className="size-4" /> Lançar ITBI
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setBenefitPropertyId(properties[0]?.id ?? "");
+                setBeneficio(properties[0]?.beneficio_iptu ?? "imunidade");
+                setBeneficioMotivo("");
+                setBenefitOpen(true);
+              }}
+              disabled={properties.length === 0}
+            >
+              <Home className="size-4" /> Imunidade/isenção
             </Button>
           </div>
         )}
@@ -763,6 +812,7 @@ function Content() {
                       <SelectItem key={p.id} value={p.id}>
                         {p.inscricao_imobiliaria} — {p.proprietario} (
                         {brl(p.valor_venal)})
+                        {p.beneficio_iptu ? ` — ${p.beneficio_iptu}` : ""}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -858,6 +908,87 @@ function Content() {
       </Dialog>
 
       {/* Lançar ITBI */}
+      {/* Imunidade/isenção de IPTU (O4-04c, CF art. 150, VI) */}
+      <Dialog open={benefitOpen} onOpenChange={setBenefitOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Imunidade / isenção de IPTU</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Imóvel imune (CF art. 150, VI) ou isento (lei municipal) não
+              recebe lançamento de IPTU — avulso nem em lote. Conceder exige o
+              fundamento legal.
+            </p>
+            <div>
+              <Label>Imóvel</Label>
+              <Select
+                value={benefitPropertyId}
+                onValueChange={(v) => {
+                  setBenefitPropertyId(v);
+                  const p = properties.find((x) => x.id === v);
+                  setBeneficio(p?.beneficio_iptu ?? "imunidade");
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {properties.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.inscricao_imobiliaria} — {p.proprietario}
+                      {p.beneficio_iptu ? ` — ${p.beneficio_iptu}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Benefício</Label>
+              <Select value={beneficio} onValueChange={setBeneficio}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="imunidade">
+                    Imunidade (CF art. 150, VI)
+                  </SelectItem>
+                  <SelectItem value="isencao">
+                    Isenção (lei municipal)
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Fundamento legal</Label>
+              <Input
+                value={beneficioMotivo}
+                placeholder="Ex.: CF art. 150, VI, b — templo de qualquer culto"
+                onChange={(e) => setBeneficioMotivo(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            {properties.find((x) => x.id === benefitPropertyId)
+              ?.beneficio_iptu && (
+              <Button
+                variant="outline"
+                onClick={() => submitBenefit(true)}
+                disabled={busy}
+              >
+                Encerrar benefício
+              </Button>
+            )}
+            <Button
+              onClick={() => submitBenefit(false)}
+              disabled={busy || beneficioMotivo.trim().length < 3}
+            >
+              Conceder
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={itbiOpen} onOpenChange={setItbiOpen}>
         <DialogContent>
           <DialogHeader>

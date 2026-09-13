@@ -28,9 +28,11 @@ export const getProperties = createServerFn({ method: "POST" })
       endereco: string;
       valor_venal: string;
       status: string;
+      beneficio_iptu: string | null;
+      beneficio_iptu_motivo: string | null;
     }>(
       `select id, inscricao_imobiliaria, proprietario, endereco,
-         valor_venal::text, status
+         valor_venal::text, status, beneficio_iptu, beneficio_iptu_motivo
        from public.real_estate_properties
        where tenant_id = $1 order by inscricao_imobiliaria`,
       [data.tenant_id],
@@ -160,6 +162,59 @@ export const savePropertyRegistration = createServerFn({ method: "POST" })
     return { id };
   });
 
+const BenefitInput = z.object({
+  tenant_id: z.string().uuid(),
+  property_id: z.string().uuid(),
+  // null encerra o benefício (volta a lançar IPTU).
+  beneficio: z.enum(["imunidade", "isencao"]).nullable(),
+  motivo: z.string().trim().max(500).optional(),
+});
+
+// O4-04c — Concede ou encerra imunidade (CF art. 150, VI) / isenção (lei municipal)
+// de IPTU do imóvel. Conceder exige motivo (fundamento legal); encerrar limpa os dois.
+// Imóvel com benefício não recebe IPTU, avulso nem em lote. Reusa taxes.manage.
+export const setPropertyTaxBenefit = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => BenefitInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "taxes.manage");
+    const motivo = data.motivo?.trim() ?? "";
+    if (data.beneficio && motivo.length < 3)
+      throw new Error("Informe o fundamento legal do benefício");
+    return withTransaction(async (client) => {
+      const property = (
+        await client.query<{ beneficio_iptu: string | null }>(
+          `select beneficio_iptu from public.real_estate_properties
+           where id=$1 and tenant_id=$2 for update`,
+          [data.property_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!property) throw new Error("Imóvel não encontrado");
+      await client.query(
+        `update public.real_estate_properties
+         set beneficio_iptu=$3, beneficio_iptu_motivo=$4, updated_at=now()
+         where id=$1 and tenant_id=$2`,
+        [
+          data.property_id,
+          data.tenant_id,
+          data.beneficio,
+          data.beneficio ? motivo : null,
+        ],
+      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: data.beneficio ? "grant_tax_benefit" : "revoke_tax_benefit",
+        resource: "real_estate_properties",
+        recordId: data.property_id,
+        before: { beneficio_iptu: property.beneficio_iptu },
+        after: { beneficio_iptu: data.beneficio, motivo: motivo || null },
+      });
+      return { id: data.property_id, beneficio_iptu: data.beneficio };
+    });
+  });
+
 const IptuInput = z.object({
   tenant_id: z.string().uuid(),
   property_id: z.string().uuid(),
@@ -184,9 +239,10 @@ export const launchIptu = createServerFn({ method: "POST" })
           proprietario_documento: string;
           valor_venal: string;
           status: string;
+          beneficio_iptu: string | null;
         }>(
           `select inscricao_imobiliaria, proprietario, proprietario_documento,
-             valor_venal::text, status
+             valor_venal::text, status, beneficio_iptu
            from public.real_estate_properties
            where id=$1 and tenant_id=$2 for update`,
           [data.property_id, data.tenant_id],
@@ -195,6 +251,11 @@ export const launchIptu = createServerFn({ method: "POST" })
       if (!property) throw new Error("Imóvel não encontrado");
       if (property.status !== "ativo")
         throw new Error("Imóvel baixado não lança IPTU");
+      // O4-04c — imune (CF art. 150, VI) ou isento (lei municipal) não lança.
+      if (property.beneficio_iptu)
+        throw new Error(
+          `Imóvel com ${property.beneficio_iptu} de IPTU não lança`,
+        );
       const dup = await client.query(
         `select id from public.tax_credits
          where tenant_id=$1 and tributo='IPTU' and exercicio=$2
@@ -262,7 +323,19 @@ export const launchIptuBatch = createServerFn({ method: "POST" })
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "taxes.manage");
     return withTransaction(async (client) => {
-      // Imóveis ativos sem IPTU do exercício (compara inscrição sem diferenciar caixa).
+      // O4-04c — imóveis ativos com imunidade/isenção ficam fora do lote (contados
+      // à parte, para o operador conferir que o benefício foi respeitado).
+      const isentos = Number(
+        (
+          await client.query<{ n: string }>(
+            `select count(*)::text as n from public.real_estate_properties
+             where tenant_id=$1 and status='ativo' and beneficio_iptu is not null`,
+            [data.tenant_id],
+          )
+        ).rows[0].n,
+      );
+      // Imóveis ativos, sem benefício, sem IPTU do exercício (compara inscrição sem
+      // diferenciar caixa).
       const pendentes = (
         await client.query<{
           id: string;
@@ -275,6 +348,7 @@ export const launchIptuBatch = createServerFn({ method: "POST" })
              p.proprietario_documento, p.valor_venal::text
            from public.real_estate_properties p
            where p.tenant_id=$1 and p.status='ativo'
+             and p.beneficio_iptu is null
              and not exists (
                select 1 from public.tax_credits tc
                where tc.tenant_id=p.tenant_id and tc.tributo='IPTU'
@@ -329,9 +403,10 @@ export const launchIptuBatch = createServerFn({ method: "POST" })
           aliquota: data.aliquota,
           lancados,
           ignorados,
+          isentos,
           total_valor: totalValor,
         },
       });
-      return { lancados, ignorados, total_valor: totalValor };
+      return { lancados, ignorados, isentos, total_valor: totalValor };
     });
   });

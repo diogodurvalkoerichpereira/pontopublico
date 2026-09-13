@@ -176,3 +176,48 @@ test("lança IPTU de todos os ativos pendentes; pula baixado, já lançado e ven
   assert.equal(r2.ignorados, 1);
   assert.equal(await iptuCount(), 2);
 });
+
+// O4-04c — imunidade/isenção: imóvel com benefício fica fora do lote e do avulso;
+// encerrado o benefício, volta a lançar. Conceder exige fundamento.
+test("imóvel imune/isento não lança IPTU (lote nem avulso); encerrar o benefício volta a lançar", async () => {
+  const templo = await seedProperty(400000); // 1% → 4000 se lançasse
+  const setBenefit = (beneficio, motivo) =>
+    fn.setPropertyTaxBenefit({
+      data: { tenant_id: tenantId, property_id: templo, beneficio, motivo },
+      context: ctx(),
+    });
+
+  // Conceder sem fundamento é recusado.
+  await assert.rejects(setBenefit("imunidade", ""), /fundamento/i);
+  const g = await setBenefit("imunidade", "CF art. 150, VI, b — templo");
+  assert.equal(g.beneficio_iptu, "imunidade");
+
+  const antes = await iptuCount();
+  const r = await batch();
+  assert.equal(r.isentos, 1); // o templo, contado à parte
+  assert.equal(r.lancados, 0); // e NÃO lançado
+  assert.equal(await iptuCount(), antes);
+
+  // Avulso também recusa.
+  await assert.rejects(
+    fn.launchIptu({
+      data: {
+        tenant_id: tenantId,
+        property_id: templo,
+        exercicio: 2026,
+        aliquota: 1,
+        vencimento: "2026-03-31",
+      },
+      context: ctx(),
+    }),
+    /imunidade/i,
+  );
+
+  // Encerrado o benefício, o lote passa a lançar o imóvel.
+  await setBenefit(null);
+  const r2 = await batch();
+  assert.equal(r2.isentos, 0);
+  assert.equal(r2.lancados, 1);
+  assert.equal(r2.total_valor, 4000);
+  assert.equal(await iptuCount(), antes + 1);
+});

@@ -1355,6 +1355,20 @@ Sem migration; reusa `taxes.manage`. Teste `tests/sprint-itbi.test.mjs` verifica
 mutação (fixar `arbitrado=false` — base sempre o declarado — lança 2.000 em vez de 4.000 e
 derruba).
 
+**O4-04c — Imunidade e isenção de IPTU no cadastro imobiliário (CF art. 150, VI) ✅.**
+`setPropertyTaxBenefit` concede (`imunidade` — entes públicos, templos, partidos, sindicatos,
+educação/assistência — ou `isencao` por lei municipal) ou encerra o benefício do imóvel;
+conceder exige o fundamento legal (`beneficio_iptu_motivo`). Imóvel com benefício **não
+recebe IPTU**: `launchIptu` recusa e `launchIptuBatch` o deixa fora do lote, devolvendo
+`isentos` à parte para conferência — antes, o lote de abertura do exercício lançava IPTU em
+imóvel imune (lançamento indevido que depois exigia cancelamento). Migration aditiva
+`20260909670000_o4_04c_real_estate_tax_exemption.sql` (`beneficio_iptu` com check
+imunidade/isencao + motivo obrigatório quando há benefício). `/tributos` ganha o diálogo
+"Imunidade/isenção", marca o benefício no seletor de imóvel e informa os isentos fora do lote.
+Teste `tests/sprint-iptu-batch.test.mjs` verificado por mutação (retirar o filtro
+`beneficio_iptu is null` do lote lança o templo — derruba). Pendente (O4-04d): página
+própria do cadastro imobiliário (hoje `savePropertyRegistration` não tem tela).
+
 **O4-04b — Resumo do cadastro imobiliário (base do IPTU) ✅.** `getRealEstateSummary`
 consolida a contagem de imóveis por situação (ativo/baixado) e, dos **ativos**, o valor
 venal total e a área construída — a **base tributável** do IPTU; imóvel baixado não integra
