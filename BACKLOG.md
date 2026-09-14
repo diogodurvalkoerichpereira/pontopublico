@@ -1647,6 +1647,27 @@ exercício do empenho, não pela data do pagamento; (j) `valor_bloqueado` ignora
 orçado (erro cru do Postgres); (k) `saldo_apos` da tesouraria fica incoerente com lançamento
 retroativo.
 
+**O4-16 — Tributos: as guias que não tinham como começar nem como consultar. ✅**
+Varredura de fluxo por AST (`export const … = createServerFn` sem nenhuma referência em
+`src/routes`/`src/components`) achou **49 funções de servidor sem tela** — cadeias inteiras
+sem começo ou sem fim, a mesma classe do `createBudgetCommitment`. Este incremento fecha as
+de tributos: **`launchTaxCredit`** ganha "Novo lançamento" (era o único caminho para TAXA e
+COSIP, que não nascem de imóvel nem de prestador — sem ele esses tributos não existiam na
+aplicação); **`saveServiceTaxpayer`** ganha "Novo contribuinte ISS" (a lista de prestadores
+nascia vazia e "Lançar ISS" ficava desabilitado para sempre); **`checkTaxClearance`** ganha
+"Regularidade fiscal", com extrato do que é exigível, o que está a vencer e o que está
+suspenso por parcelamento.
+
+Junto, o item (h) da auditoria financeira: `checkTaxClearance` comparava o documento **como
+string crua** — o mesmo CPF entra no cadastro ora com máscara, ora sem, e a consulta
+devolvia "regular" para quem devia, o pior erro possível numa certidão; agora compara
+normalizado (só letras e dígitos). E tratava **crédito a vencer** como impedimento: lançar o
+IPTU do exercício bloqueava a consulta de todo o município até o vencimento. Exigível passa a
+ser _vencido e não suspenso_ (CTN art. 205); o que está a vencer aparece no extrato e soma em
+`saldo_a_vencer`, sem rebaixar a situação. Quatro casos novos em
+`tests/sprint-tax-clearance.test.mjs`, verificados por mutação (voltar a comparação crua
+derruba 1; voltar o "a vencer" como exigível derruba 2).
+
 ### Onda 5 — Apoio, controle e transparência (10-14 sem)
 
 Protocolo e processo eletrônico com ICP-Brasil · e-SIC/LAI · controle interno ·

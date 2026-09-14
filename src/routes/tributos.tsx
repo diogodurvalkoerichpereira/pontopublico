@@ -38,6 +38,7 @@ import {
   inscribeDividaAtiva,
   getUpdatedTaxDebt,
   cancelTaxCredit,
+  launchTaxCredit,
   getTaxCreditsSummary,
   getTaxCreditsByTributo,
   getTaxCreditPayments,
@@ -50,7 +51,12 @@ import {
   getRealEstateSummary,
   setPropertyTaxBenefit,
 } from "@/lib/real-estate.functions";
-import { getServiceTaxpayers, launchIss } from "@/lib/service-tax.functions";
+import {
+  getServiceTaxpayers,
+  launchIss,
+  saveServiceTaxpayer,
+} from "@/lib/service-tax.functions";
+import { checkTaxClearance } from "@/lib/tax-clearance.functions";
 import { launchItbi } from "@/lib/itbi.functions";
 
 import { AppShell } from "@/components/AppShell";
@@ -99,6 +105,26 @@ type Taxpayer = {
   razao_social: string;
   aliquota_iss: string;
   status: string;
+};
+type Clearance = {
+  contribuinte_documento: string;
+  situacao: string;
+  saldo_total: number;
+  saldo_suspenso: number;
+  saldo_a_vencer: number;
+  saldo_exigivel: number;
+  em_divida_ativa: boolean;
+  debts: Array<{
+    id: string;
+    tributo: string;
+    exercicio: number;
+    inscricao: string;
+    saldo: string;
+    status: string;
+    vencimento: string;
+    suspenso: boolean;
+    vencido: boolean;
+  }>;
 };
 
 const brl = (v: number | string) =>
@@ -159,6 +185,32 @@ function Content() {
   const [benefitPropertyId, setBenefitPropertyId] = useState("");
   const [beneficio, setBeneficio] = useState("imunidade");
   const [beneficioMotivo, setBeneficioMotivo] = useState("");
+
+  // Lançamento avulso (TAXA/COSIP e acertos manuais): é o único caminho para os
+  // tributos que não nascem de imóvel nem de prestador de serviço.
+  const doLaunchAvulso = useServerFn(launchTaxCredit);
+  const [avulsoOpen, setAvulsoOpen] = useState(false);
+  const [avTributo, setAvTributo] = useState("TAXA");
+  const [avContribuinte, setAvContribuinte] = useState("");
+  const [avDocumento, setAvDocumento] = useState("");
+  const [avInscricao, setAvInscricao] = useState("");
+  const [avValor, setAvValor] = useState("");
+
+  // Cadastro do contribuinte de ISS: sem ele a lista de prestadores nasce vazia
+  // e "Lançar ISS" fica permanentemente desabilitado.
+  const doSaveTaxpayer = useServerFn(saveServiceTaxpayer);
+  const [taxpayerOpen, setTaxpayerOpen] = useState(false);
+  const [tpInscricao, setTpInscricao] = useState("");
+  const [tpRazao, setTpRazao] = useState("");
+  const [tpDocumento, setTpDocumento] = useState("");
+  const [tpAtividade, setTpAtividade] = useState("");
+  const [tpAliquota, setTpAliquota] = useState("2");
+
+  // Consulta de regularidade fiscal (base da CND/CPEN).
+  const doCheckClearance = useServerFn(checkTaxClearance);
+  const [cndOpen, setCndOpen] = useState(false);
+  const [cndDoc, setCndDoc] = useState("");
+  const [cndResultado, setCndResultado] = useState<Clearance | null>(null);
 
   const [busy, setBusy] = useState(false);
 
@@ -460,6 +512,85 @@ function Content() {
     }
   };
 
+  const submitAvulso = async () => {
+    if (!activeTenant) return;
+    setBusy(true);
+    try {
+      await doLaunchAvulso({
+        data: {
+          tenant_id: activeTenant.id,
+          tributo: avTributo as "IPTU" | "ISS" | "ITBI" | "TAXA" | "COSIP",
+          exercicio: Number(exercicio),
+          contribuinte: avContribuinte.trim(),
+          contribuinte_documento: avDocumento.trim(),
+          inscricao: avInscricao.trim(),
+          valor_lancado: Number(avValor),
+          vencimento,
+        },
+      });
+      toast.success(`${avTributo} lançado: ${brl(avValor)}`);
+      setAvulsoOpen(false);
+      setAvContribuinte("");
+      setAvDocumento("");
+      setAvInscricao("");
+      setAvValor("");
+      refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao lançar");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitTaxpayer = async () => {
+    if (!activeTenant) return;
+    setBusy(true);
+    try {
+      await doSaveTaxpayer({
+        data: {
+          tenant_id: activeTenant.id,
+          inscricao_municipal: tpInscricao.trim(),
+          razao_social: tpRazao.trim(),
+          documento: tpDocumento.trim(),
+          atividade: tpAtividade.trim(),
+          aliquota_iss: Number(tpAliquota),
+          status: "ativo" as const,
+        },
+      });
+      toast.success("Contribuinte de ISS cadastrado");
+      setTaxpayerOpen(false);
+      setTpInscricao("");
+      setTpRazao("");
+      setTpDocumento("");
+      setTpAtividade("");
+      qc.invalidateQueries({
+        queryKey: ["service-taxpayers", activeTenant.id],
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao gravar");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitCnd = async () => {
+    if (!activeTenant || cndDoc.trim().length < 3) return;
+    setBusy(true);
+    try {
+      const r = await doCheckClearance({
+        data: {
+          tenant_id: activeTenant.id,
+          contribuinte_documento: cndDoc.trim(),
+        },
+      });
+      setCndResultado(r as Clearance);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha na consulta");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <section className="space-y-6">
       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -472,8 +603,34 @@ function Content() {
             </p>
           </div>
         </div>
+        <div className="flex gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            onClick={() => {
+              setCndResultado(null);
+              setCndDoc("");
+              setCndOpen(true);
+            }}
+          >
+            <ScrollText className="size-4" /> Regularidade fiscal
+          </Button>
+        </div>
         {canManage && (
           <div className="flex gap-2 flex-wrap">
+            <Button
+              onClick={() => {
+                setAvContribuinte("");
+                setAvDocumento("");
+                setAvInscricao("");
+                setAvValor("");
+                setAvulsoOpen(true);
+              }}
+            >
+              <Calculator className="size-4" /> Novo lançamento
+            </Button>
+            <Button variant="outline" onClick={() => setTaxpayerOpen(true)}>
+              <Briefcase className="size-4" /> Novo contribuinte ISS
+            </Button>
             <Button
               variant="outline"
               onClick={() => {
@@ -992,6 +1149,267 @@ function Content() {
               Conceder
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={avulsoOpen} onOpenChange={setAvulsoOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Novo lançamento tributário</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Tributo</Label>
+              <Select value={avTributo} onValueChange={setAvTributo}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="TAXA">Taxa</SelectItem>
+                  <SelectItem value="COSIP">COSIP</SelectItem>
+                  <SelectItem value="IPTU">IPTU</SelectItem>
+                  <SelectItem value="ISS">ISS</SelectItem>
+                  <SelectItem value="ITBI">ITBI</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Exercício</Label>
+                <Input
+                  type="number"
+                  value={exercicio}
+                  onChange={(e) => setExercicio(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label>Vencimento</Label>
+                <Input
+                  type="date"
+                  value={vencimento}
+                  onChange={(e) => setVencimento(e.target.value)}
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Contribuinte</Label>
+              <Input
+                value={avContribuinte}
+                onChange={(e) => setAvContribuinte(e.target.value)}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>CPF/CNPJ</Label>
+                <Input
+                  value={avDocumento}
+                  onChange={(e) => setAvDocumento(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label>Inscrição</Label>
+                <Input
+                  value={avInscricao}
+                  onChange={(e) => setAvInscricao(e.target.value)}
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Valor lançado</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={avValor}
+                onChange={(e) => setAvValor(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={submitAvulso}
+              disabled={
+                busy ||
+                avContribuinte.trim().length < 2 ||
+                avDocumento.trim().length < 3 ||
+                avInscricao.trim().length < 1 ||
+                !(Number(avValor) > 0)
+              }
+            >
+              Lançar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={taxpayerOpen} onOpenChange={setTaxpayerOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Novo contribuinte de ISS</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Inscrição municipal</Label>
+                <Input
+                  value={tpInscricao}
+                  onChange={(e) => setTpInscricao(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label>CPF/CNPJ</Label>
+                <Input
+                  value={tpDocumento}
+                  onChange={(e) => setTpDocumento(e.target.value)}
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Razão social</Label>
+              <Input
+                value={tpRazao}
+                onChange={(e) => setTpRazao(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Atividade</Label>
+              <Input
+                value={tpAtividade}
+                onChange={(e) => setTpAtividade(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Alíquota de ISS (%)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={tpAliquota}
+                onChange={(e) => setTpAliquota(e.target.value)}
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Teto de 5% (CF art. 156, §3º, I).
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={submitTaxpayer}
+              disabled={
+                busy ||
+                tpInscricao.trim().length < 1 ||
+                tpRazao.trim().length < 2 ||
+                tpDocumento.trim().length < 3 ||
+                tpAtividade.trim().length < 2 ||
+                !(Number(tpAliquota) > 0)
+              }
+            >
+              Cadastrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={cndOpen} onOpenChange={setCndOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Regularidade fiscal do contribuinte</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>CPF/CNPJ</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={cndDoc}
+                  onChange={(e) => setCndDoc(e.target.value)}
+                  placeholder="com ou sem máscara"
+                />
+                <Button
+                  onClick={submitCnd}
+                  disabled={busy || cndDoc.trim().length < 3}
+                >
+                  Consultar
+                </Button>
+              </div>
+            </div>
+            {cndResultado && (
+              <div className="space-y-3">
+                <Badge
+                  variant={
+                    cndResultado.situacao === "regular"
+                      ? "default"
+                      : cndResultado.situacao === "regular_com_ressalva"
+                        ? "secondary"
+                        : "destructive"
+                  }
+                >
+                  {cndResultado.situacao === "regular"
+                    ? "Regular — sem débito exigível"
+                    : cndResultado.situacao === "regular_com_ressalva"
+                      ? "Regular com ressalva (efeito de negativa)"
+                      : "Com débitos exigíveis"}
+                </Badge>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    Exigível hoje:{" "}
+                    <strong>{brl(cndResultado.saldo_exigivel)}</strong>
+                  </div>
+                  <div>
+                    A vencer:{" "}
+                    <strong>{brl(cndResultado.saldo_a_vencer)}</strong>
+                  </div>
+                  <div>
+                    Suspenso (parcelado):{" "}
+                    <strong>{brl(cndResultado.saldo_suspenso)}</strong>
+                  </div>
+                  <div>
+                    Total em aberto:{" "}
+                    <strong>{brl(cndResultado.saldo_total)}</strong>
+                  </div>
+                </div>
+                {cndResultado.debts.length > 0 && (
+                  <div className="rounded-lg border max-h-64 overflow-y-auto">
+                    <table className="w-full text-sm">
+                      <thead className="border-b bg-muted/40 text-left">
+                        <tr>
+                          <th className="p-2 font-semibold">Tributo</th>
+                          <th className="p-2 font-semibold">Inscrição</th>
+                          <th className="p-2 font-semibold text-right">
+                            Saldo
+                          </th>
+                          <th className="p-2 font-semibold">Situação</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {cndResultado.debts.map((d) => (
+                          <tr key={d.id} className="border-b last:border-0">
+                            <td className="p-2">
+                              {d.tributo}/{d.exercicio}
+                            </td>
+                            <td className="p-2">{d.inscricao}</td>
+                            <td className="p-2 text-right tabular-nums">
+                              {brl(d.saldo)}
+                            </td>
+                            <td className="p-2 text-xs">
+                              {d.suspenso
+                                ? "suspenso (parcelado)"
+                                : !d.vencido
+                                  ? "a vencer"
+                                  : d.status === "divida_ativa"
+                                    ? "dívida ativa"
+                                    : "vencido"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Consulta interna de regularidade. Não é a certidão: a CND/CPEN
+                  exige layout, código de autenticação e assinatura do ente.
+                </p>
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 

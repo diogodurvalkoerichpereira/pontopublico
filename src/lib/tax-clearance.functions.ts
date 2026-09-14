@@ -20,9 +20,19 @@ const Input = z.object({
   contribuinte_documento: z.string().trim().min(3).max(20),
 });
 
-// Situação: "regular" (nada em aberto), "regular_com_ressalva" (há débitos, mas TODOS
-// com exigibilidade suspensa por parcelamento ativo → CPEN) ou "com_debitos" (ao menos
-// um débito exigível). Débito em aberto é um crédito não quitado/cancelado com saldo > 0.
+// Situação: "regular" (nada em aberto), "regular_com_ressalva" (há débitos, mas NENHUM
+// exigível hoje — suspensos por parcelamento ativo ou ainda a vencer → CPEN) ou
+// "com_debitos" (ao menos um débito exigível). Débito em aberto é um crédito não
+// quitado/cancelado com saldo > 0.
+//
+// Duas regras que o caminho anterior errava:
+// 1. O documento é comparado **normalizado** (só letras e dígitos). O mesmo CPF entra no
+//    cadastro ora com máscara, ora sem — comparar a string crua devolvia "regular" para
+//    quem devia, que é o pior erro possível numa certidão.
+// 2. Crédito **a vencer** não é impedimento (CTN art. 205: a certidão atesta débito
+//    exigível). Ele entra em `debts` marcado `vencido:false` e conta em `saldo_a_vencer`,
+//    mas não rebaixa a situação — antes, lançar o IPTU do exercício bloqueava a CND de
+//    todos os contribuintes do município até o vencimento.
 export const checkTaxClearance = createServerFn({ method: "POST" })
   .middleware([requireAuth])
   .validator((data: unknown) => Input.parse(data))
@@ -38,6 +48,7 @@ export const checkTaxClearance = createServerFn({ method: "POST" })
       status: string;
       vencimento: string;
       suspenso: boolean;
+      vencido: boolean;
     }>(
       `select tc.id, tc.tributo, tc.exercicio, tc.inscricao,
          (tc.valor_lancado - tc.valor_pago)::text as saldo, tc.status,
@@ -46,22 +57,31 @@ export const checkTaxClearance = createServerFn({ method: "POST" })
            select 1 from public.tax_installment_plans p
            where p.credit_id = tc.id and p.tenant_id = tc.tenant_id
              and p.status = 'ativo'
-         ) as suspenso
+         ) as suspenso,
+         (tc.vencimento < current_date) as vencido
        from public.tax_credits tc
        where tc.tenant_id = $1
-         and tc.contribuinte_documento = $2
+         and regexp_replace(lower(tc.contribuinte_documento), '[^0-9a-z]', '', 'g')
+             = regexp_replace(lower($2), '[^0-9a-z]', '', 'g')
          and tc.status in ('lancado', 'divida_ativa')
          and tc.valor_lancado > tc.valor_pago
        order by tc.exercicio desc, tc.tributo, tc.inscricao`,
       [data.tenant_id, data.contribuinte_documento],
     );
-    const debts = rows.map((d) => ({ ...d, suspenso: Boolean(d.suspenso) }));
+    const debts = rows.map((d) => ({
+      ...d,
+      suspenso: Boolean(d.suspenso),
+      vencido: Boolean(d.vencido),
+    }));
     const round2 = (v: number) => Number(v.toFixed(2));
-    const saldoTotal = round2(debts.reduce((s, d) => s + Number(d.saldo), 0));
-    const saldoSuspenso = round2(
-      debts.filter((d) => d.suspenso).reduce((s, d) => s + Number(d.saldo), 0),
-    );
-    const exigiveis = debts.filter((d) => !d.suspenso);
+    const soma = (list: typeof debts) =>
+      round2(list.reduce((s, d) => s + Number(d.saldo), 0));
+    const saldoTotal = soma(debts);
+    const saldoSuspenso = soma(debts.filter((d) => d.suspenso));
+    const aVencer = debts.filter((d) => !d.suspenso && !d.vencido);
+    // Exigível hoje: vencido e sem parcelamento ativo. Dívida ativa entra por já ter
+    // vencido na origem; o parcelamento suspende a exigibilidade também dela.
+    const exigiveis = debts.filter((d) => !d.suspenso && d.vencido);
     const emDividaAtiva = debts.some((d) => d.status === "divida_ativa");
     const situacao =
       debts.length === 0
@@ -74,6 +94,8 @@ export const checkTaxClearance = createServerFn({ method: "POST" })
       situacao,
       saldo_total: saldoTotal,
       saldo_suspenso: saldoSuspenso,
+      saldo_a_vencer: soma(aVencer),
+      saldo_exigivel: soma(exigiveis),
       em_divida_ativa: emDividaAtiva,
       debts,
     };

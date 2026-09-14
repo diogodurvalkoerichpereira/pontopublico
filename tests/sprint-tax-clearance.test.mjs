@@ -86,13 +86,20 @@ async function bundle(entry, name) {
 
 const ctx = () => ({ userId });
 
-async function seedCredit(doc, inscricao, lancado, pago, status) {
+async function seedCredit(
+  doc,
+  inscricao,
+  lancado,
+  pago,
+  status,
+  vencimento = "2024-05-01",
+) {
   await db.query(
     `insert into public.tax_credits
        (id, tenant_id, tributo, exercicio, contribuinte, contribuinte_documento,
         inscricao, valor_lancado, valor_pago, vencimento, status)
-     values ($1,$2,'IPTU',2024,'Fulano',$3,$4,$5,$6,'2024-05-01',$7)`,
-    [randomUUID(), tenantId, doc, inscricao, lancado, pago, status],
+     values ($1,$2,'IPTU',2024,'Fulano',$3,$4,$5,$6,$8,$7)`,
+    [randomUUID(), tenantId, doc, inscricao, lancado, pago, status, vencimento],
   );
 }
 
@@ -145,6 +152,39 @@ test("dívida ativa com saldo acende a pendência", async () => {
   assert.equal(r.saldo_total, 200);
   assert.equal(r.em_divida_ativa, true);
   assert.equal(r.debts.length, 1);
+});
+
+test("documento com máscara acha o débito do mesmo contribuinte", async () => {
+  // O cadastro grava ora com máscara, ora sem. Comparar a string crua devolvia
+  // "regular" para quem devia — o pior erro possível numa certidão.
+  await seedCredit("529.982.247-25", "M-1", 500, 0, "lancado");
+  const semMascara = await check("52998224725");
+  assert.equal(semMascara.situacao, "com_debitos");
+  assert.equal(semMascara.saldo_total, 500);
+  const comMascara = await check("529.982.247-25");
+  assert.equal(comMascara.situacao, "com_debitos");
+});
+
+test("crédito a vencer não impede a certidão, mas aparece no extrato", async () => {
+  // CTN art. 205: a certidão atesta débito EXIGÍVEL. Lançar o IPTU do exercício
+  // não pode bloquear a CND de todo o município até o vencimento.
+  await seedCredit("444", "AV-1", 700, 0, "lancado", "2999-12-31");
+  const r = await check("444");
+  assert.equal(r.situacao, "regular_com_ressalva");
+  assert.equal(r.saldo_exigivel, 0);
+  assert.equal(r.saldo_a_vencer, 700);
+  assert.equal(r.saldo_total, 700);
+  assert.equal(r.debts.length, 1);
+  assert.equal(r.debts[0].vencido, false);
+});
+
+test("vencido junto com a vencer rebaixa para com_debitos", async () => {
+  await seedCredit("555", "AV-2", 100, 0, "lancado", "2999-12-31");
+  await seedCredit("555", "VE-1", 300, 0, "lancado", "2024-01-10");
+  const r = await check("555");
+  assert.equal(r.situacao, "com_debitos");
+  assert.equal(r.saldo_exigivel, 300);
+  assert.equal(r.saldo_a_vencer, 100);
 });
 
 test("crédito sem saldo (pago integral) não conta mesmo sem status quitado", async () => {
