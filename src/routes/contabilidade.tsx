@@ -32,6 +32,8 @@ const EVENTO_LABEL: Record<string, string> = {
   baixa_bem_depreciacao: "Baixa de bem — depreciação acumulada",
   baixa_bem_desincorporacao: "Baixa de bem — desincorporação (VPD)",
   baixa_bem_alienacao: "Baixa de bem — alienação (VPA)",
+  reavaliacao_positiva: "Reavaliação de bem — ganho (VPA)",
+  reavaliacao_negativa: "Reavaliação de bem — perda (VPD)",
 };
 type Roteiro = {
   event_code: string;
@@ -114,7 +116,9 @@ function Content() {
             | "pagamento"
             | "baixa_bem_depreciacao"
             | "baixa_bem_desincorporacao"
-            | "baixa_bem_alienacao",
+            | "baixa_bem_alienacao"
+            | "reavaliacao_positiva"
+            | "reavaliacao_negativa",
           debit_account: v.d.trim(),
           credit_account: v.c.trim(),
         },

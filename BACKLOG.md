@@ -1328,6 +1328,28 @@ foram movidos para `accounting.server.ts` (só servidor) e os códigos de evento
 Regra derivada, registrada no CLAUDE.md: `*.functions.ts` não exporta helper puro que
 dependa de módulo de servidor.
 
+**O3-11d — Reavaliação de bens patrimoniais (NBC TSP) ✅.** O roteiro previa
+depreciação (O3-03) e baixa (O3-11/O3-11c), mas nunca a **reavaliação** de bem a valor
+justo (laudo/avaliação), citada no roadmap e ausente do código. `revaluateAsset` ajusta
+o valor líquido contábil (aquisição − depreciação acumulada) ao novo valor informado
+**sem tocar a depreciação já acumulada**: o valor de aquisição passa a ser
+`novo_valor_liquido + depreciação acumulada`, o que preserva a fórmula existente e os
+CHECKs de `asset_deprec_teto`/`asset_residual_teto` sem reabrir o cronograma de
+depreciação já corrido. Só bem **ativo** reavalia; o novo líquido nunca pode ficar
+abaixo do valor residual (violaria o CHECK). Ganho (líquido sobe) ou perda (líquido
+desce) contabiliza pelo **roteiro do ente** (O2-06, dois eventos novos —
+`reavaliacao_positiva`: D imobilizado / C VPA de ajuste; `reavaliacao_negativa`: D VPD
+de ajuste / C imobilizado); sem delta, nada contabiliza. Histórico append-only em
+`patrimony_asset_revaluations` (um bem pode ser reavaliado mais de uma vez na vida
+útil); `getAssetRevaluations` lista o período e consolida ganhos/perdas, espelhando
+`getAssetDisposals` (O3-11b) para o outro lado do ciclo de vida do bem. Migration
+`20260909700000_o3_11d_asset_revaluation.sql` (tabela + recria o CHECK de `event_code`
+com os dois códigos novos); reusa `assets.*`. `/patrimonio` ganha a ação "Reavaliar" e o
+demonstrativo de reavaliações; `/contabilidade` ganha os dois rótulos no roteiro. Teste
+`tests/sprint-asset-revaluation.test.mjs` verificado por mutação (inverter o sinal do
+resultado — líquido anterior − novo em vez de novo − anterior — inverte ganho/perda e
+o evento contabilizado, e ainda viola o CHECK do histórico — derruba).
+
 **O4-04d — Página do cadastro imobiliário ✅.** Rota `/imoveis` dá tela ao O4-04:
 lista os imóveis (inscrição, proprietário/documento, endereço, valor venal, situação e
 selo de imunidade/isenção), cadastra e **edita por id** (`savePropertyRegistration`,

@@ -6,6 +6,7 @@ import {
   Building,
   Plus,
   TrendingDown,
+  TrendingUp,
   Archive,
   ScrollText,
 } from "lucide-react";
@@ -28,8 +29,10 @@ import {
   depreciateAsset,
   depreciateAllAssets,
   disposeAsset,
+  revaluateAsset,
   getPatrimonySummary,
   getAssetDisposals,
+  getAssetRevaluations,
 } from "@/lib/assets.functions";
 
 export const Route = createFileRoute("/patrimonio")({ component: Page });
@@ -69,12 +72,15 @@ function Content() {
   const depreciate = useServerFn(depreciateAsset);
   const depreciateAll = useServerFn(depreciateAllAssets);
   const dispose = useServerFn(disposeAsset);
+  const revaluate = useServerFn(revaluateAsset);
   const qc = useQueryClient();
 
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [disposeTarget, setDisposeTarget] = useState<Asset | null>(null);
   const [disposeForm, setDisposeForm] = useState({ motivo: "", valor: "0" });
+  const [revalTarget, setRevalTarget] = useState<Asset | null>(null);
+  const [revalForm, setRevalForm] = useState({ valor: "0", justificativa: "" });
   const [form, setForm] = useState({
     tombamento: "",
     descricao: "",
@@ -120,10 +126,32 @@ function Content() {
       }),
   });
 
+  const loadRevaluations = useServerFn(getAssetRevaluations);
+  const { data: revaluations } = useQuery({
+    queryKey: [
+      "asset-revaluations",
+      activeTenant?.id,
+      periodo.from,
+      periodo.to,
+    ],
+    enabled: Boolean(activeTenant),
+    queryFn: () =>
+      loadRevaluations({
+        data: {
+          tenant_id: activeTenant!.id,
+          from: periodo.from,
+          to: periodo.to,
+        },
+      }),
+  });
+
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["assets", activeTenant?.id] });
     qc.invalidateQueries({ queryKey: ["patrimony-summary", activeTenant?.id] });
     qc.invalidateQueries({ queryKey: ["asset-disposals", activeTenant?.id] });
+    qc.invalidateQueries({
+      queryKey: ["asset-revaluations", activeTenant?.id],
+    });
   };
 
   const runDepreciateAll = async () => {
@@ -225,6 +253,45 @@ function Content() {
       refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Falha ao baixar");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openReval = (a: Asset) => {
+    setRevalTarget(a);
+    setRevalForm({ valor: a.valor_liquido, justificativa: "" });
+  };
+
+  const submitReval = async () => {
+    if (!activeTenant || !revalTarget) return;
+    setBusy(true);
+    try {
+      const r = await revaluate({
+        data: {
+          tenant_id: activeTenant.id,
+          asset_id: revalTarget.id,
+          data_reavaliacao: new Date().toISOString().slice(0, 10),
+          novo_valor_liquido: Number(revalForm.valor || 0),
+          justificativa: revalForm.justificativa.trim(),
+        },
+      });
+      // O3-11d: informa se a reavaliação foi ao razão pelo roteiro do ente.
+      toast.success(
+        `Bem reavaliado — resultado ${brl(r.resultado)} (${
+          r.resultado >= 0 ? "ganho" : "perda"
+        })${
+          r.lancamentos
+            ? ` · ${r.lancamentos} lançamento(s) no razão`
+            : " · sem roteiro contábil configurado"
+        }`,
+      );
+      setRevalTarget(null);
+      refresh();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Falha ao reavaliar",
+      );
     } finally {
       setBusy(false);
     }
@@ -334,6 +401,13 @@ function Content() {
                           onClick={() => doDepreciate(a, 1)}
                         >
                           <TrendingDown className="size-4" /> Depreciar mês
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openReval(a)}
+                        >
+                          <TrendingUp className="size-4" /> Reavaliar
                         </Button>
                         <Button
                           size="sm"
@@ -492,6 +566,94 @@ function Content() {
         </div>
       </div>
 
+      <div className="rounded-xl border bg-card p-4 space-y-4">
+        <div className="flex items-center gap-2">
+          <TrendingUp className="size-5 text-primary" />
+          <div>
+            <h2 className="font-bold">Demonstrativo de reavaliações</h2>
+            <p className="text-xs text-muted-foreground">
+              Ganhos e perdas de valor justo no período (NBC TSP)
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="rounded-lg border p-3">
+            <div className="text-xs text-muted-foreground">Ganhos / Perdas</div>
+            <div className="text-lg font-bold tabular-nums">
+              <span className="text-emerald-600">
+                {brl(revaluations?.totais.ganhos ?? 0)}
+              </span>{" "}
+              /{" "}
+              <span className="text-destructive">
+                {brl(revaluations?.totais.perdas ?? 0)}
+              </span>
+            </div>
+          </div>
+          <div className="rounded-lg border p-3">
+            <div className="text-xs text-muted-foreground">
+              Resultado líquido
+            </div>
+            <div
+              className={`text-lg font-bold tabular-nums ${
+                (revaluations?.totais.resultado_liquido ?? 0) >= 0
+                  ? "text-emerald-600"
+                  : "text-destructive"
+              }`}
+            >
+              {brl(revaluations?.totais.resultado_liquido ?? 0)}
+            </div>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b bg-muted/40 text-left">
+              <tr>
+                <th className="p-2 font-semibold">Data</th>
+                <th className="p-2 font-semibold">Tombamento</th>
+                <th className="p-2 font-semibold">Descrição</th>
+                <th className="p-2 font-semibold text-right">Líquido antes</th>
+                <th className="p-2 font-semibold text-right">Líquido depois</th>
+                <th className="p-2 font-semibold text-right">Resultado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(revaluations?.revaluations ?? []).map((r) => (
+                <tr key={r.id} className="border-b last:border-0">
+                  <td className="p-2 tabular-nums">{r.data_reavaliacao}</td>
+                  <td className="p-2 font-medium">{r.tombamento}</td>
+                  <td className="p-2">{r.descricao}</td>
+                  <td className="p-2 text-right tabular-nums">
+                    {brl(r.valor_liquido_anterior)}
+                  </td>
+                  <td className="p-2 text-right tabular-nums">
+                    {brl(r.valor_liquido_novo)}
+                  </td>
+                  <td
+                    className={`p-2 text-right tabular-nums ${
+                      r.resultado >= 0 ? "text-emerald-600" : "text-destructive"
+                    }`}
+                  >
+                    {brl(r.resultado)}
+                  </td>
+                </tr>
+              ))}
+              {(revaluations?.revaluations ?? []).length === 0 && (
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="p-4 text-center text-muted-foreground"
+                  >
+                    Nenhuma reavaliação no período.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
@@ -592,6 +754,52 @@ function Content() {
           <DialogFooter>
             <Button onClick={submitDispose} disabled={busy}>
               Confirmar baixa
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(revalTarget)}
+        onOpenChange={(o) => !o && setRevalTarget(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reavaliar bem {revalTarget?.tombamento}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Valor líquido contábil atual:{" "}
+              {brl(revalTarget?.valor_liquido ?? 0)}. O resultado da reavaliação
+              = novo líquido − líquido atual.
+            </p>
+            <div>
+              <Label>Novo valor líquido (laudo/avaliação)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={revalForm.valor}
+                onChange={(e) =>
+                  setRevalForm((f) => ({ ...f, valor: e.target.value }))
+                }
+              />
+            </div>
+            <div>
+              <Label>Justificativa</Label>
+              <Input
+                value={revalForm.justificativa}
+                onChange={(e) =>
+                  setRevalForm((f) => ({
+                    ...f,
+                    justificativa: e.target.value,
+                  }))
+                }
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={submitReval} disabled={busy}>
+              Confirmar reavaliação
             </Button>
           </DialogFooter>
         </DialogContent>

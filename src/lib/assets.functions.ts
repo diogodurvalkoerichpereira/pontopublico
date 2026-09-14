@@ -636,3 +636,189 @@ export const getAssetDisposals = createServerFn({ method: "POST" })
       },
     };
   });
+
+const RevaluateInput = z.object({
+  tenant_id: z.string().uuid(),
+  asset_id: z.string().uuid(),
+  data_reavaliacao: z.string().date(),
+  novo_valor_liquido: z.number().min(0).max(1_000_000_000_000),
+  justificativa: z.string().trim().min(3).max(500),
+});
+
+// O3-11d — Reavaliação de bem (NBC TSP). Ajusta o valor líquido contábil ao novo
+// valor justo (laudo/avaliação), sem alterar a depreciação já acumulada: o valor
+// de aquisição passa a ser `novo_valor_liquido + depreciação acumulada`, o que
+// preserva a fórmula líquido = aquisição − depreciação acumulada e os CHECKs de
+// asset_deprec_teto/asset_residual_teto sem tocar o cronograma de depreciação já
+// corrido. Só bem ativo reavalia. O novo líquido nunca pode ficar abaixo do valor
+// residual (violaria asset_deprec_teto). Ganho (líquido sobe) ou perda (líquido
+// desce) contabiliza pelo roteiro do ente (O2-06); sem delta, nada contabiliza.
+export const revaluateAsset = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => RevaluateInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "assets.manage");
+    return withTransaction(async (client) => {
+      const asset = (
+        await client.query<{
+          valor_aquisicao: string;
+          valor_residual: string;
+          depreciacao_acumulada: string;
+          status: string;
+        }>(
+          `select valor_aquisicao::text, valor_residual::text,
+             depreciacao_acumulada::text, status
+           from public.patrimony_assets where id=$1 and tenant_id=$2 for update`,
+          [data.asset_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!asset) throw new Error("Bem não encontrado");
+      if (asset.status !== "ativo") throw new Error("Bem baixado não reavalia");
+      const valorResidual = Number(asset.valor_residual);
+      const depreciacaoAcumulada = Number(asset.depreciacao_acumulada);
+      const valorLiquidoAnterior = round2(
+        Number(asset.valor_aquisicao) - depreciacaoAcumulada,
+      );
+      if (data.novo_valor_liquido < valorResidual)
+        throw new Error(
+          "Novo valor líquido não pode ser menor que o valor residual",
+        );
+      const novoValorAquisicao = round2(
+        data.novo_valor_liquido + depreciacaoAcumulada,
+      );
+      if (novoValorAquisicao <= 0)
+        throw new Error(
+          "Reavaliação resultaria em valor de aquisição inválido",
+        );
+      const resultado = round2(data.novo_valor_liquido - valorLiquidoAnterior);
+      await client.query(
+        `update public.patrimony_assets
+         set valor_aquisicao=$3, updated_at=now()
+         where id=$1 and tenant_id=$2`,
+        [data.asset_id, data.tenant_id, novoValorAquisicao],
+      );
+      await client.query(
+        `insert into public.patrimony_asset_revaluations
+           (tenant_id, asset_id, data_reavaliacao, valor_liquido_anterior,
+            valor_liquido_novo, resultado, justificativa, created_by)
+         values ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [
+          data.tenant_id,
+          data.asset_id,
+          data.data_reavaliacao,
+          valorLiquidoAnterior,
+          data.novo_valor_liquido,
+          resultado,
+          data.justificativa,
+          context.userId,
+        ],
+      );
+      // O3-11d — contabiliza o ganho/perda de reavaliação pelo roteiro do ente
+      // (O2-06). Sem delta, nada contabiliza; sem mapeamento, o fato não escritura
+      // (comportamento do O2-06).
+      let lancamentos = 0;
+      if (resultado !== 0) {
+        const exercicio = Number(data.data_reavaliacao.slice(0, 4));
+        const posted = await contabilizarEvento({
+          client,
+          tenantId: data.tenant_id,
+          exercicio,
+          dataLancamento: data.data_reavaliacao,
+          eventCode:
+            resultado > 0 ? "reavaliacao_positiva" : "reavaliacao_negativa",
+          valor: Math.abs(resultado),
+          historico:
+            resultado > 0
+              ? "Reavaliação de bem — ganho de valor justo (VPA)"
+              : "Reavaliação de bem — perda de valor justo (VPD)",
+          sourceRef: data.asset_id,
+          actorId: context.userId,
+        });
+        if (posted) lancamentos += 1;
+      }
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "revaluate",
+        resource: "patrimony_assets",
+        recordId: data.asset_id,
+        after: {
+          valor_liquido_anterior: valorLiquidoAnterior,
+          valor_liquido_novo: data.novo_valor_liquido,
+          resultado,
+          lancamentos,
+        },
+      });
+      return {
+        valor_liquido_anterior: valorLiquidoAnterior,
+        valor_liquido_novo: data.novo_valor_liquido,
+        resultado,
+        lancamentos,
+      };
+    });
+  });
+
+const RevaluationsInput = z.object({
+  tenant_id: z.string().uuid(),
+  from: z.string().date(),
+  to: z.string().date(),
+});
+
+// O3-11d — Demonstrativo de reavaliações do exercício. Lista as reavaliações no
+// período (por data_reavaliacao), com o bem, o líquido antes/depois e o resultado
+// (ganho/perda de valor justo), e consolida os totais — espelha getAssetDisposals
+// (O3-11b) para o outro lado do ciclo de vida do bem (ajuste de valor, não saída).
+// Read-only.
+export const getAssetRevaluations = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => RevaluationsInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "assets.read");
+    const rows = await query<{
+      id: string;
+      tombamento: string;
+      descricao: string;
+      data_reavaliacao: string;
+      valor_liquido_anterior: string;
+      valor_liquido_novo: string;
+      resultado: string;
+      justificativa: string;
+    }>(
+      `select r.id, a.tombamento, a.descricao,
+         r.data_reavaliacao::text as data_reavaliacao,
+         r.valor_liquido_anterior::text, r.valor_liquido_novo::text,
+         r.resultado::text, r.justificativa
+       from public.patrimony_asset_revaluations r
+       join public.patrimony_assets a on a.id = r.asset_id and a.tenant_id = r.tenant_id
+       where r.tenant_id=$1 and r.data_reavaliacao between $2::date and $3::date
+       order by r.data_reavaliacao, r.id`,
+      [data.tenant_id, data.from, data.to],
+    );
+    const totais = rows.reduce(
+      (acc, r) => {
+        const resultado = Number(r.resultado);
+        if (resultado >= 0) acc.ganhos = round2(acc.ganhos + resultado);
+        else acc.perdas = round2(acc.perdas + resultado);
+        return acc;
+      },
+      { ganhos: 0, perdas: 0 },
+    );
+    return {
+      revaluations: rows.map((r) => ({
+        id: r.id,
+        tombamento: r.tombamento,
+        descricao: r.descricao,
+        data_reavaliacao: r.data_reavaliacao,
+        valor_liquido_anterior: round2(Number(r.valor_liquido_anterior)),
+        valor_liquido_novo: round2(Number(r.valor_liquido_novo)),
+        resultado: round2(Number(r.resultado)),
+        justificativa: r.justificativa,
+      })),
+      totais: {
+        ...totais,
+        resultado_liquido: round2(totais.ganhos + totais.perdas),
+      },
+    };
+  });

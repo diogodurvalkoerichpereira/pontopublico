@@ -130,7 +130,7 @@ after(async () => {
 
 test("lista todos os eventos; grava e atualiza o roteiro (um por evento); recusa evento desconhecido", async () => {
   const antes = await list();
-  assert.equal(antes.roteiros.length, 7); // 4 do O2-06 + 3 da baixa de bem (O3-11c)
+  assert.equal(antes.roteiros.length, 9); // 4 do O2-06 + 3 da baixa de bem (O3-11c) + 2 da reavaliação (O3-11d)
   assert.ok(antes.roteiros.every((r) => r.configurado === false));
   assert.equal(antes.canManage, true);
 
