@@ -40,10 +40,12 @@ import {
 import {
   getContractItems,
   addContractItem,
+  cancelContractItem,
 } from "@/lib/contract-items.functions";
 import {
   getContractAmendments,
   registerContractAmendment,
+  cancelContractAmendment,
 } from "@/lib/contract-amendments.functions";
 import { linkContractToProcurement } from "@/lib/contract-procurement.functions";
 import { getProcurementProcesses } from "@/lib/procurement.functions";
@@ -146,6 +148,18 @@ function Content() {
   });
   const [vinculoOpen, setVinculoOpen] = useState(false);
   const [processId, setProcessId] = useState("");
+  // O3-14 — desfazer. Aditivo e item consomem cota legal (25% do art. 125 e o
+  // valor do contrato): sem cancelamento, um lançamento errado a queimava para
+  // sempre, e "registrar outro compensando" não resolve, porque o limite é
+  // sobre o acumulado.
+  const doCancelItem = useServerFn(cancelContractItem);
+  const doCancelAditivo = useServerFn(cancelContractAmendment);
+  const [cancelAlvo, setCancelAlvo] = useState<{
+    tipo: "item" | "aditivo";
+    id: string;
+    rotulo: string;
+  } | null>(null);
+  const [cancelMotivo, setCancelMotivo] = useState("");
   const [measureContract, setMeasureContract] = useState<Contract | null>(null);
   const [mForm, setMForm] = useState({
     competencia: new Date().toISOString().slice(0, 7),
@@ -231,6 +245,8 @@ function Content() {
     quantidade: string;
     preco_unitario: string;
     valor_total: string;
+    status: string;
+    motivo_cancelamento: string | null;
   }>;
   const amendments = (amendmentsData?.amendments ?? []) as Array<{
     id: string;
@@ -240,6 +256,8 @@ function Content() {
     nova_vigencia_fim: string | null;
     justificativa: string;
     data_aditivo: string;
+    status: string;
+    motivo_cancelamento: string | null;
   }>;
   // Só uma licitação homologada da mesma modalidade pode originar o contrato —
   // filtrar aqui evita oferecer uma opção que o servidor vai recusar.
@@ -267,6 +285,42 @@ function Content() {
     qc.invalidateQueries({
       queryKey: ["contract-amendments", activeTenant?.id, detalhes?.id],
     });
+  };
+
+  const submitCancelamento = async () => {
+    if (!activeTenant || !cancelAlvo) return;
+    setBusy(true);
+    try {
+      const motivo = cancelMotivo.trim();
+      if (cancelAlvo.tipo === "item")
+        await doCancelItem({
+          data: {
+            tenant_id: activeTenant.id,
+            item_id: cancelAlvo.id,
+            motivo,
+          },
+        });
+      else {
+        const r = await doCancelAditivo({
+          data: {
+            tenant_id: activeTenant.id,
+            amendment_id: cancelAlvo.id,
+            motivo,
+          },
+        });
+        toast.success(
+          `Aditivo cancelado — contrato volta a ${brl(r.valor_total)}`,
+        );
+      }
+      if (cancelAlvo.tipo === "item") toast.success("Item cancelado");
+      setCancelAlvo(null);
+      setCancelMotivo("");
+      refreshDetalhes();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao cancelar");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const submitItem = async () => {
@@ -751,7 +805,9 @@ function Content() {
               <div className="p-2 text-sm font-semibold border-b bg-muted/40">
                 Itens ({contractItems.length}) — soma{" "}
                 {brl(
-                  contractItems.reduce((s, i) => s + Number(i.valor_total), 0),
+                  contractItems
+                    .filter((i) => i.status !== "cancelado")
+                    .reduce((s, i) => s + Number(i.valor_total), 0),
                 )}{" "}
                 de {brl(detalhes.valor_total)}
               </div>
@@ -763,11 +819,15 @@ function Content() {
                     <th className="p-2 font-semibold text-right">Qtd</th>
                     <th className="p-2 font-semibold text-right">Unitário</th>
                     <th className="p-2 font-semibold text-right">Total</th>
+                    <th className="p-2 font-semibold" />
                   </tr>
                 </thead>
                 <tbody>
                   {contractItems.map((i) => (
-                    <tr key={i.id} className="border-b last:border-0">
+                    <tr
+                      key={i.id}
+                      className={`border-b last:border-0 ${i.status === "cancelado" ? "text-muted-foreground line-through" : ""}`}
+                    >
                       <td className="p-2 tabular-nums">{i.numero}</td>
                       <td className="p-2">{i.descricao}</td>
                       <td className="p-2 text-right tabular-nums">
@@ -779,12 +839,40 @@ function Content() {
                       <td className="p-2 text-right tabular-nums">
                         {brl(i.valor_total)}
                       </td>
+                      <td className="p-2 no-underline">
+                        {i.status === "cancelado" ? (
+                          <Badge
+                            variant="outline"
+                            title={i.motivo_cancelamento ?? ""}
+                          >
+                            cancelado
+                          </Badge>
+                        ) : (
+                          canManage &&
+                          detalhes.status === "vigente" && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                setCancelMotivo("");
+                                setCancelAlvo({
+                                  tipo: "item",
+                                  id: i.id,
+                                  rotulo: `item ${i.numero} — ${i.descricao}`,
+                                });
+                              }}
+                            >
+                              Cancelar
+                            </Button>
+                          )
+                        )}
+                      </td>
                     </tr>
                   ))}
                   {contractItems.length === 0 && (
                     <tr>
                       <td
-                        colSpan={5}
+                        colSpan={6}
                         className="p-4 text-center text-muted-foreground"
                       >
                         Contrato sem itens detalhados.
@@ -807,11 +895,15 @@ function Content() {
                     <th className="p-2 font-semibold text-right">Valor</th>
                     <th className="p-2 font-semibold">Nova vigência</th>
                     <th className="p-2 font-semibold">Data</th>
+                    <th className="p-2 font-semibold" />
                   </tr>
                 </thead>
                 <tbody>
                   {amendments.map((a) => (
-                    <tr key={a.id} className="border-b last:border-0">
+                    <tr
+                      key={a.id}
+                      className={`border-b last:border-0 ${a.status === "cancelado" ? "text-muted-foreground line-through" : ""}`}
+                    >
                       <td className="p-2 tabular-nums">{a.numero}</td>
                       <td className="p-2">{a.tipo.replace("_", " + ")}</td>
                       <td className="p-2 text-right tabular-nums">
@@ -823,12 +915,48 @@ function Content() {
                         {a.nova_vigencia_fim ?? "—"}
                       </td>
                       <td className="p-2 tabular-nums">{a.data_aditivo}</td>
+                      <td className="p-2 no-underline">
+                        {a.status === "cancelado" ? (
+                          <Badge
+                            variant="outline"
+                            title={a.motivo_cancelamento ?? ""}
+                          >
+                            cancelado
+                          </Badge>
+                        ) : (
+                          canManage &&
+                          detalhes.status === "vigente" &&
+                          // Só o último vigente: cancelar um do meio deixaria os
+                          // posteriores apoiados num estado que deixou de existir.
+                          a.numero ===
+                            Math.max(
+                              ...amendments
+                                .filter((x) => x.status !== "cancelado")
+                                .map((x) => x.numero),
+                            ) && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                setCancelMotivo("");
+                                setCancelAlvo({
+                                  tipo: "aditivo",
+                                  id: a.id,
+                                  rotulo: `termo aditivo ${a.numero}`,
+                                });
+                              }}
+                            >
+                              Cancelar
+                            </Button>
+                          )
+                        )}
+                      </td>
                     </tr>
                   ))}
                   {amendments.length === 0 && (
                     <tr>
                       <td
-                        colSpan={5}
+                        colSpan={6}
                         className="p-4 text-center text-muted-foreground"
                       >
                         Nenhum termo aditivo.
@@ -952,6 +1080,48 @@ function Content() {
           </table>
         </div>
       )}
+
+      <Dialog
+        open={Boolean(cancelAlvo)}
+        onOpenChange={(o) => !o && setCancelAlvo(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancelar {cancelAlvo?.rotulo}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              O registro não é apagado: fica na lista marcado como cancelado,
+              com o motivo — em contrato público o que foi registrado e depois
+              desfeito faz parte da instrução do processo. O que volta é a cota
+              que ele ocupava.
+            </p>
+            <div>
+              <Label>Motivo do cancelamento</Label>
+              <Input
+                value={cancelMotivo}
+                onChange={(e) => setCancelMotivo(e.target.value)}
+                placeholder="Ex.: valor digitado incorretamente"
+              />
+              {cancelMotivo.trim().length > 0 &&
+                cancelMotivo.trim().length < 5 && (
+                  <p className="mt-1 text-xs text-destructive">
+                    Descreva o motivo com pelo menos 5 caracteres.
+                  </p>
+                )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="destructive"
+              onClick={submitCancelamento}
+              disabled={busy || cancelMotivo.trim().length < 5}
+            >
+              Confirmar cancelamento
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={itemOpen} onOpenChange={setItemOpen}>
         <DialogContent>

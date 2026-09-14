@@ -1790,6 +1790,38 @@ asserções negativas — sem `{`, sem código do zod, sem nome de tabela, sem i
 Verificado por mutação: devolver a mensagem crua do zod derruba 7; não traduzir o erro do
 banco derruba 2. Catraca de lint desceu de 1512 para **1451**.
 
+**O3-14 — Desfazer aditivo e item de contrato + auditoria de coerência CRUD↔front. ✅**
+
+**A auditoria.** Duas varreduras por AST. A primeira confronta, em cada uma das **271
+chamadas** das telas, os campos que o front envia com os que o schema zod aceita:
+**zero divergências** — os contratos de campo estão coerentes, nenhuma tela manda campo
+que o servidor ignora nem esquece campo obrigatório. A segunda pergunta outra coisa: que
+_operações_ cada módulo oferece. Ali apareceu o buraco — **51 módulos criam sem oferecer
+como desfazer**. A maioria é por desenho (lançamento contábil é imutável; cadastro usa
+`status` via `save`, que é o soft-delete correto), mas dois são materialmente graves.
+
+**O defeito.** `registerContractAmendment` e `addContractItem` eram de mão única, e ambos
+consomem **cota legal**: o aditivo consome o limite de 25% do valor original (Lei 14.133
+art. 125) e o item consome o valor total do contrato. Um lançamento errado queimava a cota
+**para sempre** — e "registrar outro compensando" não resolve, porque o limite é sobre o
+valor **acumulado**: o errado e o estorno somariam duas vezes contra o teto. Aditivo de
+prazo era pior: a regra só aceita prorrogar, então uma data errada não tinha caminho de
+volta.
+
+**A correção.** Migration `20260914120000_o3_14_*` acrescenta `status`, motivo e autoria do
+cancelamento nas duas tabelas, mais `vigencia_anterior` em `contract_amendments` — sem ela
+o cancelamento do aditivo de prazo não teria para onde voltar, porque a data anterior não é
+recuperável por cálculo. `cancelContractAmendment` devolve valor e vigência ao estado
+anterior e **só aceita o último aditivo vigente** (cancelar um do meio deixaria os
+posteriores apoiados num estado que deixou de existir); recusa quando o acréscimo já foi
+empenhado. `cancelContractItem` libera a cota do item. O cancelamento é **lógico**: em
+contrato público o que foi registrado e depois desfeito faz parte da instrução do processo,
+então o registro fica na lista, riscado, com o motivo. Os dois agregados que competem com os
+limites (`sum(valor_acrescimo)` e `sum(valor_total)`) passam a filtrar `status='vigente'` —
+é isso que devolve a cota. `/contratos` ganha o botão em cada linha e o diálogo que exige o
+motivo. Seis casos novos em `sprint-contract-amendments` e dois em `sprint-contract-items`,
+com quatro mutações verificadas.
+
 ### Onda 5 — Apoio, controle e transparência (10-14 sem)
 
 Protocolo e processo eletrônico com ICP-Brasil · e-SIC/LAI · controle interno ·

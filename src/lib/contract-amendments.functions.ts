@@ -36,9 +36,11 @@ export const getContractAmendments = createServerFn({ method: "POST" })
       nova_vigencia_fim: string | null;
       justificativa: string;
       data_aditivo: string;
+      status: string;
+      motivo_cancelamento: string | null;
     }>(
       `select id, numero, tipo, valor_acrescimo::text, nova_vigencia_fim::text,
-         justificativa, data_aditivo::text
+         justificativa, data_aditivo::text, status, motivo_cancelamento
        from public.contract_amendments
        where tenant_id = $1 and contract_id = $2
        order by numero`,
@@ -106,7 +108,7 @@ export const registerContractAmendment = createServerFn({ method: "POST" })
             await client.query<{ soma: string }>(
               `select coalesce(sum(valor_acrescimo),0)::text as soma
                from public.contract_amendments
-               where contract_id=$1 and tenant_id=$2`,
+               where contract_id=$1 and tenant_id=$2 and status='vigente'`,
               [data.contract_id, data.tenant_id],
             )
           ).rows[0].soma,
@@ -156,8 +158,9 @@ export const registerContractAmendment = createServerFn({ method: "POST" })
       await client.query(
         `insert into public.contract_amendments
            (id, tenant_id, contract_id, numero, tipo, valor_acrescimo,
-            nova_vigencia_fim, justificativa, data_aditivo, created_by)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+            nova_vigencia_fim, justificativa, data_aditivo, created_by,
+            vigencia_anterior)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
         [
           id,
           data.tenant_id,
@@ -169,6 +172,10 @@ export const registerContractAmendment = createServerFn({ method: "POST" })
           data.justificativa,
           data.data_aditivo,
           context.userId,
+          // Só faz sentido para aditivo de prazo; é o único jeito de voltar,
+          // porque a regra só aceita prorrogar e a data anterior não é
+          // recuperável por cálculo.
+          alteraPrazo ? contract.vigencia_fim : null,
         ],
       );
       await client.query(
@@ -193,5 +200,137 @@ export const registerContractAmendment = createServerFn({ method: "POST" })
         after: { numero, tipo: data.tipo, valor_total: novoTotal },
       });
       return { id, numero, valor_total: novoTotal };
+    });
+  });
+
+const CancelAmendmentInput = z.object({
+  tenant_id: z.string().uuid(),
+  amendment_id: z.string().uuid(),
+  motivo: z.string().trim().min(5).max(500),
+});
+
+// O3-14 — Cancela um termo aditivo, devolvendo o contrato ao estado anterior.
+//
+// Sem isso o aditivo era de mão única: um valor digitado errado queimava parte do
+// limite de 25% do art. 125 para sempre, e "registrar outro compensando" não
+// resolve — o limite é sobre o acumulado, então o erro e o estorno somariam DUAS
+// vezes contra o teto. Uma data errada era pior ainda: a regra só aceita
+// prorrogar, então não havia caminho de volta.
+//
+// Só o ÚLTIMO aditivo vigente é cancelável. Cancelar um do meio deixaria os
+// posteriores apoiados num estado que deixou de existir — a vigência que eles
+// prorrogaram, o valor sobre o qual foram calculados.
+export const cancelContractAmendment = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => parseInput(CancelAmendmentInput, data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "contracts.manage");
+    return withTransaction(async (client) => {
+      const aditivo = (
+        await client.query<{
+          contract_id: string;
+          numero: number;
+          tipo: string;
+          status: string;
+          valor_acrescimo: string;
+          vigencia_anterior: string | null;
+        }>(
+          `select contract_id, numero, tipo, status, valor_acrescimo::text,
+             vigencia_anterior::text
+           from public.contract_amendments
+           where id=$1 and tenant_id=$2 for update`,
+          [data.amendment_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!aditivo) throw new Error("Termo aditivo não encontrado");
+      if (aditivo.status === "cancelado")
+        throw new Error("Este termo aditivo já está cancelado");
+
+      const contract = (
+        await client.query<{
+          valor_total: string;
+          valor_empenhado: string;
+          status: string;
+        }>(
+          `select valor_total::text, valor_empenhado::text, status
+           from public.procurement_contracts
+           where id=$1 and tenant_id=$2 for update`,
+          [aditivo.contract_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!contract) throw new Error("Contrato não encontrado");
+      if (contract.status !== "vigente")
+        throw new Error("Só um contrato vigente tem aditivo cancelável");
+
+      const ultimo = (
+        await client.query<{ numero: number }>(
+          `select max(numero) as numero from public.contract_amendments
+           where contract_id=$1 and tenant_id=$2 and status='vigente'`,
+          [aditivo.contract_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (Number(ultimo?.numero) !== Number(aditivo.numero))
+        throw new Error(
+          `Só o último termo aditivo vigente (nº ${ultimo?.numero}) pode ser cancelado: ` +
+            `os posteriores foram calculados sobre o estado que este criou.`,
+        );
+
+      const alteraValor = aditivo.tipo !== "prazo";
+      const alteraPrazo = aditivo.tipo !== "valor";
+      const novoTotal = alteraValor
+        ? Number(
+            (
+              Number(contract.valor_total) - Number(aditivo.valor_acrescimo)
+            ).toFixed(2),
+          )
+        : Number(contract.valor_total);
+      if (novoTotal <= 0)
+        throw new Error("O cancelamento zeraria o valor do contrato");
+      // Um acréscimo já empenhado não pode ser desfeito: o empenho ficaria acima
+      // do contrato. Anule o empenho antes.
+      if (novoTotal < Number(contract.valor_empenhado))
+        throw new Error(
+          `O cancelamento deixaria o contrato (${novoTotal.toFixed(2)}) abaixo do já ` +
+            `empenhado (${Number(contract.valor_empenhado).toFixed(2)}). Anule o empenho antes.`,
+        );
+
+      await client.query(
+        `update public.contract_amendments
+         set status='cancelado', cancelado_em=now(), cancelado_por=$3,
+             motivo_cancelamento=$4
+         where id=$1 and tenant_id=$2`,
+        [data.amendment_id, data.tenant_id, context.userId, data.motivo],
+      );
+      await client.query(
+        `update public.procurement_contracts
+         set valor_total=$3,
+             vigencia_fim=case when $4::date is not null then $4::date else vigencia_fim end,
+             updated_at=now()
+         where id=$1 and tenant_id=$2`,
+        [
+          aditivo.contract_id,
+          data.tenant_id,
+          novoTotal,
+          alteraPrazo ? aditivo.vigencia_anterior : null,
+        ],
+      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "cancelar_aditivo",
+        resource: "contract_amendments",
+        recordId: data.amendment_id,
+        after: {
+          numero: aditivo.numero,
+          valor_total: novoTotal,
+          motivo: data.motivo,
+        },
+      });
+      return {
+        id: data.amendment_id,
+        numero: aditivo.numero,
+        valor_total: novoTotal,
+      };
     });
   });

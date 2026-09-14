@@ -167,3 +167,84 @@ test("item fracionado calcula e arredonda o valor da linha", async () => {
   const i = await addItem(c, 3, 33.33); // 99.99
   assert.equal(i.valor_total, 99.99);
 });
+
+// --- O3-14: cancelamento do item ------------------------------------------
+//
+// A soma dos itens é limitada pelo valor do contrato. Sem cancelamento, um item
+// lançado errado consumia essa cota para sempre.
+
+const cancelaItem = (item_id, motivo = "Item lancado em duplicidade") =>
+  fn.cancelContractItem({
+    data: { tenant_id: tenantId, item_id, motivo },
+    context: ctx(),
+  });
+
+test("item cancelado devolve a cota do valor do contrato", async () => {
+  const c = await seedContract(10000);
+  const errado = await fn.addContractItem({
+    data: {
+      tenant_id: tenantId,
+      contract_id: c,
+      descricao: "Item errado",
+      unidade: "un",
+      quantidade: 1,
+      preco_unitario: 10000,
+    },
+    context: ctx(),
+  });
+  // Com o errado de pé, o contrato está lotado.
+  await assert.rejects(
+    fn.addContractItem({
+      data: {
+        tenant_id: tenantId,
+        contract_id: c,
+        descricao: "Item certo",
+        unidade: "un",
+        quantidade: 1,
+        preco_unitario: 500,
+      },
+      context: ctx(),
+    }),
+    /excederia o valor do contrato/,
+  );
+
+  await cancelaItem(errado.id);
+  const certo = await fn.addContractItem({
+    data: {
+      tenant_id: tenantId,
+      contract_id: c,
+      descricao: "Item certo",
+      unidade: "un",
+      quantidade: 1,
+      preco_unitario: 9000,
+    },
+    context: ctx(),
+  });
+  assert.ok(certo.id);
+
+  // O cancelado continua na lista, marcado: o histórico faz parte do processo.
+  const lista = await fn.getContractItems({
+    data: { tenant_id: tenantId, contract_id: c },
+    context: ctx(),
+  });
+  const cancelado = lista.items.find((i) => i.id === errado.id);
+  assert.equal(cancelado.status, "cancelado");
+  assert.equal(cancelado.motivo_cancelamento, "Item lancado em duplicidade");
+});
+
+test("cancelar item duas vezes e recusado", async () => {
+  const c = await seedContract(5000);
+  const item = await fn.addContractItem({
+    data: {
+      tenant_id: tenantId,
+      contract_id: c,
+      descricao: "Item",
+      unidade: "un",
+      quantidade: 1,
+      preco_unitario: 100,
+    },
+    context: ctx(),
+  });
+  await cancelaItem(item.id);
+  await assert.rejects(cancelaItem(item.id), /já está cancelado/);
+});

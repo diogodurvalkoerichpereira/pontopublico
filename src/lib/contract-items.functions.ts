@@ -33,9 +33,11 @@ export const getContractItems = createServerFn({ method: "POST" })
       quantidade: string;
       preco_unitario: string;
       valor_total: string;
+      status: string;
+      motivo_cancelamento: string | null;
     }>(
       `select id, numero, descricao, unidade, quantidade::text,
-         preco_unitario::text, valor_total::text
+         preco_unitario::text, valor_total::text, status, motivo_cancelamento
        from public.contract_items
        where tenant_id = $1 and contract_id = $2
        order by numero`,
@@ -80,7 +82,7 @@ export const addContractItem = createServerFn({ method: "POST" })
           await client.query<{ soma: string }>(
             `select coalesce(sum(valor_total),0)::text as soma
              from public.contract_items
-             where contract_id=$1 and tenant_id=$2`,
+             where contract_id=$1 and tenant_id=$2 and status='vigente'`,
             [data.contract_id, data.tenant_id],
           )
         ).rows[0].soma,
@@ -126,5 +128,68 @@ export const addContractItem = createServerFn({ method: "POST" })
         after: { numero, valor_total: valor },
       });
       return { id, numero, valor_total: valor };
+    });
+  });
+
+const CancelItemInput = z.object({
+  tenant_id: z.string().uuid(),
+  item_id: z.string().uuid(),
+  motivo: z.string().trim().min(5).max(500),
+});
+
+// O3-14 — Cancela um item. É cancelamento LÓGICO: em contrato público o que foi
+// registrado e depois desfeito faz parte da instrução do processo, então o item
+// permanece na lista, marcado. O que muda é que ele deixa de ocupar o valor do
+// contrato — sem isso um item lançado errado consumia a cota do contrato para
+// sempre, e não havia como corrigir.
+export const cancelContractItem = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .validator((data: unknown) => parseInput(CancelItemInput, data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "contracts.manage");
+    return withTransaction(async (client) => {
+      const item = (
+        await client.query<{
+          contract_id: string;
+          numero: number;
+          status: string;
+          valor_total: string;
+        }>(
+          `select contract_id, numero, status, valor_total::text
+           from public.contract_items
+           where id=$1 and tenant_id=$2 for update`,
+          [data.item_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!item) throw new Error("Item não encontrado");
+      if (item.status === "cancelado")
+        throw new Error("Este item já está cancelado");
+      const contrato = (
+        await client.query<{ status: string }>(
+          `select status from public.procurement_contracts
+           where id=$1 and tenant_id=$2 for update`,
+          [item.contract_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!contrato) throw new Error("Contrato não encontrado");
+      if (contrato.status !== "vigente")
+        throw new Error("Só um contrato vigente tem itens canceláveis");
+      await client.query(
+        `update public.contract_items
+         set status='cancelado', cancelado_em=now(), cancelado_por=$3,
+             motivo_cancelamento=$4
+         where id=$1 and tenant_id=$2`,
+        [data.item_id, data.tenant_id, context.userId, data.motivo],
+      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "cancel_item",
+        resource: "contract_items",
+        recordId: data.item_id,
+        after: { numero: item.numero, motivo: data.motivo },
+      });
+      return { id: data.item_id, numero: item.numero };
     });
   });

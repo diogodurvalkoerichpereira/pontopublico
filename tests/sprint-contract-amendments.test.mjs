@@ -186,3 +186,116 @@ test("aditivo de prazo prorroga a vigência; retroceder é recusado", async () =
     /posterior/,
   );
 });
+
+// --- O3-14: cancelamento do termo aditivo ---------------------------------
+//
+// Antes o aditivo era de mão única. Isso é material porque o limite do art. 125
+// é sobre o valor ACUMULADO: um aditivo errado queimava parte dos 25% para
+// sempre, e "registrar outro compensando" não resolve — o errado e o estorno
+// somariam DUAS vezes contra o teto. Uma data errada era pior: a regra só aceita
+// prorrogar, então não havia caminho de volta.
+
+const cancela = (amendment_id, motivo = "Valor digitado incorretamente") =>
+  fn.cancelContractAmendment({
+    data: { tenant_id: tenantId, amendment_id, motivo },
+    context: ctx(),
+  });
+
+const valorDoContrato = async (id) =>
+  Number(
+    (
+      await db.query(
+        "select valor_total::text as v from public.procurement_contracts where id=$1",
+        [id],
+      )
+    ).rows[0].v,
+  );
+
+test("cancelar aditivo de valor devolve o contrato ao valor anterior", async () => {
+  const c = await seedContract(100000);
+  const a = await adita(c, { tipo: "valor", valor_acrescimo: 20000 });
+  assert.equal(await valorDoContrato(c), 120000);
+
+  const r = await cancela(a.id);
+  assert.equal(r.valor_total, 100000);
+  assert.equal(await valorDoContrato(c), 100000);
+
+  const linha = (
+    await db.query(
+      "select status, motivo_cancelamento from public.contract_amendments where id=$1",
+      [a.id],
+    )
+  ).rows[0];
+  // Cancelamento é lógico: em contrato público o que foi registrado e depois
+  // desfeito faz parte da instrução do processo.
+  assert.equal(linha.status, "cancelado");
+  assert.equal(linha.motivo_cancelamento, "Valor digitado incorretamente");
+});
+
+test("aditivo cancelado devolve a cota dos 25%", async () => {
+  // É a razão de existir do cancelamento: o teto é sobre o acumulado.
+  const c = await seedContract(100000);
+  const errado = await adita(c, { tipo: "valor", valor_acrescimo: 25000 });
+  // Com o errado de pé, nem um centavo a mais cabe.
+  await assert.rejects(
+    adita(c, { tipo: "valor", valor_acrescimo: 1000 }),
+    /excede o limite/,
+  );
+  await cancela(errado.id);
+  // Cancelado, a cota inteira volta a caber.
+  const certo = await adita(c, { tipo: "valor", valor_acrescimo: 25000 });
+  assert.ok(certo.id);
+  assert.equal(await valorDoContrato(c), 125000);
+});
+
+test("cancelar aditivo de prazo restaura a vigencia anterior", async () => {
+  // A regra só aceita prorrogar, então a data anterior não é recuperável por
+  // cálculo: ela precisa ter sido guardada no momento do aditivo.
+  const c = await seedContract(50000);
+  const a = await adita(c, { tipo: "prazo", nova_vigencia_fim: "2027-06-30" });
+  let vig = (
+    await db.query(
+      "select vigencia_fim::text as v from public.procurement_contracts where id=$1",
+      [c],
+    )
+  ).rows[0].v;
+  assert.equal(vig, "2027-06-30");
+
+  await cancela(a.id, "Prorrogacao registrada no contrato errado");
+  vig = (
+    await db.query(
+      "select vigencia_fim::text as v from public.procurement_contracts where id=$1",
+      [c],
+    )
+  ).rows[0].v;
+  assert.equal(vig, "2026-12-31", "volta para a vigencia original");
+});
+
+test("so o ultimo aditivo vigente e cancelavel", async () => {
+  // Cancelar um do meio deixaria os posteriores apoiados num estado que deixou
+  // de existir: a vigência que prorrogaram, o valor sobre o qual foram calculados.
+  const c = await seedContract(100000);
+  const primeiro = await adita(c, { tipo: "valor", valor_acrescimo: 10000 });
+  await adita(c, { tipo: "valor", valor_acrescimo: 5000 });
+  await assert.rejects(cancela(primeiro.id), /último termo aditivo vigente/);
+});
+
+test("cancelar duas vezes e recusado", async () => {
+  const c = await seedContract(80000);
+  const a = await adita(c, { tipo: "valor", valor_acrescimo: 8000 });
+  await cancela(a.id);
+  await assert.rejects(cancela(a.id), /já está cancelado/);
+  assert.equal(await valorDoContrato(c), 80000, "o valor nao cai duas vezes");
+});
+
+test("nao cancela acrescimo ja empenhado", async () => {
+  // Desfazer deixaria o empenho acima do contrato.
+  const c = await seedContract(100000);
+  const a = await adita(c, { tipo: "valor", valor_acrescimo: 20000 });
+  await db.query(
+    "update public.procurement_contracts set valor_empenhado=110000 where id=$1",
+    [c],
+  );
+  await assert.rejects(cancela(a.id), /Anule o empenho antes/);
+  assert.equal(await valorDoContrato(c), 120000, "nada mudou");
+});
