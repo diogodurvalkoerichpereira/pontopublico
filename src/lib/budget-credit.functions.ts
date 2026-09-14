@@ -5,6 +5,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -20,7 +21,7 @@ const GetInput = z.object({
 
 export const getBudgetCreditMovements = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => GetInput.parse(data))
+  .validator((data: unknown) => parseInput(GetInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "budget.read");
@@ -58,7 +59,7 @@ const TransferInput = z.object({
 // Remaneja crédito: anula na origem, suplementa no destino, atômico.
 export const transferBudgetCredit = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => TransferInput.parse(data))
+  .validator((data: unknown) => parseInput(TransferInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "budget.manage");

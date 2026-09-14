@@ -21,6 +21,7 @@
 // (Passivo, PL, VPA) têm o sinal invertido. Read-only, reusa accounting.read.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query } from "./db.server";
 import { requireAuth } from "./data.functions";
 import {
@@ -35,7 +36,7 @@ const Input = z.object({
 
 export const getEquityStatement = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => Input.parse(data))
+  .validator((data: unknown) => parseInput(Input, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "accounting.read");

@@ -3,6 +3,7 @@
 // Sem tabelas próprias; só agrega.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, queryOne } from "./db.server";
 import { requireAuth } from "./data.functions";
 import {
@@ -19,7 +20,7 @@ const num = (v: unknown) => Number(v ?? 0);
 
 export const getTransparencyReport = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => Input.parse(data))
+  .validator((data: unknown) => parseInput(Input, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "transparency.read");
@@ -103,7 +104,7 @@ export const getTransparencyReport = createServerFn({ method: "POST" })
 // aparece; ordena pelo maior empenhado. Read-only, reusa transparency.read.
 export const getTransparencyByFunction = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => Input.parse(data))
+  .validator((data: unknown) => parseInput(Input, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "transparency.read");
@@ -151,7 +152,7 @@ export const getTransparencyByFunction = createServerFn({ method: "POST" })
 // transparency.read; sem tabela própria.
 export const getOpenDataTransparencia = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => Input.parse(data))
+  .validator((data: unknown) => parseInput(Input, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "transparency.read");
@@ -247,7 +248,7 @@ export const getOpenDataTransparencia = createServerFn({ method: "POST" })
 // (O5-04/O5-06) já registra; read-only, reusa transparency.read, sem tabela própria.
 export const getEsicStatistics = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => Input.parse(data))
+  .validator((data: unknown) => parseInput(Input, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "transparency.read");

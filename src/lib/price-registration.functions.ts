@@ -5,6 +5,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -17,7 +18,7 @@ const GetInput = z.object({ tenant_id: z.string().uuid() });
 
 export const getPriceRegistrations = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => GetInput.parse(data))
+  .validator((data: unknown) => parseInput(GetInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "contracts.read");
@@ -84,7 +85,7 @@ const UM_DIA = 86_400_000;
 // Forma a ata a partir da licitação homologada. Vigência de no máximo 1 ano (art. 84).
 export const createPriceRegistration = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => CreateInput.parse(data))
+  .validator((data: unknown) => parseInput(CreateInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "contracts.manage");
@@ -164,7 +165,7 @@ const DrawInput = z.object({
 // consumo nunca ultrapassa o saldo registrado (registrada − consumida).
 export const drawFromPriceRegistration = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => DrawInput.parse(data))
+  .validator((data: unknown) => parseInput(DrawInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "contracts.manage");
@@ -271,7 +272,7 @@ const DESFECHO: Record<string, string> = {
 // `drawFromPriceRegistration` já recusa ata não vigente. Reusa contracts.manage.
 export const closePriceRegistration = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => CloseInput.parse(data))
+  .validator((data: unknown) => parseInput(CloseInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "contracts.manage");
@@ -312,7 +313,7 @@ const SummaryInput = z.object({ tenant_id: z.string().uuid() });
 // consumido) — o comprometimento vivo do SRP. Read-only, reusa contracts.read.
 export const getPriceRegistrationSummary = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SummaryInput.parse(data))
+  .validator((data: unknown) => parseInput(SummaryInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "contracts.read");
@@ -369,7 +370,7 @@ const DrawsInput = z.object({
 // Read-only, reusa contracts.read.
 export const getPriceRegistrationDraws = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => DrawsInput.parse(data))
+  .validator((data: unknown) => parseInput(DrawsInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "contracts.read");
@@ -416,7 +417,7 @@ const ExpiringInput = z.object({
 // vencidas × a vencer. Read-only, reusa contracts.read.
 export const getExpiringPriceRegistrations = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => ExpiringInput.parse(data))
+  .validator((data: unknown) => parseInput(ExpiringInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "contracts.read");

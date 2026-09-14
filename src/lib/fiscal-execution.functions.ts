@@ -5,6 +5,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -17,7 +18,7 @@ const GetInput = z.object({ tenant_id: z.string().uuid() });
 
 export const getFiscalExecutions = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => GetInput.parse(data))
+  .validator((data: unknown) => parseInput(GetInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "taxes.read");
@@ -55,7 +56,7 @@ const FileInput = z.object({
 // CDA; uma execução por CDA (unique + guarda de estado).
 export const fileFiscalExecution = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => FileInput.parse(data))
+  .validator((data: unknown) => parseInput(FileInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "taxes.manage");
@@ -118,7 +119,7 @@ const UpdateStatusInput = z.object({
 // Atualiza o andamento da execução. Uma execução extinta/quitada é terminal.
 export const updateFiscalExecutionStatus = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => UpdateStatusInput.parse(data))
+  .validator((data: unknown) => parseInput(UpdateStatusInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "taxes.manage");

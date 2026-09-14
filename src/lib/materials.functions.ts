@@ -4,6 +4,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, queryOne, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -19,7 +20,7 @@ const TenantInput = z.object({ tenant_id: z.string().uuid() });
 
 export const getMaterialItems = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => TenantInput.parse(data))
+  .validator((data: unknown) => parseInput(TenantInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "materials.read");
@@ -58,7 +59,7 @@ const SaveItemInput = z.object({
 
 export const saveMaterialItem = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SaveItemInput.parse(data))
+  .validator((data: unknown) => parseInput(SaveItemInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "materials.manage");
@@ -130,7 +131,7 @@ const MovementSummaryInput = z.object({
 // Reusa materials.read.
 export const getMaterialMovementSummary = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => MovementSummaryInput.parse(data))
+  .validator((data: unknown) => parseInput(MovementSummaryInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "materials.read");
@@ -183,7 +184,7 @@ const LedgerInput = z.object({
 // com o saldo do próprio item. Reusa materials.read.
 export const getMaterialLedger = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => LedgerInput.parse(data))
+  .validator((data: unknown) => parseInput(LedgerInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "materials.read");
@@ -251,7 +252,7 @@ const MovementInput = z.object({
 // Movimenta o estoque: entrada soma; saída subtrai e nunca excede o saldo.
 export const recordMaterialMovement = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => MovementInput.parse(data))
+  .validator((data: unknown) => parseInput(MovementInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "materials.manage");
@@ -329,7 +330,7 @@ export const recordMaterialMovement = createServerFn({ method: "POST" })
 // materials.read. Base para conciliar consumo (VPD) e permanente (patrimônio).
 export const getMaterialInventory = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => TenantInput.parse(data))
+  .validator((data: unknown) => parseInput(TenantInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "materials.read");
@@ -378,7 +379,7 @@ const AdjustInput = z.object({
 // materials.manage.
 export const adjustMaterialInventory = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => AdjustInput.parse(data))
+  .validator((data: unknown) => parseInput(AdjustInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "materials.manage");
@@ -465,7 +466,7 @@ const ReorderInput = z.object({ tenant_id: z.string().uuid() });
 // ou com saldo acima do mínimo não alerta. Read-only, reusa materials.read.
 export const getMaterialReorderAlerts = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => ReorderInput.parse(data))
+  .validator((data: unknown) => parseInput(ReorderInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "materials.read");

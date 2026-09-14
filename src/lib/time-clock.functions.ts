@@ -4,6 +4,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, queryOne, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -31,7 +32,7 @@ const RecordInput = z.object({
 
 export const recordTimeClockPunch = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => RecordInput.parse(data))
+  .validator((data: unknown) => parseInput(RecordInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "people.manage");
@@ -115,7 +116,7 @@ const ListInput = z.object({
 
 export const getTimeClockPunches = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => ListInput.parse(data))
+  .validator((data: unknown) => parseInput(ListInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "people.read");
@@ -153,7 +154,7 @@ const VerifyInput = z.object({ tenant_id: z.string().uuid() });
 
 export const verifyTimeClockChain = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => VerifyInput.parse(data))
+  .validator((data: unknown) => parseInput(VerifyInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "people.read");
@@ -204,7 +205,7 @@ const MirrorInput = z.object({
 /** Espelho de ponto: jornada apurada por dia (pareamento posicional das marcas). */
 export const getTimeMirror = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => MirrorInput.parse(data))
+  .validator((data: unknown) => parseInput(MirrorInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "people.read");
@@ -255,7 +256,7 @@ const ReceiptInput = z.object({
  *  o O1-03b (exige homologacao). CPF integral so com people.sensitive.read. */
 export const getPunchReceipt = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => ReceiptInput.parse(data))
+  .validator((data: unknown) => parseInput(ReceiptInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "people.read");
@@ -375,7 +376,7 @@ async function loadApuracao(
  *  tolerancia legal, extras e faltas por dia e no total. Feriado tem previsto 0. */
 export const getTimeApuracao = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => ApuracaoInput.parse(data))
+  .validator((data: unknown) => parseInput(ApuracaoInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "people.read");
@@ -415,7 +416,7 @@ const round2 = (value: number) => Number(value.toFixed(2));
  *  ponto->folha. A valoracao usa parametros explicitos do RH. */
 export const depositTimeApuracao = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => DepositInput.parse(data))
+  .validator((data: unknown) => parseInput(DepositInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "payroll.assignments.manage");
@@ -533,7 +534,7 @@ const ResumoMensalInput = z.object({
  *  dia sem marcacao depende de escala, e O1-03f). Read-only, reusa people.read. */
 export const getApuracaoResumoMensal = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => ResumoMensalInput.parse(data))
+  .validator((data: unknown) => parseInput(ResumoMensalInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "people.read");
@@ -660,7 +661,7 @@ const InconsistenciasInput = z.object({
  *  valorar. Read-only, reusa people.read, sem migration. */
 export const getPunchInconsistencies = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => InconsistenciasInput.parse(data))
+  .validator((data: unknown) => parseInput(InconsistenciasInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "people.read");
@@ -756,7 +757,7 @@ const BankFromApuracaoInput = z.object({
  *  Guard people.manage. */
 export const postTimeBankFromApuracao = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => BankFromApuracaoInput.parse(data))
+  .validator((data: unknown) => parseInput(BankFromApuracaoInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "people.manage");

@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -26,7 +27,7 @@ function checksum(value: unknown) {
 
 export const getSpecialPayrollWorkspace = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => TenantInput.parse(data))
+  .validator((data: unknown) => parseInput(TenantInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "payroll.special.read");
@@ -174,7 +175,7 @@ type SpecialResult = {
 
 export const createSpecialPayroll = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => CreateInput.parse(data))
+  .validator((data: unknown) => parseInput(CreateInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "payroll.special.manage");

@@ -4,6 +4,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, queryOne, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -16,7 +17,7 @@ const TenantInput = z.object({ tenant_id: z.string().uuid() });
 
 export const getTreasuryAccounts = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => TenantInput.parse(data))
+  .validator((data: unknown) => parseInput(TenantInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "accounting.read");
@@ -53,7 +54,7 @@ const SaveInput = z.object({
 
 export const saveTreasuryAccount = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SaveInput.parse(data))
+  .validator((data: unknown) => parseInput(SaveInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "accounting.manage");
@@ -188,7 +189,7 @@ const MovementInput = z.object({
 
 export const recordTreasuryMovement = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => MovementInput.parse(data))
+  .validator((data: unknown) => parseInput(MovementInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "accounting.manage");
@@ -227,7 +228,7 @@ const TransferInput = z.object({
 // Transfere entre contas do ente: saída da origem + ingresso no destino, atômico.
 export const transferBetweenAccounts = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => TransferInput.parse(data))
+  .validator((data: unknown) => parseInput(TransferInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "accounting.manage");
@@ -296,7 +297,7 @@ const LedgerInput = z.object({
 // `account_id`. Read-only, reusa accounting.read.
 export const getTreasuryLedger = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => LedgerInput.parse(data))
+  .validator((data: unknown) => parseInput(LedgerInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "accounting.read");

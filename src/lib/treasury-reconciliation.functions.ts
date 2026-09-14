@@ -4,6 +4,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -19,7 +20,7 @@ const GetInput = z.object({
 
 export const getTreasuryReconciliations = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => GetInput.parse(data))
+  .validator((data: unknown) => parseInput(GetInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "accounting.read");
@@ -57,7 +58,7 @@ const ReconcileInput = z.object({
 // o extrato tem mais que o livro). Uma conciliação por conta/data.
 export const reconcileTreasuryAccount = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => ReconcileInput.parse(data))
+  .validator((data: unknown) => parseInput(ReconcileInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "accounting.manage");

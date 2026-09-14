@@ -14,6 +14,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -34,7 +35,7 @@ const pad = (v: unknown, n: number) =>
     .slice(-n);
 export const generateBankRemittance = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((v: unknown) => Input.parse(v))
+  .validator((v: unknown) => parseInput(Input, v))
   .handler(async ({ data, context }) => {
     const a = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(a, "bank.remittance.manage");
@@ -114,7 +115,7 @@ export const generateBankRemittance = createServerFn({ method: "POST" })
 export const getBankRemittances = createServerFn({ method: "POST" })
   .middleware([requireAuth])
   .validator((v: unknown) =>
-    z.object({ tenant_id: z.string().uuid() }).parse(v),
+    parseInput(z.object({ tenant_id: z.string().uuid() }), v),
   )
   .handler(async ({ data, context }) => {
     const a = await loadTenantAccess(context.userId, data.tenant_id);

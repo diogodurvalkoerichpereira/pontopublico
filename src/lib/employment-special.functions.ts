@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import {
@@ -16,7 +17,7 @@ const digest = (value: unknown) =>
 
 export const getEmploymentSpecialWorkspace = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((value: unknown) => Tenant.parse(value))
+  .validator((value: unknown) => parseInput(Tenant, value))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     if (
@@ -75,7 +76,7 @@ const EventInput = z.object({
 });
 export const saveEmploymentSpecialEvent = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((value: unknown) => EventInput.parse(value))
+  .validator((value: unknown) => parseInput(EventInput, value))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "employment.special.manage");
@@ -109,7 +110,7 @@ export const saveEmploymentSpecialEvent = createServerFn({ method: "POST" })
 
 export const processDueEmploymentEvents = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((value: unknown) => Tenant.parse(value))
+  .validator((value: unknown) => parseInput(Tenant, value))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "employment.special.manage");
@@ -190,7 +191,7 @@ const TerminationInput = z.object({
 });
 export const calculateTermination = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((value: unknown) => TerminationInput.parse(value))
+  .validator((value: unknown) => parseInput(TerminationInput, value))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "termination.manage");
@@ -337,7 +338,7 @@ const ApplyTermination = z.object({
 });
 export const applyTermination = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((v: unknown) => ApplyTermination.parse(v))
+  .validator((v: unknown) => parseInput(ApplyTermination, v))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "termination.manage");

@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, queryOne, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -15,7 +16,7 @@ const TenantInput = z.object({ tenant_id: z.string().uuid() });
 
 export const getPayrollCatalog = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => TenantInput.parse(data))
+  .validator((data: unknown) => parseInput(TenantInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "payroll.catalog.read");
@@ -95,7 +96,7 @@ const SaveRubricInput = z.object({
 
 export const savePayrollRubric = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SaveRubricInput.parse(data))
+  .validator((data: unknown) => parseInput(SaveRubricInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "payroll.catalog.manage");
@@ -180,7 +181,7 @@ const SaveVersionInput = z.object({
 
 export const savePayrollRubricVersion = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SaveVersionInput.parse(data))
+  .validator((data: unknown) => parseInput(SaveVersionInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "payroll.catalog.manage");
@@ -322,7 +323,7 @@ const ValidateFormulaInput = z.object({
 
 export const validatePayrollFormula = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => ValidateFormulaInput.parse(data))
+  .validator((data: unknown) => parseInput(ValidateFormulaInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "payroll.catalog.manage");
@@ -348,7 +349,7 @@ const ProjectBaseInput = z.object({
 
 export const projectPayrollBases = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => ProjectBaseInput.parse(data))
+  .validator((data: unknown) => parseInput(ProjectBaseInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "payroll.catalog.read");

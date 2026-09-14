@@ -5,6 +5,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -20,7 +21,7 @@ const GetInput = z.object({
 
 export const getSupplementaryCredits = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => GetInput.parse(data))
+  .validator((data: unknown) => parseInput(GetInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "budget.read");
@@ -58,7 +59,7 @@ const ExcessInput = z.object({
 // abrir o crédito. Fonte sem excesso não aparece. Read-only, reusa budget.read.
 export const getExcessRevenueAvailable = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => ExcessInput.parse(data))
+  .validator((data: unknown) => parseInput(ExcessInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "budget.read");
@@ -123,7 +124,7 @@ const OpenInput = z.object({
 // Abre o crédito suplementar lastreado no excesso de arrecadação da fonte.
 export const openSupplementaryCredit = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => OpenInput.parse(data))
+  .validator((data: unknown) => parseInput(OpenInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "budget.manage");

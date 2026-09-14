@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query } from "./db.server";
 import { requireAuth } from "./data.functions";
 import {
@@ -9,7 +10,7 @@ import {
 export const getManagerDashboard = createServerFn({ method: "POST" })
   .middleware([requireAuth])
   .validator((v: unknown) =>
-    z.object({ tenant_id: z.string().uuid() }).parse(v),
+    parseInput(z.object({ tenant_id: z.string().uuid() }), v),
   )
   .handler(async ({ data, context }) => {
     const a = await loadTenantAccess(context.userId, data.tenant_id);

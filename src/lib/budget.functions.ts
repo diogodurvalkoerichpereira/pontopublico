@@ -6,6 +6,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, queryOne, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -22,7 +23,7 @@ const GetInput = z.object({
 
 export const getBudgetAppropriations = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => GetInput.parse(data))
+  .validator((data: unknown) => parseInput(GetInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "budget.read");
@@ -77,7 +78,7 @@ const SaveInput = z.object({
 
 export const saveBudgetAppropriation = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SaveInput.parse(data))
+  .validator((data: unknown) => parseInput(SaveInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "budget.manage");
@@ -205,7 +206,7 @@ const GetCommitmentsInput = z.object({
 
 export const getBudgetCommitments = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => GetCommitmentsInput.parse(data))
+  .validator((data: unknown) => parseInput(GetCommitmentsInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "budget.read");
@@ -246,7 +247,7 @@ const ByCredorInput = z.object({
 // sem saldo empenhado não aparece. Read-only, reusa budget.read.
 export const getCommitmentsByCredor = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => ByCredorInput.parse(data))
+  .validator((data: unknown) => parseInput(ByCredorInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "budget.read");
@@ -310,7 +311,7 @@ const ExecutionInput = z.object({
 //    empenhado é orçado − empenhado − bloqueado (LRF art. 9º).
 export const getBudgetExecution = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => ExecutionInput.parse(data))
+  .validator((data: unknown) => parseInput(ExecutionInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "budget.read");
@@ -520,7 +521,7 @@ async function reserveOnAppropriation(params: ReserveParams) {
 
 export const createBudgetCommitment = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => CommitInput.parse(data))
+  .validator((data: unknown) => parseInput(CommitInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "budget.manage");
@@ -561,7 +562,7 @@ const CommitPayrollInput = z.object({
 // Exige que TODA linha seja alocada; idempotente (a requisição vira 'empenhada').
 export const commitPayrollEmpenho = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => CommitPayrollInput.parse(data))
+  .validator((data: unknown) => parseInput(CommitPayrollInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "budget.manage");
@@ -657,7 +658,7 @@ const CommitContractInput = z.object({
 // um contrato pode ser empenhado em várias parcelas (exercícios/exec. diferentes).
 export const commitContractEmpenho = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => CommitContractInput.parse(data))
+  .validator((data: unknown) => parseInput(CommitContractInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "budget.manage");
@@ -740,7 +741,7 @@ export const partiallyCancelBudgetCommitment = createServerFn({
   method: "POST",
 })
   .middleware([requireAuth])
-  .validator((data: unknown) => PartialCancelInput.parse(data))
+  .validator((data: unknown) => parseInput(PartialCancelInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "budget.manage");
@@ -853,7 +854,7 @@ const TransitionInput = z.object({
 // estado de origem + carimba o marco).
 export const transitionBudgetCommitment = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => TransitionInput.parse(data))
+  .validator((data: unknown) => parseInput(TransitionInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "budget.manage");

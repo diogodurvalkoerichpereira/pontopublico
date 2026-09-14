@@ -5,6 +5,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -17,7 +18,7 @@ const GetInput = z.object({ tenant_id: z.string().uuid() });
 
 export const getActiveDebtCertificates = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => GetInput.parse(data))
+  .validator((data: unknown) => parseInput(GetInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "taxes.read");
@@ -50,7 +51,7 @@ export const getActiveDebtCertificates = createServerFn({ method: "POST" })
 // CDAs 'ativa' — quitadas e canceladas não são estoque de dívida. Reusa taxes.read.
 export const getActiveDebtByTaxpayer = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => GetInput.parse(data))
+  .validator((data: unknown) => parseInput(GetInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "taxes.read");
@@ -103,7 +104,7 @@ const EmitInput = z.object({
 // 'divida_ativa' com saldo devedor; uma CDA por crédito (unique + guarda de estado).
 export const emitActiveDebtCertificate = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => EmitInput.parse(data))
+  .validator((data: unknown) => parseInput(EmitInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "taxes.manage");
@@ -197,7 +198,7 @@ const SettleInput = z.object({
 // taxes.manage.
 export const settleActiveDebtCertificate = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SettleInput.parse(data))
+  .validator((data: unknown) => parseInput(SettleInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "taxes.manage");
@@ -256,7 +257,7 @@ const CancelInput = z.object({
 // automaticamente). Ativa o status 'cancelada'. Reusa taxes.manage.
 export const cancelActiveDebtCertificate = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => CancelInput.parse(data))
+  .validator((data: unknown) => parseInput(CancelInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "taxes.manage");
@@ -300,7 +301,7 @@ const AgingInput = z.object({
 // contribuinte não dá. Só CDA ativa é estoque. Read-only, reusa taxes.read.
 export const getActiveDebtAging = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => AgingInput.parse(data))
+  .validator((data: unknown) => parseInput(AgingInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "taxes.read");

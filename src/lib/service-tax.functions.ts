@@ -6,6 +6,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, queryOne, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -18,7 +19,7 @@ const TenantInput = z.object({ tenant_id: z.string().uuid() });
 
 export const getServiceTaxpayers = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => TenantInput.parse(data))
+  .validator((data: unknown) => parseInput(TenantInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "taxes.read");
@@ -55,7 +56,7 @@ const SaveInput = z.object({
 
 export const saveServiceTaxpayer = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SaveInput.parse(data))
+  .validator((data: unknown) => parseInput(SaveInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "taxes.manage");
@@ -132,7 +133,7 @@ const IssInput = z.object({
 // com inscrição "inscricao_municipal/competencia" (um lançamento por competência).
 export const launchIss = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => IssInput.parse(data))
+  .validator((data: unknown) => parseInput(IssInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "taxes.manage");

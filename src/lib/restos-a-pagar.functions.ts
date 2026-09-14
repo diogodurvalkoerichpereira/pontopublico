@@ -6,6 +6,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -21,7 +22,7 @@ const GetInput = z.object({
 
 export const getRestosAPagar = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => GetInput.parse(data))
+  .validator((data: unknown) => parseInput(GetInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "budget.read");
@@ -63,7 +64,7 @@ const InscribeInput = z.object({
 // inscritos. Idempotente: reexecutar não duplica.
 export const inscribeRestosAPagar = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => InscribeInput.parse(data))
+  .validator((data: unknown) => parseInput(InscribeInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "budget.manage");
@@ -142,7 +143,7 @@ const PayInput = z.object({
 // Paga um resto a pagar inscrito: quita o empenho de origem (status 'pago').
 export const payRestoAPagar = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => PayInput.parse(data))
+  .validator((data: unknown) => parseInput(PayInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "budget.manage");
@@ -216,7 +217,7 @@ const CancelInput = z.object({
 // origem, a 'anulado'. Não devolve saldo à dotação (o exercício de origem está encerrado).
 export const cancelRestoAPagar = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => CancelInput.parse(data))
+  .validator((data: unknown) => parseInput(CancelInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "budget.manage");
@@ -286,7 +287,7 @@ const SummaryInput = z.object({
 // liquidar). Read-only, reusa budget.read.
 export const getRestosAPagarSummary = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SummaryInput.parse(data))
+  .validator((data: unknown) => parseInput(SummaryInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "budget.read");

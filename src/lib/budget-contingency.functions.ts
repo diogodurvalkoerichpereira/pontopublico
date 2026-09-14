@@ -4,6 +4,7 @@
 // a liberação nunca deixa o bloqueado negativo. Reusa budget.*.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -22,7 +23,7 @@ const Input = z.object({
 // Contingencia (bloqueia) parte da dotação. O bloqueio nunca invade o já empenhado.
 export const contingenciarDotacao = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => Input.parse(data))
+  .validator((data: unknown) => parseInput(Input, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "budget.manage");
@@ -74,7 +75,7 @@ export const contingenciarDotacao = createServerFn({ method: "POST" })
 // Descontingencia (libera) parte do bloqueio. Nunca deixa o bloqueado negativo.
 export const descontingenciarDotacao = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => Input.parse(data))
+  .validator((data: unknown) => parseInput(Input, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "budget.manage");

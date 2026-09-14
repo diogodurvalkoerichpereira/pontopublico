@@ -3,6 +3,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, queryOne, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -46,7 +47,7 @@ function computeDepreciation(input: {
 
 export const getAssets = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => TenantInput.parse(data))
+  .validator((data: unknown) => parseInput(TenantInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "assets.read");
@@ -81,7 +82,7 @@ export const getAssets = createServerFn({ method: "POST" })
 // assets.read.
 export const getPatrimonySummary = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => TenantInput.parse(data))
+  .validator((data: unknown) => parseInput(TenantInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "assets.read");
@@ -126,7 +127,7 @@ const SaveInput = z.object({
 
 export const saveAsset = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SaveInput.parse(data))
+  .validator((data: unknown) => parseInput(SaveInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "assets.manage");
@@ -209,7 +210,7 @@ const IncorporateInput = z.object({
 // materials.manage (baixa o estoque) e assets.manage (cria o bem).
 export const incorporateMaterialAsset = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => IncorporateInput.parse(data))
+  .validator((data: unknown) => parseInput(IncorporateInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "materials.manage");
@@ -327,7 +328,7 @@ const DepreciateInput = z.object({
 // (aquisição − residual); os meses efetivamente depreciados respeitam a vida útil.
 export const depreciateAsset = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => DepreciateInput.parse(data))
+  .validator((data: unknown) => parseInput(DepreciateInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "assets.manage");
@@ -390,7 +391,7 @@ const DepreciateAllInput = z.object({
 // depreciado é ignorado. Devolve quantos foram depreciados e o total da cota do período.
 export const depreciateAllAssets = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => DepreciateAllInput.parse(data))
+  .validator((data: unknown) => parseInput(DepreciateAllInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "assets.manage");
@@ -462,7 +463,7 @@ const DisposeInput = z.object({
 // se negativo. Só um bem ativo pode ser baixado; a baixa é definitiva (não deprecia mais).
 export const disposeAsset = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => DisposeInput.parse(data))
+  .validator((data: unknown) => parseInput(DisposeInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "assets.manage");
@@ -577,7 +578,7 @@ const DisposalsInput = z.object({
 // patrimoniais (NBC TSP), que a baixa registrava um bem por vez e nada totalizava. Read-only.
 export const getAssetDisposals = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => DisposalsInput.parse(data))
+  .validator((data: unknown) => parseInput(DisposalsInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "assets.read");
@@ -655,7 +656,7 @@ const RevaluateInput = z.object({
 // desce) contabiliza pelo roteiro do ente (O2-06); sem delta, nada contabiliza.
 export const revaluateAsset = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => RevaluateInput.parse(data))
+  .validator((data: unknown) => parseInput(RevaluateInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "assets.manage");
@@ -772,7 +773,7 @@ const RevaluationsInput = z.object({
 // Read-only.
 export const getAssetRevaluations = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => RevaluationsInput.parse(data))
+  .validator((data: unknown) => parseInput(RevaluationsInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "assets.read");

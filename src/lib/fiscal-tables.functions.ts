@@ -6,6 +6,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, queryOne, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -20,7 +21,7 @@ const TenantInput = z.object({ tenant_id: z.string().uuid() });
 
 export const getFiscalTables = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => TenantInput.parse(data))
+  .validator((data: unknown) => parseInput(TenantInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "fiscal.read");
@@ -82,7 +83,7 @@ const SaveTableInput = z.object({
 
 export const saveFiscalTable = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SaveTableInput.parse(data))
+  .validator((data: unknown) => parseInput(SaveTableInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "fiscal.manage");
@@ -178,7 +179,7 @@ const SaveVersionInput = z.object({
 
 export const saveFiscalTableVersion = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SaveVersionInput.parse(data))
+  .validator((data: unknown) => parseInput(SaveVersionInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "fiscal.manage");

@@ -3,6 +3,7 @@
 // ALLOWLIST do teste de cobertura de autorização por essa razão.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, queryOne, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import {
@@ -69,7 +70,7 @@ const CodeInput = z.object({ code: z.string().min(1).max(20) });
 // confirmed_at e devolve os códigos de recuperação UMA ÚNICA VEZ.
 export const confirmMfaEnrollment = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((v: unknown) => CodeInput.parse(v))
+  .validator((v: unknown) => parseInput(CodeInput, v))
   .handler(async ({ data, context }) => {
     const factor = await loadFactor(context.userId);
     if (!factor) throw new Error("Nenhuma inscrição de MFA pendente");
@@ -90,7 +91,7 @@ export const confirmMfaEnrollment = createServerFn({ method: "POST" })
 // atual como MFA-backed. Códigos de recuperação são consumidos ao usar.
 export const verifyMfa = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((v: unknown) => CodeInput.parse(v))
+  .validator((v: unknown) => parseInput(CodeInput, v))
   .handler(async ({ data, context }) => {
     const factor = await loadFactor(context.userId);
     if (!factor?.confirmed_at) throw new Error("MFA não configurado");
@@ -122,7 +123,7 @@ export const verifyMfa = createServerFn({ method: "POST" })
 // usuário — sem fator, nenhuma sessão segue MFA-backed.
 export const disableMfa = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((v: unknown) => CodeInput.parse(v))
+  .validator((v: unknown) => parseInput(CodeInput, v))
   .handler(async ({ data, context }) => {
     const factor = await loadFactor(context.userId);
     if (!factor?.confirmed_at) throw new Error("MFA não configurado");

@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, queryOne, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -55,7 +56,7 @@ const RegistryInput = TenantIdInput.extend({
 
 export const getPeopleRegistry = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => RegistryInput.parse(data))
+  .validator((data: unknown) => parseInput(RegistryInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     const scope = await loadTenantUnitScope(access, "people.read");
@@ -133,7 +134,7 @@ export const getPeopleRegistry = createServerFn({ method: "POST" })
 
 export const getPeopleUnits = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => TenantIdInput.parse(data))
+  .validator((data: unknown) => parseInput(TenantIdInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     const scope = await loadTenantUnitScope(access, "people.read");
@@ -181,7 +182,7 @@ function nullable(value: string | null | undefined) {
 
 export const savePersonAndLink = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SavePersonLinkInput.parse(data))
+  .validator((data: unknown) => parseInput(SavePersonLinkInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "people.manage");

@@ -5,6 +5,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -20,7 +21,7 @@ const GetInput = z.object({
 
 export const getDisbursementSchedule = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => GetInput.parse(data))
+  .validator((data: unknown) => parseInput(GetInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "budget.read");
@@ -96,7 +97,7 @@ const SaveInput = z.object({
 // Define (ou substitui) a cota mensal de desembolso de uma fonte no exercício.
 export const saveDisbursementQuota = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SaveInput.parse(data))
+  .validator((data: unknown) => parseInput(SaveInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "budget.manage");
@@ -147,7 +148,7 @@ const ProgressInput = z.object({
 // É o indicador de aderência à programação financeira. Read-only, reusa budget.read.
 export const getDisbursementProgress = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => ProgressInput.parse(data))
+  .validator((data: unknown) => parseInput(ProgressInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "budget.read");

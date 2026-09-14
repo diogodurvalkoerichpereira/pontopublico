@@ -6,6 +6,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -21,7 +22,7 @@ const GetInput = z.object({
 
 export const getInstallmentPlans = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => GetInput.parse(data))
+  .validator((data: unknown) => parseInput(GetInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "taxes.read");
@@ -57,7 +58,7 @@ const GetInstallmentsInput = z.object({
 // Lista as parcelas de um plano (número, valor, vencimento, situação).
 export const getInstallments = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => GetInstallmentsInput.parse(data))
+  .validator((data: unknown) => parseInput(GetInstallmentsInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "taxes.read");
@@ -102,7 +103,7 @@ function addMonths(iso: string, months: number): string {
 // Abre um parcelamento do saldo devedor de um crédito em dívida ativa.
 export const createInstallmentPlan = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => CreateInput.parse(data))
+  .validator((data: unknown) => parseInput(CreateInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "taxes.manage");
@@ -198,7 +199,7 @@ const PayInput = z.object({
 // Paga uma parcela: arrecada o valor no crédito; a última quita crédito e plano.
 export const payInstallment = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => PayInput.parse(data))
+  .validator((data: unknown) => parseInput(PayInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "taxes.manage");
@@ -308,7 +309,7 @@ const RescindInput = z.object({
 // permanece em dívida ativa com o saldo remanescente (as parcelas pagas já arrecadaram).
 export const rescindInstallmentPlan = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => RescindInput.parse(data))
+  .validator((data: unknown) => parseInput(RescindInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "taxes.manage");
@@ -374,7 +375,7 @@ const SummaryInput = z.object({
 // data de referência) — a inadimplência da carteira. Read-only, reusa taxes.read.
 export const getInstallmentPlansSummary = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SummaryInput.parse(data))
+  .validator((data: unknown) => parseInput(SummaryInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "taxes.read");

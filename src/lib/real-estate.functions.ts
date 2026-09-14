@@ -5,6 +5,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, queryOne, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -17,7 +18,7 @@ const TenantInput = z.object({ tenant_id: z.string().uuid() });
 
 export const getProperties = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => TenantInput.parse(data))
+  .validator((data: unknown) => parseInput(TenantInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "taxes.read");
@@ -54,7 +55,7 @@ export const getProperties = createServerFn({ method: "POST" })
 // tributável** do IPTU. Imóvel baixado não integra a base. Read-only, reusa taxes.read.
 export const getRealEstateSummary = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => TenantInput.parse(data))
+  .validator((data: unknown) => parseInput(TenantInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "taxes.read");
@@ -98,7 +99,7 @@ const SaveInput = z.object({
 
 export const savePropertyRegistration = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SaveInput.parse(data))
+  .validator((data: unknown) => parseInput(SaveInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "taxes.manage");
@@ -181,7 +182,7 @@ const BenefitInput = z.object({
 // Imóvel com benefício não recebe IPTU, avulso nem em lote. Reusa taxes.manage.
 export const setPropertyTaxBenefit = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => BenefitInput.parse(data))
+  .validator((data: unknown) => parseInput(BenefitInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "taxes.manage");
@@ -233,7 +234,7 @@ const IptuInput = z.object({
 // gravado em tax_credits. Um lançamento por imóvel/exercício.
 export const launchIptu = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => IptuInput.parse(data))
+  .validator((data: unknown) => parseInput(IptuInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "taxes.manage");
@@ -324,7 +325,7 @@ const IptuBatchInput = z.object({
 // taxes.manage.
 export const launchIptuBatch = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => IptuBatchInput.parse(data))
+  .validator((data: unknown) => parseInput(IptuBatchInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "taxes.manage");

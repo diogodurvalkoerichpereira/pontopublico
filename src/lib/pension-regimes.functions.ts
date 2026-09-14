@@ -6,6 +6,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, queryOne, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -18,7 +19,7 @@ const TenantInput = z.object({ tenant_id: z.string().uuid() });
 
 export const getPensionRegimes = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => TenantInput.parse(data))
+  .validator((data: unknown) => parseInput(TenantInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "people.read");
@@ -47,7 +48,7 @@ export const getPensionRegimes = createServerFn({ method: "POST" })
 // people.read; os flags dizem o que a tela pode gerir.
 export const getPensionWorkspace = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => TenantInput.parse(data))
+  .validator((data: unknown) => parseInput(TenantInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "people.read");
@@ -108,7 +109,7 @@ const SaveRegimeInput = z.object({
 
 export const savePensionRegime = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SaveRegimeInput.parse(data))
+  .validator((data: unknown) => parseInput(SaveRegimeInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "people.manage");
@@ -178,7 +179,7 @@ export const savePensionRegime = createServerFn({ method: "POST" })
 
 export const getPensionRegimeRubrics = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => TenantInput.parse(data))
+  .validator((data: unknown) => parseInput(TenantInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "payroll.simulate");
@@ -204,7 +205,7 @@ const SetRegimeRubricsInput = z.object({
 
 export const setPensionRegimeRubrics = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SetRegimeRubricsInput.parse(data))
+  .validator((data: unknown) => parseInput(SetRegimeRubricsInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "payroll.assignments.manage");

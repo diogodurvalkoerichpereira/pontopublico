@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query } from "./db.server";
 import { requireAuth } from "./data.functions";
 import {
@@ -73,7 +74,7 @@ export const saveFiscalMonth = createServerFn({ method: "POST" })
   });
 export const getFiscalDashboard = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((v: unknown) => tenant.parse(v))
+  .validator((v: unknown) => parseInput(tenant, v))
   .handler(async ({ data, context }) => {
     const a = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(a, "fiscal.read");

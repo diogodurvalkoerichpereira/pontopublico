@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -21,7 +22,7 @@ function checksum(value: unknown) {
 
 export const getPayrollCycleWorkspace = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => TenantInput.parse(data))
+  .validator((data: unknown) => parseInput(TenantInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "payroll.cycles.read");
@@ -316,7 +317,7 @@ const PreviewInput = z.object({
 
 export const materializePayrollPreview = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => PreviewInput.parse(data))
+  .validator((data: unknown) => parseInput(PreviewInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "payroll.cycles.prepare");
@@ -476,7 +477,7 @@ const transitionRules = {
 
 export const transitionPayrollCycle = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => TransitionInput.parse(data))
+  .validator((data: unknown) => parseInput(TransitionInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     const rule = transitionRules[data.action];
@@ -572,7 +573,7 @@ const ByRubricInput = z.object({
 // payroll.cycles.read.
 export const getPayrollCycleByRubric = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => ByRubricInput.parse(data))
+  .validator((data: unknown) => parseInput(ByRubricInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "payroll.cycles.read");

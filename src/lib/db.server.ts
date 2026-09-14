@@ -1,6 +1,7 @@
 // Camada de acesso ao PostgreSQL (attestado-db) — substitui o backend Supabase.
 // SOMENTE servidor. Nunca importar em código de cliente.
 import { Pool } from "pg";
+import { traduzirErroDoBanco } from "./db-errors.server";
 
 let _pool: Pool | undefined;
 
@@ -21,12 +22,19 @@ export function getPool(): Pool {
   return _pool;
 }
 
+// Toda consulta passa por aqui, então é aqui que a violação de constraint vira
+// frase legível: um `check` disparado mostrava ao usuário o nome da tabela e da
+// constraint, em inglês. O erro original vai no `cause`, para o log do servidor.
 export async function query<T = Record<string, unknown>>(
   text: string,
   params: unknown[] = [],
 ): Promise<T[]> {
-  const res = await getPool().query(text, params as never[]);
-  return res.rows as T[];
+  try {
+    const res = await getPool().query(text, params as never[]);
+    return res.rows as T[];
+  } catch (e) {
+    throw traduzirErroDoBanco(e);
+  }
 }
 
 export async function queryOne<T = Record<string, unknown>>(
@@ -48,7 +56,9 @@ export async function withTransaction<T>(
     return result;
   } catch (e) {
     await client.query("ROLLBACK");
-    throw e;
+    // Dentro da transação o handler usa `client.query` direto, que não passa
+    // pelo `query` acima — a tradução tem de acontecer também aqui.
+    throw traduzirErroDoBanco(e);
   } finally {
     client.release();
   }

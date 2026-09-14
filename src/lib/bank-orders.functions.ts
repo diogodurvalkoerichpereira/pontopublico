@@ -6,6 +6,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -22,7 +23,7 @@ const GetInput = z.object({
 
 export const getBankOrders = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => GetInput.parse(data))
+  .validator((data: unknown) => parseInput(GetInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "accounting.read");
@@ -62,7 +63,7 @@ const EmitInput = z.object({
 // só paga uma vez (unique tenant/commitment no banco + guarda de estado 'liquidado').
 export const emitBankOrder = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => EmitInput.parse(data))
+  .validator((data: unknown) => parseInput(EmitInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "accounting.manage");
@@ -227,7 +228,7 @@ const CancelInput = z.object({
 // cancela; a de OB já cancelada é recusada. Fecha o ciclo reversível do pagamento.
 export const cancelBankOrder = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => CancelInput.parse(data))
+  .validator((data: unknown) => parseInput(CancelInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "accounting.manage");

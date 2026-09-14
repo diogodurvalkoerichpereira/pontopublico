@@ -3,6 +3,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, queryOne, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -15,7 +16,7 @@ const TenantInput = z.object({ tenant_id: z.string().uuid() });
 
 export const getFleetVehicles = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => TenantInput.parse(data))
+  .validator((data: unknown) => parseInput(TenantInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "assets.read");
@@ -48,7 +49,7 @@ const SaveInput = z.object({
 
 export const saveFleetVehicle = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SaveInput.parse(data))
+  .validator((data: unknown) => parseInput(SaveInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "assets.manage");
@@ -109,7 +110,7 @@ const EventInput = z.object({
 // Registra um evento; o hodômetro do veículo nunca retrocede.
 export const recordFleetEvent = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => EventInput.parse(data))
+  .validator((data: unknown) => parseInput(EventInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "assets.manage");
@@ -182,7 +183,7 @@ const ConsumptionInput = z.object({
 // senão consumo/custo ficam nulos. Read-only, reusa assets.read.
 export const getFleetConsumption = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => ConsumptionInput.parse(data))
+  .validator((data: unknown) => parseInput(ConsumptionInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "assets.read");
@@ -263,7 +264,7 @@ const CostSummaryInput = z.object({
 // listado). Read-only, reusa assets.read.
 export const getFleetCostSummary = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => CostSummaryInput.parse(data))
+  .validator((data: unknown) => parseInput(CostSummaryInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "assets.read");

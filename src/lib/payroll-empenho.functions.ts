@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -17,7 +18,7 @@ const Tenant = z.object({ tenant_id: z.string().uuid() });
 
 export const getPayrollEmpenhoRequests = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((v: unknown) => Tenant.parse(v))
+  .validator((v: unknown) => parseInput(Tenant, v))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "payroll.cycles.read");
@@ -85,7 +86,7 @@ const EmitInput = z.object({
 // empenho homologado no SIAFIC.
 export const emitPayrollEmpenhoRequest = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((v: unknown) => EmitInput.parse(v))
+  .validator((v: unknown) => parseInput(EmitInput, v))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "payroll.cycles.close");

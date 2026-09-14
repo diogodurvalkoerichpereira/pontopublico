@@ -6,6 +6,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -30,7 +31,7 @@ const SummaryInput = z.object({ tenant_id: z.string().uuid() });
 // menor, com o total geral. Só consignação `ativa` compromete margem. Reusa people.read.
 export const getConsignmentsSummary = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SummaryInput.parse(data))
+  .validator((data: unknown) => parseInput(SummaryInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "people.read");
@@ -64,7 +65,7 @@ export const getConsignmentsSummary = createServerFn({ method: "POST" })
 // consignações ativas.
 export const getConsignmentMargin = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => MarginInput.parse(data))
+  .validator((data: unknown) => parseInput(MarginInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "people.read");
@@ -122,7 +123,7 @@ const RegisterInput = z.object({
 // Inclui uma consignação: só entra se couber na margem consignável disponível.
 export const registerConsignment = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => RegisterInput.parse(data))
+  .validator((data: unknown) => parseInput(RegisterInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "people.manage");
@@ -214,7 +215,7 @@ const DepositInput = z.object({
 // parcelas — o avanço de parcelas_pagas/quitação ocorre no fechamento do ciclo.
 export const depositConsignmentsToPayroll = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => DepositInput.parse(data))
+  .validator((data: unknown) => parseInput(DepositInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "people.manage");
@@ -292,7 +293,7 @@ const CancelInput = z.object({
 // Cancela uma consignação ativa, liberando a margem. Só uma ativa cancela.
 export const cancelConsignment = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => CancelInput.parse(data))
+  .validator((data: unknown) => parseInput(CancelInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "people.manage");
@@ -335,7 +336,7 @@ const AmortizeInput = z.object({
 // ativas comprometem). Não amortiza consignação já quitada/cancelada.
 export const amortizeConsignment = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => AmortizeInput.parse(data))
+  .validator((data: unknown) => parseInput(AmortizeInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "people.manage");

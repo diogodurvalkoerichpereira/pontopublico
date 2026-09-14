@@ -4,6 +4,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -19,7 +20,7 @@ const GetInput = z.object({
 
 export const getProcurementProcesses = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => GetInput.parse(data))
+  .validator((data: unknown) => parseInput(GetInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "contracts.read");
@@ -61,7 +62,7 @@ const SummaryInput = z.object({
 // homologado** das já homologadas. Reusa contracts.read.
 export const getProcurementSummary = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SummaryInput.parse(data))
+  .validator((data: unknown) => parseInput(SummaryInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "contracts.read");
@@ -125,7 +126,7 @@ const OpenInput = z.object({
 
 export const openProcurementProcess = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => OpenInput.parse(data))
+  .validator((data: unknown) => parseInput(OpenInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "contracts.manage");
@@ -177,7 +178,7 @@ const TransitionInput = z.object({
 // Encerra o certame com um desfecho. Só uma licitação aberta transita.
 export const transitionProcurementProcess = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => TransitionInput.parse(data))
+  .validator((data: unknown) => parseInput(TransitionInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "contracts.manage");
@@ -227,7 +228,7 @@ const ProposalInput = z.object({
 // já entrar desclassificada, com motivo. Reusa contracts.manage.
 export const recordProcurementProposal = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => ProposalInput.parse(data))
+  .validator((data: unknown) => parseInput(ProposalInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "contracts.manage");
@@ -297,7 +298,7 @@ const JudgmentInput = z.object({
 // contracts.read.
 export const getProcurementJudgment = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => JudgmentInput.parse(data))
+  .validator((data: unknown) => parseInput(JudgmentInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "contracts.read");
@@ -345,7 +346,7 @@ const AwardInput = z.object({
 // Reusa contracts.manage.
 export const adjudicateProcurementWinner = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => AwardInput.parse(data))
+  .validator((data: unknown) => parseInput(AwardInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "contracts.manage");
@@ -411,7 +412,7 @@ const SavingsInput = z.object({
 // aqui a base é a mesma nos dois lados. Read-only, reusa contracts.read.
 export const getProcurementSavings = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SavingsInput.parse(data))
+  .validator((data: unknown) => parseInput(SavingsInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "contracts.read");
@@ -484,7 +485,7 @@ const DisqualifyInput = z.object({
 // não desclassifica de novo. Reusa contracts.manage.
 export const disqualifyProcurementProposal = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => DisqualifyInput.parse(data))
+  .validator((data: unknown) => parseInput(DisqualifyInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "contracts.manage");

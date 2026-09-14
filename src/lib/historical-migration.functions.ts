@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, queryOne } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAuditQ } from "./audit.server";
@@ -16,15 +17,16 @@ const row = z.object({
 export const createMigrationJob = createServerFn({ method: "POST" })
   .middleware([requireAuth])
   .validator((v: unknown) =>
-    z
-      .object({
+    parseInput(
+      z.object({
         tenant_id: z.string().uuid(),
         name: z.string().min(3).max(160),
         source_type: z.string().min(2).max(80),
         expected_rows: z.number().int().nonnegative(),
         expected_total: z.number().finite(),
-      })
-      .parse(v),
+      }),
+      v,
+    ),
   )
   .handler(async ({ data, context }) => {
     const a = await loadTenantAccess(context.userId, data.tenant_id);
@@ -46,13 +48,14 @@ export const createMigrationJob = createServerFn({ method: "POST" })
 export const stageHistoricalRows = createServerFn({ method: "POST" })
   .middleware([requireAuth])
   .validator((v: unknown) =>
-    z
-      .object({
+    parseInput(
+      z.object({
         tenant_id: z.string().uuid(),
         job_id: z.string().uuid(),
         rows: z.array(row).min(1).max(5000),
-      })
-      .parse(v),
+      }),
+      v,
+    ),
   )
   .handler(async ({ data, context }) => {
     const a = await loadTenantAccess(context.userId, data.tenant_id);
@@ -93,9 +96,10 @@ export const stageHistoricalRows = createServerFn({ method: "POST" })
 export const reconcileMigrationJob = createServerFn({ method: "POST" })
   .middleware([requireAuth])
   .validator((v: unknown) =>
-    z
-      .object({ tenant_id: z.string().uuid(), job_id: z.string().uuid() })
-      .parse(v),
+    parseInput(
+      z.object({ tenant_id: z.string().uuid(), job_id: z.string().uuid() }),
+      v,
+    ),
   )
   .handler(async ({ data, context }) => {
     const a = await loadTenantAccess(context.userId, data.tenant_id);
@@ -129,9 +133,10 @@ export const reconcileMigrationJob = createServerFn({ method: "POST" })
 export const commitMigrationJob = createServerFn({ method: "POST" })
   .middleware([requireAuth])
   .validator((v: unknown) =>
-    z
-      .object({ tenant_id: z.string().uuid(), job_id: z.string().uuid() })
-      .parse(v),
+    parseInput(
+      z.object({ tenant_id: z.string().uuid(), job_id: z.string().uuid() }),
+      v,
+    ),
   )
   .handler(async ({ data, context }) => {
     const a = await loadTenantAccess(context.userId, data.tenant_id);
@@ -166,7 +171,7 @@ export const commitMigrationJob = createServerFn({ method: "POST" })
 export const listMigrationJobs = createServerFn({ method: "POST" })
   .middleware([requireAuth])
   .validator((v: unknown) =>
-    z.object({ tenant_id: z.string().uuid() }).parse(v),
+    parseInput(z.object({ tenant_id: z.string().uuid() }), v),
   )
   .handler(async ({ data, context }) => {
     const a = await loadTenantAccess(context.userId, data.tenant_id);

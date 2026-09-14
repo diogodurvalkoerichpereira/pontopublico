@@ -15,6 +15,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -36,7 +37,7 @@ const I = z.object({
 });
 export const generateOfficialExport = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((v: unknown) => I.parse(v))
+  .validator((v: unknown) => parseInput(I, v))
   .handler(async ({ data, context }) => {
     const a = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(a, "official.export.manage");

@@ -6,6 +6,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -31,7 +32,7 @@ const Input = z.object({
 // reduz o imposto. Devolve `base_calculo` e `arbitrado` (base veio do venal).
 export const launchItbi = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => Input.parse(data))
+  .validator((data: unknown) => parseInput(Input, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "taxes.manage");

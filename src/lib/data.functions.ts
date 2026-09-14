@@ -2,6 +2,7 @@
 import { createServerFn, createMiddleware } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { promises as fs } from "node:fs";
 import { join, normalize } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
@@ -141,7 +142,7 @@ async function sessionFor(
 }
 
 export const signUp = createServerFn({ method: "POST" })
-  .validator((d: unknown) => SignUpInput.parse(d))
+  .validator((d: unknown) => parseInput(SignUpInput, d))
   .handler(async ({ data }) => {
     assertStrongPassword(data.password);
     const email = data.email.toLowerCase();
@@ -255,7 +256,7 @@ const SignInInput = z.object({
 });
 
 export const signIn = createServerFn({ method: "POST" })
-  .validator((d: unknown) => SignInInput.parse(d))
+  .validator((d: unknown) => parseInput(SignInInput, d))
   .handler(async ({ data }) => {
     const identifier = data.email.trim().toLowerCase();
     const { ipHash } = requestFingerprint();
@@ -365,7 +366,7 @@ const UploadInput = z.object({
 
 export const storageUpload = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((d: unknown) => UploadInput.parse(d))
+  .validator((d: unknown) => parseInput(UploadInput, d))
   .handler(async ({ data, context }) => {
     // Usuário só pode enviar para a própria pasta (path começa com <userId>/)
     if (!data.path.startsWith(`${context.userId}/`)) {
@@ -384,7 +385,7 @@ const DownloadInput = z.object({
 
 export const storageDownload = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((d: unknown) => DownloadInput.parse(d))
+  .validator((d: unknown) => parseInput(DownloadInput, d))
   .handler(async ({ data, context }) => {
     const ctx = await loadAccess(context.userId);
     const isRh = ctx.roles.includes("rh") || ctx.roles.includes("admin");
@@ -414,7 +415,7 @@ const AdminCreateInput = z.object({
 
 export const adminCreateUser = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((d: unknown) => AdminCreateInput.parse(d))
+  .validator((d: unknown) => parseInput(AdminCreateInput, d))
   .handler(async ({ data, context }) => {
     assertStrongPassword(data.password);
     const ctx = await loadAccess(context.userId);
@@ -613,7 +614,7 @@ const EmailSettingsInput = z.object({
 
 export const saveEmailSettings = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((d: unknown) => EmailSettingsInput.parse(d))
+  .validator((d: unknown) => parseInput(EmailSettingsInput, d))
   .handler(async ({ data, context }) => {
     await requireAdmin(context.userId);
     const existing = await loadEmailSettings();
@@ -664,7 +665,7 @@ export const saveEmailSettings = createServerFn({ method: "POST" })
 const SendTestInput = z.object({ to: z.string().email() });
 export const sendTestEmail = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((d: unknown) => SendTestInput.parse(d))
+  .validator((d: unknown) => parseInput(SendTestInput, d))
   .handler(async ({ data, context }) => {
     await requireAdmin(context.userId);
     const s = await loadEmailSettings();
@@ -684,7 +685,7 @@ const AdminResetPasswordInput = z.object({
 // (evita escalonamento de privilégio).
 export const adminResetPassword = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((d: unknown) => AdminResetPasswordInput.parse(d))
+  .validator((d: unknown) => parseInput(AdminResetPasswordInput, d))
   .handler(async ({ data, context }) => {
     const ctx = await loadAccess(context.userId);
     const isAdmin = ctx.roles.includes("admin");
@@ -740,7 +741,7 @@ const AdminUpdateEmailInput = z.object({
 // RH (não-admin) não pode alterar e-mail de admin/RH (evita hijack de conta).
 export const adminUpdateUserEmail = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((d: unknown) => AdminUpdateEmailInput.parse(d))
+  .validator((d: unknown) => parseInput(AdminUpdateEmailInput, d))
   .handler(async ({ data, context }) => {
     const ctx = await loadAccess(context.userId);
     const isAdmin = ctx.roles.includes("admin");
@@ -803,7 +804,7 @@ const RhUploadDocInput = z.object({
 
 export const rhUploadEmployeeDocument = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((d: unknown) => RhUploadDocInput.parse(d))
+  .validator((d: unknown) => parseInput(RhUploadDocInput, d))
   .handler(async ({ data, context }) => {
     const ctx = await loadAccess(context.userId);
     const isAdmin = ctx.roles.includes("admin");
@@ -853,7 +854,9 @@ export const rhUploadEmployeeDocument = createServerFn({ method: "POST" })
 
 export const adminDeleteUser = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((d: unknown) => z.object({ user_id: z.string().uuid() }).parse(d))
+  .validator((d: unknown) =>
+    parseInput(z.object({ user_id: z.string().uuid() }), d),
+  )
   .handler(async ({ data, context }) => {
     const ctx = await loadAccess(context.userId);
     if (!ctx.roles.includes("admin")) throw new Error("Apenas administradores");

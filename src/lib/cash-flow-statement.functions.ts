@@ -15,6 +15,7 @@
 // não explica. Read-only, reusa budget.read (mesma audiência do balanço financeiro).
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { queryOne } from "./db.server";
 import { requireAuth } from "./data.functions";
 import {
@@ -31,7 +32,7 @@ const n2 = (v: number) => Number(v.toFixed(2));
 
 export const getCashFlowStatement = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => Input.parse(data))
+  .validator((data: unknown) => parseInput(Input, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "budget.read");

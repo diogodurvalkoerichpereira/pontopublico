@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, queryOne, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit, recordAuditQ } from "./audit.server";
@@ -29,7 +30,7 @@ function checksum(value: unknown) {
 
 export const getPayrollSimulationWorkspace = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => TenantInput.parse(data))
+  .validator((data: unknown) => parseInput(TenantInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     const canReadAssignments = access.permissions.includes(
@@ -144,7 +145,7 @@ const SaveAssignmentInput = z.object({
 
 export const saveEmploymentLinkRubric = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SaveAssignmentInput.parse(data))
+  .validator((data: unknown) => parseInput(SaveAssignmentInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     const scope = await loadTenantUnitScope(
@@ -267,7 +268,7 @@ type CalculationSource = {
 
 export const runPayrollSimulation = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => RunInput.parse(data))
+  .validator((data: unknown) => parseInput(RunInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "payroll.simulate");
@@ -650,7 +651,7 @@ const RunDetailInput = z.object({
 
 export const getPayrollSimulationRun = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => RunDetailInput.parse(data))
+  .validator((data: unknown) => parseInput(RunDetailInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "payroll.simulate");

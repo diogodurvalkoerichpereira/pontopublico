@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -11,7 +12,7 @@ import {
 const Tenant = z.object({ tenant_id: z.string().uuid() });
 export const getVacationWorkspace = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((v: unknown) => Tenant.parse(v))
+  .validator((v: unknown) => parseInput(Tenant, v))
   .handler(async ({ data, context }) => {
     const a = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(a, "vacation.read");
@@ -163,7 +164,7 @@ const DepositVacationInput = z.object({
 });
 export const depositVacationToPayroll = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((v: unknown) => DepositVacationInput.parse(v))
+  .validator((v: unknown) => parseInput(DepositVacationInput, v))
   .handler(async ({ data, context }) => {
     const a = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(a, "payroll.assignments.manage");
@@ -285,7 +286,7 @@ const CancelInput = z.object({
 // vacation.manage.
 export const cancelVacation = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((v: unknown) => CancelInput.parse(v))
+  .validator((v: unknown) => parseInput(CancelInput, v))
   .handler(async ({ data, context }) => {
     const a = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(a, "vacation.manage");
@@ -334,7 +335,7 @@ const DeadlineInput = z.object({
 // vacation.read.
 export const getVacationDeadlineAlerts = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((v: unknown) => DeadlineInput.parse(v))
+  .validator((v: unknown) => parseInput(DeadlineInput, v))
   .handler(async ({ data, context }) => {
     const a = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(a, "vacation.read");

@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query } from "./db.server";
 import { requireAuth } from "./data.functions";
 import {
@@ -10,7 +11,7 @@ const tenant = z.object({ tenant_id: z.string().uuid() });
 
 export const refreshDataMart = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((v: unknown) => tenant.parse(v))
+  .validator((v: unknown) => parseInput(tenant, v))
   .handler(async ({ data, context }) => {
     const a = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(a, "analytics.manage");
@@ -73,7 +74,7 @@ export const refreshDataMart = createServerFn({ method: "POST" })
 
 export const getDataMartStatus = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((v: unknown) => tenant.parse(v))
+  .validator((v: unknown) => parseInput(tenant, v))
   .handler(async ({ data, context }) => {
     const a = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(a, "analytics.read");

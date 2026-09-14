@@ -6,6 +6,7 @@
 // para que lancar/retificar um mes no meio reordene os seguintes.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -28,7 +29,7 @@ const PostInput = z.object({
  *  people.manage. */
 export const postTimeBankEntry = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => PostInput.parse(data))
+  .validator((data: unknown) => parseInput(PostInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "people.manage");
@@ -79,7 +80,7 @@ const GetInput = z.object({
  *  people.read. */
 export const getTimeBank = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => GetInput.parse(data))
+  .validator((data: unknown) => parseInput(GetInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "people.read");
@@ -134,7 +135,7 @@ const BalancesInput = z.object({ tenant_id: z.string().uuid() });
  *  mês) não resume, para o RH ver quem está positivo/negativo de relance. Guard people.read. */
 export const getTimeBankBalances = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => BalancesInput.parse(data))
+  .validator((data: unknown) => parseInput(BalancesInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "people.read");

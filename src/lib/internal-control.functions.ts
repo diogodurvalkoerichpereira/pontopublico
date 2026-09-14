@@ -6,6 +6,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -24,7 +25,7 @@ const GetInput = z.object({
 
 export const getInternalControlFindings = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => GetInput.parse(data))
+  .validator((data: unknown) => parseInput(GetInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "analytics.read");
@@ -64,7 +65,7 @@ const SummaryInput = z.object({
 // (implementado/nao_implementado) nunca é vencido. Reusa analytics.read.
 export const getInternalControlSummary = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SummaryInput.parse(data))
+  .validator((data: unknown) => parseInput(SummaryInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "analytics.read");
@@ -117,7 +118,7 @@ const OpenInput = z.object({
 // Registra um apontamento: número sequencial por ano (contador travado FOR UPDATE).
 export const openInternalControlFinding = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => OpenInput.parse(data))
+  .validator((data: unknown) => parseInput(OpenInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "analytics.manage");
@@ -187,7 +188,7 @@ const TransitionInput = z.object({
 // transita de novo.
 export const updateInternalControlFinding = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => TransitionInput.parse(data))
+  .validator((data: unknown) => parseInput(TransitionInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "analytics.manage");
@@ -259,7 +260,7 @@ const FollowupsInput = z.object({
 // reusa analytics.read.
 export const getInternalControlFollowups = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => FollowupsInput.parse(data))
+  .validator((data: unknown) => parseInput(FollowupsInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "analytics.read");

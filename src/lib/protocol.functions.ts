@@ -4,6 +4,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -19,7 +20,7 @@ const GetInput = z.object({
 
 export const getProtocolProcesses = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => GetInput.parse(data))
+  .validator((data: unknown) => parseInput(GetInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "protocol.read");
@@ -52,7 +53,7 @@ const SummaryInput = z.object({ tenant_id: z.string().uuid() });
 // concluído, arquivado) e total. Reusa protocol.read.
 export const getProtocolSummary = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SummaryInput.parse(data))
+  .validator((data: unknown) => parseInput(SummaryInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "protocol.read");
@@ -91,7 +92,7 @@ const DetailInput = z.object({
 // detalhe e a auditoria. Reusa protocol.read.
 export const getProtocolMovements = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => DetailInput.parse(data))
+  .validator((data: unknown) => parseInput(DetailInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "protocol.read");
@@ -143,7 +144,7 @@ const OpenInput = z.object({
 // Abre um processo: número sequencial por ano (contador travado FOR UPDATE).
 export const openProtocolProcess = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => OpenInput.parse(data))
+  .validator((data: unknown) => parseInput(OpenInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "protocol.manage");
@@ -209,7 +210,7 @@ const MoveInput = z.object({
 // a unidade atual; opcionalmente conclui.
 export const recordProtocolMovement = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => MoveInput.parse(data))
+  .validator((data: unknown) => parseInput(MoveInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "protocol.manage");
@@ -280,7 +281,7 @@ const ArchiveInput = z.object({
 // (em tramitação precisa concluir antes); arquivar é terminal. Reusa protocol.manage.
 export const archiveProtocolProcess = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => ArchiveInput.parse(data))
+  .validator((data: unknown) => parseInput(ArchiveInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "protocol.manage");

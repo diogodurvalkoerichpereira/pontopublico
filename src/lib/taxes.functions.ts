@@ -4,6 +4,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, queryOne, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -28,7 +29,7 @@ const SummaryInput = z.object({ tenant_id: z.string().uuid() });
 // totais. Reusa taxes.read.
 export const getTaxCreditsSummary = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SummaryInput.parse(data))
+  .validator((data: unknown) => parseInput(SummaryInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "taxes.read");
@@ -72,7 +73,7 @@ export const getTaxCreditsSummary = createServerFn({ method: "POST" })
 // Ordena do mais arrecadado ao menos. Reusa taxes.read.
 export const getTaxCreditsByTributo = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SummaryInput.parse(data))
+  .validator((data: unknown) => parseInput(SummaryInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "taxes.read");
@@ -103,7 +104,7 @@ export const getTaxCreditsByTributo = createServerFn({ method: "POST" })
 
 export const getTaxCredits = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => GetInput.parse(data))
+  .validator((data: unknown) => parseInput(GetInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "taxes.read");
@@ -145,7 +146,7 @@ const RevenueByOriginInput = z.object({
 // status). Read-only, reusa taxes.read.
 export const getTaxRevenueByOrigin = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => RevenueByOriginInput.parse(data))
+  .validator((data: unknown) => parseInput(RevenueByOriginInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "taxes.read");
@@ -201,7 +202,7 @@ const LaunchInput = z.object({
 
 export const launchTaxCredit = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => LaunchInput.parse(data))
+  .validator((data: unknown) => parseInput(LaunchInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "taxes.manage");
@@ -254,7 +255,7 @@ const PayInput = z.object({
 // Arrecada o tributo: soma ao pago (nunca acima do saldo); quita quando zera.
 export const recordTaxPayment = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => PayInput.parse(data))
+  .validator((data: unknown) => parseInput(PayInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "taxes.manage");
@@ -331,7 +332,7 @@ const InscribeInput = z.object({
 // Inscreve em dívida ativa: crédito vencido e com saldo, não quitado (Lei 6.830).
 export const inscribeDividaAtiva = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => InscribeInput.parse(data))
+  .validator((data: unknown) => parseInput(InscribeInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "taxes.manage");
@@ -389,7 +390,7 @@ const UpdatedDebtInput = z.object({
 // paramétrica, não uma declaração de conformidade com legislação específica.
 export const getUpdatedTaxDebt = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => UpdatedDebtInput.parse(data))
+  .validator((data: unknown) => parseInput(UpdatedDebtInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "taxes.read");
@@ -452,7 +453,7 @@ const CancelInput = z.object({
 // plano rescindido antes (evita cancelar dívida em cobrança amigável). Reusa taxes.manage.
 export const cancelTaxCredit = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => CancelInput.parse(data))
+  .validator((data: unknown) => parseInput(CancelInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "taxes.manage");
@@ -509,7 +510,7 @@ const PaymentsInput = z.object({
 // arrecadação do crédito, isolada por `credit_id`. Read-only, reusa taxes.read.
 export const getTaxCreditPayments = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => PaymentsInput.parse(data))
+  .validator((data: unknown) => parseInput(PaymentsInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "taxes.read");

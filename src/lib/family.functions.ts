@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, queryOne, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -37,7 +38,7 @@ const WorkspaceInput = z.object({
 
 export const getFamilyWorkspace = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => WorkspaceInput.parse(data))
+  .validator((data: unknown) => parseInput(WorkspaceInput, data))
   .handler(async ({ data, context }) => {
     const { access, scope } = await assertPersonScope(
       data.tenant_id,
@@ -165,7 +166,7 @@ async function resolvePerson(
 
 export const saveDependent = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SaveDependentInput.parse(data))
+  .validator((data: unknown) => parseInput(SaveDependentInput, data))
   .handler(async ({ data, context }) => {
     await assertPersonScope(
       data.tenant_id,
@@ -257,7 +258,7 @@ const SavePensionInput = z.object({
 
 export const savePensionBeneficiary = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SavePensionInput.parse(data))
+  .validator((data: unknown) => parseInput(SavePensionInput, data))
   .handler(async ({ data, context }) => {
     const { scope } = await assertPersonScope(
       data.tenant_id,
@@ -354,7 +355,7 @@ const ValidDependentsInput = z.object({
 // reusa family.read (escopo por unidade via assertPersonScope).
 export const getValidDependents = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => ValidDependentsInput.parse(data))
+  .validator((data: unknown) => parseInput(ValidDependentsInput, data))
   .handler(async ({ data, context }) => {
     await assertPersonScope(
       data.tenant_id,
@@ -397,7 +398,7 @@ const PensionAllocationInput = z.object({
 // family.read (escopo por unidade via assertPersonScope).
 export const getPensionAllocation = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => PensionAllocationInput.parse(data))
+  .validator((data: unknown) => parseInput(PensionAllocationInput, data))
   .handler(async ({ data, context }) => {
     await assertPersonScope(
       data.tenant_id,

@@ -5,6 +5,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, queryOne, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -20,7 +21,7 @@ const GetInput = z.object({
 
 export const getContracts = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => GetInput.parse(data))
+  .validator((data: unknown) => parseInput(GetInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "contracts.read");
@@ -64,7 +65,7 @@ const SummaryInput = z.object({
 // carteira vigente. Reusa contracts.read.
 export const getContractsSummary = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SummaryInput.parse(data))
+  .validator((data: unknown) => parseInput(SummaryInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "contracts.read");
@@ -119,7 +120,7 @@ const ExpiringInput = z.object({
 // Reusa contracts.read.
 export const getExpiringContracts = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => ExpiringInput.parse(data))
+  .validator((data: unknown) => parseInput(ExpiringInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "contracts.read");
@@ -174,7 +175,7 @@ const SaveInput = z.object({
 
 export const saveContract = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SaveInput.parse(data))
+  .validator((data: unknown) => parseInput(SaveInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "contracts.manage");
@@ -279,7 +280,7 @@ const TRANSICOES: Record<string, { de: string[]; para: string }> = {
 // vale a partir do estado de origem correto. Reusa contracts.manage.
 export const transitionContract = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => TransitionInput.parse(data))
+  .validator((data: unknown) => parseInput(TransitionInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "contracts.manage");

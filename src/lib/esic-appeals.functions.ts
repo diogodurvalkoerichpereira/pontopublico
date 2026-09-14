@@ -5,6 +5,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -20,7 +21,7 @@ const GetInput = z.object({
 
 export const getEsicAppeals = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => GetInput.parse(data))
+  .validator((data: unknown) => parseInput(GetInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "protocol.read");
@@ -62,7 +63,7 @@ const AppealsSummaryInput = z.object({
 // protocol.read.
 export const getEsicAppealsSummary = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => AppealsSummaryInput.parse(data))
+  .validator((data: unknown) => parseInput(AppealsSummaryInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "protocol.read");
@@ -142,7 +143,7 @@ const FileInput = z.object({
 // recurso de 1ª instância improvido. Um recurso por pedido/instância.
 export const fileEsicAppeal = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => FileInput.parse(data))
+  .validator((data: unknown) => parseInput(FileInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "protocol.manage");
@@ -220,7 +221,7 @@ const DecideInput = z.object({
 // cumprimento; improvido mantém o indeferimento.
 export const decideEsicAppeal = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => DecideInput.parse(data))
+  .validator((data: unknown) => parseInput(DecideInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "protocol.manage");

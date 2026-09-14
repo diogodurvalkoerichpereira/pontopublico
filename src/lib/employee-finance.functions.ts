@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import {
@@ -37,7 +38,7 @@ const PublishInput = z.object({
 
 export const publishClosedPayroll = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((v: unknown) => PublishInput.parse(v))
+  .validator((v: unknown) => parseInput(PublishInput, v))
   .handler(async ({ data, context }) => {
     // Publicar contracheque é ato pós-fechamento do ciclo: exige ser membro do
     // ente e ter a permissão de fechar folha. Sem isto, qualquer usuário

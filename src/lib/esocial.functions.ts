@@ -19,6 +19,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAuditQ } from "./audit.server";
@@ -35,7 +36,7 @@ const I = z.object({
 });
 export const enqueueEsocialEvent = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((v: unknown) => I.parse(v))
+  .validator((v: unknown) => parseInput(I, v))
   .handler(async ({ data, context }) => {
     const a = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(a, "esocial.manage");
@@ -76,7 +77,7 @@ export const enqueueEsocialEvent = createServerFn({ method: "POST" })
 export const processEsocialQueue = createServerFn({ method: "POST" })
   .middleware([requireAuth])
   .validator((v: unknown) =>
-    z.object({ tenant_id: z.string().uuid() }).parse(v),
+    parseInput(z.object({ tenant_id: z.string().uuid() }), v),
   )
   .handler(async ({ data, context }) => {
     const a = await loadTenantAccess(context.userId, data.tenant_id);
@@ -94,7 +95,7 @@ export const processEsocialQueue = createServerFn({ method: "POST" })
 export const getEsocialQueueStatus = createServerFn({ method: "POST" })
   .middleware([requireAuth])
   .validator((v: unknown) =>
-    z.object({ tenant_id: z.string().uuid() }).parse(v),
+    parseInput(z.object({ tenant_id: z.string().uuid() }), v),
   )
   .handler(async ({ data, context }) => {
     const a = await loadTenantAccess(context.userId, data.tenant_id);

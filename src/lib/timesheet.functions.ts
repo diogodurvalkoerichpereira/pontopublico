@@ -9,6 +9,7 @@ import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -60,7 +61,7 @@ const RegisterInput = z.object({
 
 export const registerManualTimeEntry = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((v: unknown) => RegisterInput.parse(v))
+  .validator((v: unknown) => parseInput(RegisterInput, v))
   .handler(async ({ data, context }) => {
     const a = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(a, "people.manage");
@@ -107,7 +108,7 @@ const UpdateInput = z.object({
 
 export const updateManualTimeEntry = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((v: unknown) => UpdateInput.parse(v))
+  .validator((v: unknown) => parseInput(UpdateInput, v))
   .handler(async ({ data, context }) => {
     const a = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(a, "people.manage");
@@ -159,7 +160,7 @@ const DeleteInput = z.object({
 
 export const softDeleteTimeEntry = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((v: unknown) => DeleteInput.parse(v))
+  .validator((v: unknown) => parseInput(DeleteInput, v))
   .handler(async ({ data, context }) => {
     const a = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(a, "people.manage");

@@ -4,6 +4,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -19,7 +20,7 @@ const GetInput = z.object({
 
 export const getBudgetRevenues = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => GetInput.parse(data))
+  .validator((data: unknown) => parseInput(GetInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "budget.read");
@@ -75,7 +76,7 @@ const SaveInput = z.object({
 
 export const saveBudgetRevenue = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SaveInput.parse(data))
+  .validator((data: unknown) => parseInput(SaveInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "budget.manage");
@@ -149,7 +150,7 @@ const CollectInput = z.object({
 // Registra a arrecadação e incrementa o valor_arrecadado da receita (atômico).
 export const recordRevenueCollection = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => CollectInput.parse(data))
+  .validator((data: unknown) => parseInput(CollectInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "budget.manage");
@@ -208,7 +209,7 @@ const CollectionsInput = z.object({
 // vaza a arrecadação de outra receita). Read-only, reusa budget.read.
 export const getRevenueCollections = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => CollectionsInput.parse(data))
+  .validator((data: unknown) => parseInput(CollectionsInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "budget.read");
@@ -248,7 +249,7 @@ const ReverseInput = z.object({
 // sempre. Uma arrecadação já estornada não estorna de novo. Reusa budget.manage.
 export const reverseRevenueCollection = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => ReverseInput.parse(data))
+  .validator((data: unknown) => parseInput(ReverseInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "budget.manage");

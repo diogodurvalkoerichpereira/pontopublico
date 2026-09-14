@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import {
@@ -22,7 +23,7 @@ const Input = z.object({
 });
 export const stagePayrollImport = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((v: unknown) => Input.parse(v))
+  .validator((v: unknown) => parseInput(Input, v))
   .handler(async ({ data, context }) => {
     const a = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(a, "payroll.import.manage");
@@ -104,9 +105,10 @@ export const stagePayrollImport = createServerFn({ method: "POST" })
 export const commitPayrollImport = createServerFn({ method: "POST" })
   .middleware([requireAuth])
   .validator((v: unknown) =>
-    z
-      .object({ tenant_id: z.string().uuid(), batch_id: z.string().uuid() })
-      .parse(v),
+    parseInput(
+      z.object({ tenant_id: z.string().uuid(), batch_id: z.string().uuid() }),
+      v,
+    ),
   )
   .handler(async ({ data, context }) => {
     const a = await loadTenantAccess(context.userId, data.tenant_id);
@@ -157,7 +159,7 @@ export const commitPayrollImport = createServerFn({ method: "POST" })
 export const getPayrollImports = createServerFn({ method: "POST" })
   .middleware([requireAuth])
   .validator((v: unknown) =>
-    z.object({ tenant_id: z.string().uuid() }).parse(v),
+    parseInput(z.object({ tenant_id: z.string().uuid() }), v),
   )
   .handler(async ({ data, context }) => {
     const a = await loadTenantAccess(context.userId, data.tenant_id);

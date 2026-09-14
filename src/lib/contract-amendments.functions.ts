@@ -5,6 +5,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -23,7 +24,7 @@ const GetInput = z.object({
 
 export const getContractAmendments = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => GetInput.parse(data))
+  .validator((data: unknown) => parseInput(GetInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "contracts.read");
@@ -73,7 +74,7 @@ const RegisterInput = z
 
 export const registerContractAmendment = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => RegisterInput.parse(data))
+  .validator((data: unknown) => parseInput(RegisterInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "contracts.manage");

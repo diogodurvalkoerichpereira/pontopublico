@@ -5,6 +5,7 @@
 // evento em accounting-events.ts (puro), para o cliente poder importar daqui.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -33,7 +34,7 @@ const SaveEventInput = z.object({
 
 export const saveAccountingEventAccount = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SaveEventInput.parse(data))
+  .validator((data: unknown) => parseInput(SaveEventInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "accounting.manage");
@@ -73,7 +74,7 @@ const TenantInput = z.object({ tenant_id: z.string().uuid() });
 // lista completa de eventos para a tela mostrar os não mapeados. Reusa accounting.read.
 export const getAccountingEventAccounts = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => TenantInput.parse(data))
+  .validator((data: unknown) => parseInput(TenantInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "accounting.read");
@@ -124,7 +125,7 @@ const PostInput = z.object({
 
 export const postAccountingEntry = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => PostInput.parse(data))
+  .validator((data: unknown) => parseInput(PostInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "accounting.manage");

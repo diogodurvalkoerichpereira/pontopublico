@@ -1758,6 +1758,38 @@ dia no espelho e na apuração.
 o **AFD/AEJ** da Portaria MTP 671/2021 e o comprovante oficial ao trabalhador dependem de
 homologação (O1-03b) e não são isto; o comprovante emitido diz o mesmo no rodapé.
 
+**O0-16 — O erro que o usuário lê. ✅** Duas fontes de texto cru chegavam intactas ao
+`toast.error(error.message)` das 122 telas:
+
+1. **Validação.** O padrão da casa era `.validator((data) => Schema.parse(data))`, e
+   `ZodError.message` é o **JSON das issues**: o usuário via
+   `[{"code":"too_small","minimum":2,"type":"string",...}]` — em inglês, sem dizer qual campo
+   nem o que fazer. Eram **295 funções de servidor** assim. Novo módulo puro
+   `src/lib/input-validation.ts` com `parseInput(Schema, data)`: mesmo resultado no caminho
+   feliz, frase em português no caminho de erro, nomeando o campo pelo rótulo de negócio
+   (`valor_lancado` → "valor lançado"; `contribuinte_documento` → "CPF/CNPJ do
+   contribuinte"; `uuid` → "informe uma seleção válida", porque "uuid" não quer dizer nada
+   para quem preenche). Campo em branco vira `Informe <campo>.`; enum lista as opções
+   aceitas; mensagem de `.refine()` escrita pelo autor da regra passa intacta; acima de três
+   problemas a frase resume ("e mais N problemas") para caber num toast. A troca foi
+   mecânica nas 295 chamadas.
+2. **Banco.** Violação de constraint chegava como o texto interno do Postgres —
+   `new row for relation "budget_appropriations" violates check constraint
+"budget_empenhado_bloqueado_teto"`. Novo `src/lib/db-errors.server.ts`, ligado em
+   `query` e `withTransaction` (as duas portas: dentro da transação o handler usa
+   `client.query` direto e não passa pela primeira). Constraints conhecidas ganham
+   explicação com o caminho de saída; o resto cai numa frase por SQLSTATE (23505 duplicado,
+   23503 dependência, 23502 obrigatório, 23514 regra de consistência, 40P01 concorrência…).
+   O `raise exception` das triggers do projeto **já está em português** e passa intacto — o
+   original vai no `cause`, para o log do servidor.
+
+Traduzir não substitui validar: uma constraint que dispara com frequência é validação
+faltando no handler, e a frase genérica é o sintoma. `tests/input-validation.test.mjs`
+(13 casos) executa os dois tradutores e afere o texto que o usuário vê, incluindo as
+asserções negativas — sem `{`, sem código do zod, sem nome de tabela, sem inglês.
+Verificado por mutação: devolver a mensagem crua do zod derruba 7; não traduzir o erro do
+banco derruba 2. Catraca de lint desceu de 1512 para **1451**.
+
 ### Onda 5 — Apoio, controle e transparência (10-14 sem)
 
 Protocolo e processo eletrônico com ICP-Brasil · e-SIC/LAI · controle interno ·

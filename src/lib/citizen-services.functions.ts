@@ -4,6 +4,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, queryOne, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -19,7 +20,7 @@ const GetInput = z.object({
 
 export const getCitizenServices = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => GetInput.parse(data))
+  .validator((data: unknown) => parseInput(GetInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "protocol.read");
@@ -58,7 +59,7 @@ const SaveInput = z.object({
 
 export const saveCitizenService = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SaveInput.parse(data))
+  .validator((data: unknown) => parseInput(SaveInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "protocol.manage");
@@ -128,7 +129,7 @@ const PublishInput = z.object({
 // canais); despublicar é sempre permitido.
 export const publishCitizenService = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => PublishInput.parse(data))
+  .validator((data: unknown) => parseInput(PublishInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "protocol.manage");

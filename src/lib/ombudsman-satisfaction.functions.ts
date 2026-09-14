@@ -5,6 +5,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -17,7 +18,7 @@ const GetInput = z.object({ tenant_id: z.string().uuid() });
 
 export const getOmbudsmanSatisfaction = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => GetInput.parse(data))
+  .validator((data: unknown) => parseInput(GetInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "protocol.read");
@@ -60,7 +61,7 @@ const RateInput = z.object({
 // uma avaliação por manifestação (unique + guarda de estado).
 export const rateManifestation = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => RateInput.parse(data))
+  .validator((data: unknown) => parseInput(RateInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "protocol.manage");

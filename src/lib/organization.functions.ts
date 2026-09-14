@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, queryOne, withTransaction } from "./db.server";
 import { recordAuditQ } from "./audit.server";
 import { requireAuth } from "./data.functions";
@@ -70,9 +71,10 @@ async function audit(
 export const getTenantContext = createServerFn({ method: "POST" })
   .middleware([requireAuth])
   .validator((data: unknown) =>
-    z
-      .object({ active_tenant_id: z.string().uuid().nullable().optional() })
-      .parse(data),
+    parseInput(
+      z.object({ active_tenant_id: z.string().uuid().nullable().optional() }),
+      data,
+    ),
   )
   .handler(async ({ data, context }) => {
     const tenants = await query<TenantSummary>(
@@ -106,7 +108,7 @@ export const getTenantContext = createServerFn({ method: "POST" })
 
 export const getOrganizationTree = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => TenantIdInput.parse(data))
+  .validator((data: unknown) => parseInput(TenantIdInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "org.read");
@@ -121,7 +123,7 @@ export const getOrganizationTree = createServerFn({ method: "POST" })
 
 export const getTenantUsers = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => TenantIdInput.parse(data))
+  .validator((data: unknown) => parseInput(TenantIdInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "security.read");
@@ -166,7 +168,7 @@ const SaveUnitInput = z.object({
 
 export const saveOrganizationUnit = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SaveUnitInput.parse(data))
+  .validator((data: unknown) => parseInput(SaveUnitInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "org.manage");
@@ -254,7 +256,7 @@ const CreateTenantInput = z.object({
 
 export const createTenant = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => CreateTenantInput.parse(data))
+  .validator((data: unknown) => parseInput(CreateTenantInput, data))
   .handler(async ({ data, context }) => {
     const legacy = await queryOne<{ ok: boolean }>(
       `select exists(
@@ -346,7 +348,7 @@ export interface SecurityRoleView {
 
 export const getSecurityModel = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => TenantIdInput.parse(data))
+  .validator((data: unknown) => parseInput(TenantIdInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "security.read");
@@ -445,7 +447,7 @@ const SaveRoleInput = z.object({
 
 export const saveSecurityRole = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SaveRoleInput.parse(data))
+  .validator((data: unknown) => parseInput(SaveRoleInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "security.manage");
@@ -522,7 +524,7 @@ const AssignRoleInput = z.object({
 
 export const assignSecurityRole = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => AssignRoleInput.parse(data))
+  .validator((data: unknown) => parseInput(AssignRoleInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "security.manage");
@@ -590,7 +592,7 @@ const SaveAssignmentInput = z.object({
 
 export const saveSecurityAssignment = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SaveAssignmentInput.parse(data))
+  .validator((data: unknown) => parseInput(SaveAssignmentInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "security.manage");

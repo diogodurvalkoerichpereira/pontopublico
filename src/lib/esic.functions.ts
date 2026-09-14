@@ -6,6 +6,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -40,7 +41,7 @@ const SummaryInput = z.object({
 // prazo quando depois. Reusa protocol.read.
 export const getEsicSummary = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SummaryInput.parse(data))
+  .validator((data: unknown) => parseInput(SummaryInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "protocol.read");
@@ -92,7 +93,7 @@ export const getEsicSummary = createServerFn({ method: "POST" })
 
 export const getEsicRequests = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => GetInput.parse(data))
+  .validator((data: unknown) => parseInput(GetInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "protocol.read");
@@ -132,7 +133,7 @@ const OpenInput = z.object({
 // Abre um pedido: número sequencial por ano e prazo de 20 dias (LAI).
 export const openEsicRequest = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => OpenInput.parse(data))
+  .validator((data: unknown) => parseInput(OpenInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "protocol.manage");
@@ -195,7 +196,7 @@ const ExtendInput = z.object({
 // Prorroga o prazo por mais 10 dias (art. 11, §2º). Só uma vez, só em aberto.
 export const extendEsicRequest = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => ExtendInput.parse(data))
+  .validator((data: unknown) => parseInput(ExtendInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "protocol.manage");
@@ -247,7 +248,7 @@ const RespondInput = z.object({
 // Responde ou indefere o pedido. Só um pedido em aberto (recebido/prorrogado).
 export const respondEsicRequest = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => RespondInput.parse(data))
+  .validator((data: unknown) => parseInput(RespondInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "protocol.manage");

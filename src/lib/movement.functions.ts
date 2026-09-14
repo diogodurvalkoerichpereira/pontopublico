@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, queryOne, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -18,7 +19,7 @@ const WorkspaceInput = z.object({ tenant_id: z.string().uuid() });
 
 export const getMovementWorkspace = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => WorkspaceInput.parse(data))
+  .validator((data: unknown) => parseInput(WorkspaceInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     const scope = await loadTenantUnitScope(access, "movements.read");
@@ -121,7 +122,7 @@ function safeName(name: string) {
 
 export const saveEmploymentMovement = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SaveMovementInput.parse(data))
+  .validator((data: unknown) => parseInput(SaveMovementInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     const scope = await loadTenantUnitScope(access, "movements.manage");
@@ -244,7 +245,7 @@ const ApplyDueInput = z.object({
 // por unidade e reusa `movements.manage`.
 export const applyDueEmploymentMovements = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => ApplyDueInput.parse(data))
+  .validator((data: unknown) => parseInput(ApplyDueInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     const scope = await loadTenantUnitScope(access, "movements.manage");

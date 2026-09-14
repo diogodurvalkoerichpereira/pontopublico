@@ -4,6 +4,7 @@
 // por `weekly_hours` (seg-sex). Reusa people.read / people.manage.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query, withTransaction } from "./db.server";
 import { requireAuth } from "./data.functions";
 import { recordAudit } from "./audit.server";
@@ -36,7 +37,7 @@ function rowToMinutes(row: ScheduleRow): number[] {
  *  senao o padrao por weekly_hours), para edicao. Guard people.read. */
 export const getEmploymentWeeklySchedules = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => TenantInput.parse(data))
+  .validator((data: unknown) => parseInput(TenantInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "people.read");
@@ -90,7 +91,7 @@ const SaveInput = z.object({
 /** Salva (upsert) a escala semanal customizada de um vinculo. Guard people.manage. */
 export const saveEmploymentWeeklySchedule = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => SaveInput.parse(data))
+  .validator((data: unknown) => parseInput(SaveInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "people.manage");

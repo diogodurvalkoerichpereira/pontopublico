@@ -4,6 +4,7 @@
 // transparência ativa do desempenho do atendimento. Read-only, reusa protocol.read.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { queryOne } from "./db.server";
 import { requireAuth } from "./data.functions";
 import {
@@ -22,7 +23,7 @@ function resumo(respondidas: number, noPrazo: number) {
 
 export const getResponseTimeliness = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => Input.parse(data))
+  .validator((data: unknown) => parseInput(Input, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "protocol.read");

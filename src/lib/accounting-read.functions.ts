@@ -5,6 +5,7 @@
 // accounting.read.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { parseInput } from "./input-validation";
 import { query } from "./db.server";
 import { requireAuth } from "./data.functions";
 import {
@@ -19,7 +20,7 @@ const GetInput = z.object({
 
 export const getAccountingEntries = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => GetInput.parse(data))
+  .validator((data: unknown) => parseInput(GetInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "accounting.read");
@@ -53,7 +54,7 @@ const BalanceteInput = z.object({
 // prova de fechamento do período — que a lista crua de contas não afirmava. Read-only.
 export const getBalancete = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => BalanceteInput.parse(data))
+  .validator((data: unknown) => parseInput(BalanceteInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "accounting.read");
@@ -97,7 +98,7 @@ const LedgerInput = z.object({
 // balancete consolida — para auditoria e conciliação. Read-only, reusa accounting.read.
 export const getAccountLedger = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .validator((data: unknown) => LedgerInput.parse(data))
+  .validator((data: unknown) => parseInput(LedgerInput, data))
   .handler(async ({ data, context }) => {
     const access = await loadTenantAccess(context.userId, data.tenant_id);
     requireTenantPermission(access, "accounting.read");
