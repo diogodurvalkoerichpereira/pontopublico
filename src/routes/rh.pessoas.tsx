@@ -10,7 +10,6 @@ import {
   UserRound,
 } from "lucide-react";
 import { toast } from "sonner";
-import { AppShell } from "@/components/AppShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -95,9 +94,9 @@ function Page() {
   }, [session, loading, hasTenantPermission, nav]);
   if (!session) return null;
   return (
-    <AppShell>
+    <>
       <Content />
-    </AppShell>
+    </>
   );
 }
 

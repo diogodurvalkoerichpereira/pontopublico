@@ -31,6 +31,8 @@ import {
   getFleetCostSummary,
 } from "@/lib/fleet.functions";
 
+import { AppShell } from "@/components/AppShell";
+
 export const Route = createFileRoute("/frotas")({ component: Page });
 
 function Page() {
@@ -42,7 +44,11 @@ function Page() {
     else if (!hasTenantPermission("assets.read")) nav({ to: "/app" });
   }, [session, loading, hasTenantPermission, nav]);
   if (!session) return null;
-  return <Content />;
+  return (
+    <AppShell>
+      <Content />
+    </AppShell>
+  );
 }
 
 type Vehicle = {

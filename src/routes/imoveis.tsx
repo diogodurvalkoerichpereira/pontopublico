@@ -33,6 +33,8 @@ import {
 // O4-04d — Cadastro imobiliário (base do IPTU). Lista, cadastra e edita imóveis
 // (inscrição, proprietário, endereço, valor venal, áreas, situação) e concede/encerra
 // imunidade ou isenção de IPTU (O4-04c). O lançamento do IPTU segue em /tributos.
+import { AppShell } from "@/components/AppShell";
+
 export const Route = createFileRoute("/imoveis")({ component: Page });
 
 function Page() {
@@ -44,7 +46,11 @@ function Page() {
     else if (!hasTenantPermission("taxes.read")) nav({ to: "/app" });
   }, [session, loading, hasTenantPermission, nav]);
   if (!session) return null;
-  return <Content />;
+  return (
+    <AppShell>
+      <Content />
+    </AppShell>
+  );
 }
 
 type Property = {

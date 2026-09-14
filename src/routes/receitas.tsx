@@ -24,6 +24,8 @@ import {
   reverseRevenueCollection,
 } from "@/lib/revenue.functions";
 
+import { AppShell } from "@/components/AppShell";
+
 export const Route = createFileRoute("/receitas")({ component: Page });
 
 function Page() {
@@ -35,7 +37,11 @@ function Page() {
     else if (!hasTenantPermission("budget.read")) nav({ to: "/app" });
   }, [session, loading, hasTenantPermission, nav]);
   if (!session) return null;
-  return <Content />;
+  return (
+    <AppShell>
+      <Content />
+    </AppShell>
+  );
 }
 
 type Revenue = {

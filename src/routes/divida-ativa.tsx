@@ -30,6 +30,8 @@ import {
 } from "@/lib/fiscal-execution.functions";
 import { getTaxRevenueByOrigin } from "@/lib/taxes.functions";
 
+import { AppShell } from "@/components/AppShell";
+
 export const Route = createFileRoute("/divida-ativa")({ component: Page });
 
 function Page() {
@@ -41,7 +43,11 @@ function Page() {
     else if (!hasTenantPermission("taxes.read")) nav({ to: "/app" });
   }, [session, loading, hasTenantPermission, nav]);
   if (!session) return null;
-  return <Content />;
+  return (
+    <AppShell>
+      <Content />
+    </AppShell>
+  );
 }
 
 type Cda = {

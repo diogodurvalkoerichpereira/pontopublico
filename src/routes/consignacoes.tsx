@@ -32,6 +32,8 @@ import {
   getConsignmentsSummary,
 } from "@/lib/consignments.functions";
 
+import { AppShell } from "@/components/AppShell";
+
 export const Route = createFileRoute("/consignacoes")({ component: Page });
 
 function Page() {
@@ -43,7 +45,11 @@ function Page() {
     else if (!hasTenantPermission("people.read")) nav({ to: "/app" });
   }, [session, loading, hasTenantPermission, nav]);
   if (!session) return null;
-  return <Content />;
+  return (
+    <AppShell>
+      <Content />
+    </AppShell>
+  );
 }
 
 type Consignment = {

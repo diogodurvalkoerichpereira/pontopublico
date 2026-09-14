@@ -41,6 +41,8 @@ import {
 } from "@/lib/price-registration.functions";
 import { getProcurementProcesses } from "@/lib/procurement.functions";
 
+import { AppShell } from "@/components/AppShell";
+
 export const Route = createFileRoute("/atas")({ component: Page });
 
 function Page() {
@@ -52,7 +54,11 @@ function Page() {
     else if (!hasTenantPermission("contracts.read")) nav({ to: "/app" });
   }, [session, loading, hasTenantPermission, nav]);
   if (!session) return null;
-  return <Content />;
+  return (
+    <AppShell>
+      <Content />
+    </AppShell>
+  );
 }
 
 type Registration = {

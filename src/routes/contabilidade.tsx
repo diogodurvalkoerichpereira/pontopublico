@@ -42,6 +42,8 @@ type Roteiro = {
   configurado: boolean;
 };
 
+import { AppShell } from "@/components/AppShell";
+
 export const Route = createFileRoute("/contabilidade")({ component: Page });
 
 function Page() {
@@ -53,7 +55,11 @@ function Page() {
     else if (!hasTenantPermission("accounting.read")) nav({ to: "/app" });
   }, [session, loading, hasTenantPermission, nav]);
   if (!session) return null;
-  return <Content />;
+  return (
+    <AppShell>
+      <Content />
+    </AppShell>
+  );
 }
 
 type BalanceteRow = {

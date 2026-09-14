@@ -47,6 +47,8 @@ import {
 } from "@/lib/ombudsman-satisfaction.functions";
 import { getResponseTimeliness } from "@/lib/response-timeliness.functions";
 
+import { AppShell } from "@/components/AppShell";
+
 export const Route = createFileRoute("/ouvidoria")({ component: Page });
 
 function Page() {
@@ -58,7 +60,11 @@ function Page() {
     else if (!hasTenantPermission("protocol.read")) nav({ to: "/app" });
   }, [session, loading, hasTenantPermission, nav]);
   if (!session) return null;
-  return <Content />;
+  return (
+    <AppShell>
+      <Content />
+    </AppShell>
+  );
 }
 
 type Manifestation = {

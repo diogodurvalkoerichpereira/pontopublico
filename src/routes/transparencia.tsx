@@ -14,6 +14,8 @@ import {
   getEsicStatistics,
 } from "@/lib/transparency.functions";
 
+import { AppShell } from "@/components/AppShell";
+
 export const Route = createFileRoute("/transparencia")({ component: Page });
 
 function Page() {
@@ -25,7 +27,11 @@ function Page() {
     else if (!hasTenantPermission("transparency.read")) nav({ to: "/app" });
   }, [session, loading, hasTenantPermission, nav]);
   if (!session) return null;
-  return <Content />;
+  return (
+    <AppShell>
+      <Content />
+    </AppShell>
+  );
 }
 
 type Report = {

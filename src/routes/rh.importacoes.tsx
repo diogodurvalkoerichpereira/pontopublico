@@ -117,8 +117,8 @@ function Page() {
             className="flex items-center justify-between border-b py-3"
           >
             <span>
-              {b.file_name} · {b.reference_month.slice(0, 7)} · {b.valid_rows}
-              /{b.total_rows}
+              {b.file_name} · {b.reference_month.slice(0, 7)} · {b.valid_rows}/
+              {b.total_rows}
             </span>
             <span className="flex gap-2">
               <Badge>{b.status}</Badge>

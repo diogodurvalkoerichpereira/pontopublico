@@ -4,7 +4,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { CalendarRange } from "lucide-react";
 import { toast } from "sonner";
-import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -91,7 +90,7 @@ function Page() {
   };
 
   return (
-    <AppShell>
+    <>
       <section className="space-y-6">
         <div className="flex items-center gap-3">
           <CalendarRange className="size-6 text-primary" />
@@ -212,6 +211,6 @@ function Page() {
           </table>
         </div>
       </section>
-    </AppShell>
+    </>
   );
 }

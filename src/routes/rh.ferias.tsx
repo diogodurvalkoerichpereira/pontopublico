@@ -4,7 +4,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Palmtree } from "lucide-react";
 import { toast } from "sonner";
-import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -63,7 +62,7 @@ function Page() {
     qc.invalidateQueries({ queryKey: ["vacation-alerts", activeTenant.id] });
   };
   return (
-    <AppShell>
+    <>
       <section className="space-y-6">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-extrabold">
@@ -258,7 +257,7 @@ function Page() {
           )}
         </div>
       </section>
-    </AppShell>
+    </>
   );
 }
 function Field({

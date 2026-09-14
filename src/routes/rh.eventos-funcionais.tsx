@@ -4,7 +4,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { BriefcaseBusiness, Calculator, Play } from "lucide-react";
 import { toast } from "sonner";
-import { AppShell } from "@/components/AppShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,9 +22,9 @@ export const Route = createFileRoute("/rh/eventos-funcionais")({
 });
 function Page() {
   return (
-    <AppShell>
+    <>
       <Content />
-    </AppShell>
+    </>
   );
 }
 function Content() {

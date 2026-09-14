@@ -13,6 +13,8 @@ import { getFinancialBalance } from "@/lib/financial-balance.functions";
 import { getCashFlowStatement } from "@/lib/cash-flow-statement.functions";
 import { getTaxRevenueByOrigin } from "@/lib/taxes.functions";
 
+import { AppShell } from "@/components/AppShell";
+
 export const Route = createFileRoute("/balancos")({ component: Page });
 
 function Page() {
@@ -24,7 +26,11 @@ function Page() {
     else if (!hasTenantPermission("budget.read")) nav({ to: "/app" });
   }, [session, loading, hasTenantPermission, nav]);
   if (!session) return null;
-  return <Content />;
+  return (
+    <AppShell>
+      <Content />
+    </AppShell>
+  );
 }
 
 const brl = (v: number | string) =>

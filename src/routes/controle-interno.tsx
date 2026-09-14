@@ -31,6 +31,8 @@ import {
   getInternalControlFollowups,
 } from "@/lib/internal-control.functions";
 
+import { AppShell } from "@/components/AppShell";
+
 export const Route = createFileRoute("/controle-interno")({ component: Page });
 
 function Page() {
@@ -42,7 +44,11 @@ function Page() {
     else if (!hasTenantPermission("analytics.read")) nav({ to: "/app" });
   }, [session, loading, hasTenantPermission, nav]);
   if (!session) return null;
-  return <Content />;
+  return (
+    <AppShell>
+      <Content />
+    </AppShell>
+  );
 }
 
 type Finding = {

@@ -31,6 +31,8 @@ import {
   getTreasuryLedger,
 } from "@/lib/treasury.functions";
 
+import { AppShell } from "@/components/AppShell";
+
 export const Route = createFileRoute("/tesouraria")({ component: Page });
 
 function Page() {
@@ -42,7 +44,11 @@ function Page() {
     else if (!hasTenantPermission("accounting.read")) nav({ to: "/app" });
   }, [session, loading, hasTenantPermission, nav]);
   if (!session) return null;
-  return <Content />;
+  return (
+    <AppShell>
+      <Content />
+    </AppShell>
+  );
 }
 
 type Account = {
