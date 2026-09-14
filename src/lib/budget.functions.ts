@@ -105,8 +105,9 @@ export const saveBudgetAppropriation = createServerFn({ method: "POST" })
       throw new Error("Já existe dotação com esta classificação no exercício");
 
     const before = data.id
-      ? await queryOne<{ valor_empenhado: string }>(
-          "select valor_empenhado::text from public.budget_appropriations where id = $1 and tenant_id = $2",
+      ? await queryOne<{ valor_empenhado: string; valor_bloqueado: string }>(
+          `select valor_empenhado::text, valor_bloqueado::text
+           from public.budget_appropriations where id = $1 and tenant_id = $2`,
           [data.id, data.tenant_id],
         )
       : null;
@@ -116,6 +117,24 @@ export const saveBudgetAppropriation = createServerFn({ method: "POST" })
       throw new Error(
         "Valor orçado não pode ser menor que o já empenhado na dotação",
       );
+    // O contingenciamento também ocupa a dotação: o banco tem o check
+    // `valor_empenhado + valor_bloqueado <= valor_orcado`. Sem esta validação a
+    // redução do orçado estourava o check e o usuário via o erro cru do Postgres,
+    // sem saber que o caminho era liberar o bloqueio antes (LRF art. 9º).
+    if (before) {
+      const comprometido = Number(
+        (
+          Number(before.valor_empenhado) + Number(before.valor_bloqueado)
+        ).toFixed(2),
+      );
+      if (data.valor_orcado + 0.005 < comprometido)
+        throw new Error(
+          `Valor orçado (${data.valor_orcado.toFixed(2)}) não cobre o comprometido: ` +
+            `${Number(before.valor_empenhado).toFixed(2)} empenhado + ` +
+            `${Number(before.valor_bloqueado).toFixed(2)} contingenciado. ` +
+            `Libere o contingenciamento antes de reduzir a dotação.`,
+        );
+    }
 
     const id = data.id ?? randomUUID();
     await withTransaction(async (client) => {
@@ -278,9 +297,17 @@ const ExecutionInput = z.object({
 });
 
 // O2-07 — Balanço da execução orçamentária da despesa (Lei 4.320): por dotação,
-// orçado × empenhado × liquidado × pago × saldo × restos a pagar. Empenho anulado
-// não conta. Restos a pagar = empenhado não pago (processados = liquidados não
-// pagos; não processados = empenhados ainda não liquidados).
+// orçado × contingenciado × empenhado × liquidado × pago × saldo × a pagar × restos.
+// Empenho anulado não conta.
+//
+// Duas correções de rótulo e de conta, feitas ao ligar a função à tela (O2-28):
+// 1. O que era devolvido como `restos_a_pagar` é **a pagar do exercício** (empenhado
+//    ainda não pago). Restos a pagar só nascem da INSCRIÇÃO no encerramento
+//    (Lei 4.320 art. 36) e vivem em `restos_a_pagar` — misturar os dois num mesmo
+//    nome contava a despesa do exercício corrente como resto. Agora `a_pagar` é o
+//    do exercício e `restos_a_pagar` lê os **inscritos** da tabela própria.
+// 2. `saldo_dotacao` ignorava o contingenciamento. O saldo que de fato pode ser
+//    empenhado é orçado − empenhado − bloqueado (LRF art. 9º).
 export const getBudgetExecution = createServerFn({ method: "POST" })
   .middleware([requireAuth])
   .validator((data: unknown) => ExecutionInput.parse(data))
@@ -292,43 +319,66 @@ export const getBudgetExecution = createServerFn({ method: "POST" })
       unidade_orcamentaria: string;
       natureza_despesa: string;
       valor_orcado: string;
+      bloqueado: string;
       empenhado: string;
       liquidado: string;
       pago: string;
       saldo_dotacao: string;
+      a_pagar: string;
       restos_a_pagar: string;
     }>(
       `select a.id as appropriation_id, a.unidade_orcamentaria, a.natureza_despesa,
          a.valor_orcado::text,
+         a.valor_bloqueado::text as bloqueado,
          coalesce(sum(c.valor) filter (where c.status <> 'anulado'),0)::text as empenhado,
          coalesce(sum(c.valor) filter (where c.status in ('liquidado','pago')),0)::text as liquidado,
          coalesce(sum(c.valor) filter (where c.status = 'pago'),0)::text as pago,
-         (a.valor_orcado - coalesce(sum(c.valor) filter (where c.status <> 'anulado'),0))::text as saldo_dotacao,
-         coalesce(sum(c.valor) filter (where c.status in ('empenhado','liquidado')),0)::text as restos_a_pagar
+         (a.valor_orcado - a.valor_bloqueado
+            - coalesce(sum(c.valor) filter (where c.status <> 'anulado'),0))::text as saldo_dotacao,
+         coalesce(sum(c.valor) filter (where c.status in ('empenhado','liquidado')),0)::text as a_pagar,
+         coalesce((
+           select sum(r.valor) from public.restos_a_pagar r
+           join public.budget_commitments rc on rc.id = r.commitment_id
+           where r.tenant_id = a.tenant_id and r.status = 'inscrito'
+             and rc.appropriation_id = a.id
+         ),0)::text as restos_a_pagar
        from public.budget_appropriations a
        left join public.budget_commitments c on c.appropriation_id = a.id
        where a.tenant_id = $1 and a.exercicio = $2
-       group by a.id, a.unidade_orcamentaria, a.natureza_despesa, a.valor_orcado
+       group by a.id, a.tenant_id, a.unidade_orcamentaria, a.natureza_despesa,
+         a.valor_orcado, a.valor_bloqueado
        order by a.unidade_orcamentaria, a.natureza_despesa`,
       [data.tenant_id, data.exercicio],
     );
     const totais = rows.reduce(
       (acc, r) => ({
         orcado: acc.orcado + Number(r.valor_orcado),
+        bloqueado: acc.bloqueado + Number(r.bloqueado),
         empenhado: acc.empenhado + Number(r.empenhado),
         liquidado: acc.liquidado + Number(r.liquidado),
         pago: acc.pago + Number(r.pago),
+        a_pagar: acc.a_pagar + Number(r.a_pagar),
         restos_a_pagar: acc.restos_a_pagar + Number(r.restos_a_pagar),
       }),
-      { orcado: 0, empenhado: 0, liquidado: 0, pago: 0, restos_a_pagar: 0 },
+      {
+        orcado: 0,
+        bloqueado: 0,
+        empenhado: 0,
+        liquidado: 0,
+        pago: 0,
+        a_pagar: 0,
+        restos_a_pagar: 0,
+      },
     );
     return {
       rows,
       totais: {
         orcado: Number(totais.orcado.toFixed(2)),
+        bloqueado: Number(totais.bloqueado.toFixed(2)),
         empenhado: Number(totais.empenhado.toFixed(2)),
         liquidado: Number(totais.liquidado.toFixed(2)),
         pago: Number(totais.pago.toFixed(2)),
+        a_pagar: Number(totais.a_pagar.toFixed(2)),
         restos_a_pagar: Number(totais.restos_a_pagar.toFixed(2)),
       },
     };

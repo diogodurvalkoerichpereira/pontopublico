@@ -50,7 +50,6 @@ const ALLOWLIST = {
   // Folha: cadeia folha -> empenho -> pagamento e depósitos na folha.
   commitPayrollEmpenho: "O1-08b — empenho da folha sem tela",
   commitContractEmpenho: "O3-12b — empenho do contrato sem tela",
-  getBudgetExecution: "O2-28 — quadro de execução sem tela",
   getPayrollEmpenhoRequests: "O1-08b — solicitação de empenho sem tela",
   emitPayrollEmpenhoRequest: "O1-08b — solicitação de empenho sem tela",
   publishClosedPayroll: "O1-09b — publicação da folha fechada sem tela",
@@ -68,11 +67,6 @@ const ALLOWLIST = {
   depositTimeApuracao: "O1-03f — depósito da apuração sem tela",
   getHolidays: "O1-03g — calendário de feriados sem tela",
   saveHoliday: "O1-03g — calendário de feriados sem tela",
-  // Orçamento.
-  descontingenciarDotacao: "O2-29 — descontingenciamento sem tela",
-  getBudgetCreditMovements: "O2-30 — créditos adicionais sem tela",
-  transferBudgetCredit: "O2-30 — transposição de crédito sem tela",
-  getSupplementaryCredits: "O2-30 — créditos suplementares sem tela",
   // Tesouraria e contabilidade.
   getTreasuryReconciliations: "O2-31 — conciliação bancária sem tela",
   reconcileTreasuryAccount: "O2-31 — conciliação bancária sem tela",

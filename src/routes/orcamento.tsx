@@ -2,7 +2,15 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { PiggyBank, Plus, CalendarClock, Lock, TrendingUp } from "lucide-react";
+import {
+  PiggyBank,
+  Plus,
+  CalendarClock,
+  Lock,
+  Unlock,
+  TrendingUp,
+  ArrowLeftRight,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,16 +34,25 @@ import { useAuth } from "@/lib/auth-context";
 import {
   getBudgetAppropriations,
   saveBudgetAppropriation,
+  getBudgetExecution,
 } from "@/lib/budget.functions";
+import {
+  getBudgetCreditMovements,
+  transferBudgetCredit,
+} from "@/lib/budget-credit.functions";
 import {
   getDisbursementSchedule,
   saveDisbursementQuota,
   getDisbursementProgress,
 } from "@/lib/disbursement-schedule.functions";
-import { contingenciarDotacao } from "@/lib/budget-contingency.functions";
+import {
+  contingenciarDotacao,
+  descontingenciarDotacao,
+} from "@/lib/budget-contingency.functions";
 import {
   openSupplementaryCredit,
   getExcessRevenueAvailable,
+  getSupplementaryCredits,
 } from "@/lib/supplementary-credit.functions";
 
 const MESES = [
@@ -107,6 +124,25 @@ function Content() {
   const [busy, setBusy] = useState(false);
   const [blockTarget, setBlockTarget] = useState<Appropriation | null>(null);
   const [blockForm, setBlockForm] = useState({ valor: "", motivo: "" });
+  // O2-28/29/30 — execução, liberação do contingenciamento e remanejamento de
+  // crédito. Estavam no servidor sem tela: a dotação não tinha como ser liberada
+  // depois de bloqueada, nem remanejada, e o quadro de execução não existia.
+  const descontingenciar = useServerFn(descontingenciarDotacao);
+  const remanejar = useServerFn(transferBudgetCredit);
+  const loadExecution = useServerFn(getBudgetExecution);
+  const loadCreditMovements = useServerFn(getBudgetCreditMovements);
+  const loadSupplementary = useServerFn(getSupplementaryCredits);
+  const [unblockTarget, setUnblockTarget] = useState<Appropriation | null>(
+    null,
+  );
+  const [unblockForm, setUnblockForm] = useState({ valor: "", motivo: "" });
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [transferForm, setTransferForm] = useState({
+    origem_id: "",
+    destino_id: "",
+    valor: "",
+    justificativa: "",
+  });
   const [suppOpen, setSuppOpen] = useState(false);
   const [suppForm, setSuppForm] = useState({
     destino_id: "",
@@ -215,6 +251,101 @@ function Content() {
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Falha ao contingenciar",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const { data: execution } = useQuery({
+    queryKey: ["budget-execution", activeTenant?.id, scheduleYear],
+    enabled: Boolean(activeTenant),
+    queryFn: () =>
+      loadExecution({
+        data: { tenant_id: activeTenant!.id, exercicio: Number(scheduleYear) },
+      }),
+  });
+  const { data: creditMovements } = useQuery({
+    queryKey: ["budget-credit-movements", activeTenant?.id, scheduleYear],
+    enabled: Boolean(activeTenant),
+    queryFn: () =>
+      loadCreditMovements({
+        data: { tenant_id: activeTenant!.id, exercicio: Number(scheduleYear) },
+      }),
+  });
+  const { data: supplementary } = useQuery({
+    queryKey: ["supplementary-credits", activeTenant?.id, scheduleYear],
+    enabled: Boolean(activeTenant),
+    queryFn: () =>
+      loadSupplementary({
+        data: { tenant_id: activeTenant!.id, exercicio: Number(scheduleYear) },
+      }),
+  });
+
+  const refreshCredits = () => {
+    refreshAppropriations();
+    qc.invalidateQueries({
+      queryKey: ["budget-execution", activeTenant?.id, scheduleYear],
+    });
+    qc.invalidateQueries({
+      queryKey: ["budget-credit-movements", activeTenant?.id, scheduleYear],
+    });
+    qc.invalidateQueries({
+      queryKey: ["supplementary-credits", activeTenant?.id, scheduleYear],
+    });
+  };
+
+  const submitUnblock = async () => {
+    if (!activeTenant || !unblockTarget) return;
+    setBusy(true);
+    try {
+      const r = await descontingenciar({
+        data: {
+          tenant_id: activeTenant.id,
+          appropriation_id: unblockTarget.id,
+          valor: Number(unblockForm.valor),
+          motivo: unblockForm.motivo.trim(),
+        },
+      });
+      toast.success(
+        `Contingenciamento liberado — restam ${brl(r.valor_bloqueado)} bloqueados`,
+      );
+      setUnblockTarget(null);
+      setUnblockForm({ valor: "", motivo: "" });
+      refreshCredits();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao liberar");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitTransfer = async () => {
+    if (!activeTenant) return;
+    setBusy(true);
+    try {
+      await remanejar({
+        data: {
+          tenant_id: activeTenant.id,
+          origem_id: transferForm.origem_id,
+          destino_id: transferForm.destino_id,
+          valor: Number(transferForm.valor),
+          data_referencia: new Date().toISOString().slice(0, 10),
+          justificativa: transferForm.justificativa.trim(),
+        },
+      });
+      toast.success("Crédito remanejado");
+      setTransferOpen(false);
+      setTransferForm({
+        origem_id: "",
+        destino_id: "",
+        valor: "",
+        justificativa: "",
+      });
+      refreshCredits();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Falha ao remanejar",
       );
     } finally {
       setBusy(false);
@@ -435,6 +566,22 @@ function Content() {
                         <Lock className="size-4" /> Contingenciar
                       </Button>
                     )}
+                    {Number(a.valor_bloqueado) > 0 && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="ml-2"
+                        onClick={() => {
+                          setUnblockTarget(a);
+                          setUnblockForm({
+                            valor: a.valor_bloqueado,
+                            motivo: "",
+                          });
+                        }}
+                      >
+                        <Unlock className="size-4" /> Liberar
+                      </Button>
+                    )}
                   </td>
                 )}
               </tr>
@@ -451,6 +598,197 @@ function Content() {
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* Quadro da execução orçamentária da despesa (Lei 4.320) */}
+      {execution && execution.rows.length > 0 && (
+        <div className="rounded-xl border bg-card">
+          <h2 className="font-bold p-3">
+            Execução da despesa — exercício {scheduleYear}
+          </h2>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b bg-muted/40 text-left">
+                <tr>
+                  <th className="p-3 font-semibold">Unidade</th>
+                  <th className="p-3 font-semibold">Natureza</th>
+                  <th className="p-3 font-semibold text-right">Orçado</th>
+                  <th className="p-3 font-semibold text-right">
+                    Contingenciado
+                  </th>
+                  <th className="p-3 font-semibold text-right">Empenhado</th>
+                  <th className="p-3 font-semibold text-right">Liquidado</th>
+                  <th className="p-3 font-semibold text-right">Pago</th>
+                  <th className="p-3 font-semibold text-right">A pagar</th>
+                  <th className="p-3 font-semibold text-right">Restos</th>
+                  <th className="p-3 font-semibold text-right">Saldo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {execution.rows.map((r) => (
+                  <tr
+                    key={r.appropriation_id}
+                    className="border-b last:border-0"
+                  >
+                    <td className="p-3">{r.unidade_orcamentaria}</td>
+                    <td className="p-3 tabular-nums">{r.natureza_despesa}</td>
+                    <td className="p-3 text-right tabular-nums">
+                      {brl(r.valor_orcado)}
+                    </td>
+                    <td className="p-3 text-right tabular-nums">
+                      {brl(r.bloqueado)}
+                    </td>
+                    <td className="p-3 text-right tabular-nums">
+                      {brl(r.empenhado)}
+                    </td>
+                    <td className="p-3 text-right tabular-nums">
+                      {brl(r.liquidado)}
+                    </td>
+                    <td className="p-3 text-right tabular-nums">
+                      {brl(r.pago)}
+                    </td>
+                    <td className="p-3 text-right tabular-nums">
+                      {brl(r.a_pagar)}
+                    </td>
+                    <td className="p-3 text-right tabular-nums">
+                      {brl(r.restos_a_pagar)}
+                    </td>
+                    <td className="p-3 text-right tabular-nums">
+                      {brl(r.saldo_dotacao)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 font-semibold">
+                  <td className="p-3" colSpan={2}>
+                    Total
+                  </td>
+                  <td className="p-3 text-right tabular-nums">
+                    {brl(execution.totais.orcado)}
+                  </td>
+                  <td className="p-3 text-right tabular-nums">
+                    {brl(execution.totais.bloqueado)}
+                  </td>
+                  <td className="p-3 text-right tabular-nums">
+                    {brl(execution.totais.empenhado)}
+                  </td>
+                  <td className="p-3 text-right tabular-nums">
+                    {brl(execution.totais.liquidado)}
+                  </td>
+                  <td className="p-3 text-right tabular-nums">
+                    {brl(execution.totais.pago)}
+                  </td>
+                  <td className="p-3 text-right tabular-nums">
+                    {brl(execution.totais.a_pagar)}
+                  </td>
+                  <td className="p-3 text-right tabular-nums">
+                    {brl(execution.totais.restos_a_pagar)}
+                  </td>
+                  <td className="p-3" />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <p className="px-3 pb-3 text-xs text-muted-foreground">
+            "A pagar" é o empenhado do exercício ainda não pago. "Restos" são os
+            já <strong>inscritos</strong> em restos a pagar (Lei 4.320 art. 36)
+            — são coisas diferentes e não se somam.
+          </p>
+        </div>
+      )}
+
+      {/* Créditos adicionais do exercício (Lei 4.320 art. 40-43) */}
+      <div className="rounded-xl border bg-card">
+        <div className="flex items-center justify-between gap-3 flex-wrap p-3">
+          <h2 className="font-bold">
+            Créditos adicionais — exercício {scheduleYear}
+          </h2>
+          {canManage && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setTransferOpen(true)}
+              disabled={items.filter((a) => a.status === "ativa").length < 2}
+            >
+              <ArrowLeftRight className="size-4" /> Remanejar
+            </Button>
+          )}
+        </div>
+        <div className="grid gap-4 lg:grid-cols-2 p-3 pt-0">
+          <div className="rounded-lg border overflow-x-auto">
+            <div className="p-2 text-sm font-semibold border-b bg-muted/40">
+              Remanejamentos (art. 42-43)
+            </div>
+            <table className="w-full text-sm">
+              <thead className="border-b text-left">
+                <tr>
+                  <th className="p-2 font-semibold">Data</th>
+                  <th className="p-2 font-semibold text-right">Valor</th>
+                  <th className="p-2 font-semibold">Justificativa</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(creditMovements?.movements ?? []).map((m) => (
+                  <tr key={m.id} className="border-b last:border-0">
+                    <td className="p-2 tabular-nums">{m.data_referencia}</td>
+                    <td className="p-2 text-right tabular-nums">
+                      {brl(m.valor)}
+                    </td>
+                    <td className="p-2">{m.justificativa}</td>
+                  </tr>
+                ))}
+                {(creditMovements?.movements ?? []).length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={3}
+                      className="p-4 text-center text-muted-foreground"
+                    >
+                      Nenhum remanejamento no exercício.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="rounded-lg border overflow-x-auto">
+            <div className="p-2 text-sm font-semibold border-b bg-muted/40">
+              Créditos suplementares (art. 43)
+            </div>
+            <table className="w-full text-sm">
+              <thead className="border-b text-left">
+                <tr>
+                  <th className="p-2 font-semibold">Data</th>
+                  <th className="p-2 font-semibold">Fonte</th>
+                  <th className="p-2 font-semibold">Tipo</th>
+                  <th className="p-2 font-semibold text-right">Valor</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(supplementary?.credits ?? []).map((c) => (
+                  <tr key={c.id} className="border-b last:border-0">
+                    <td className="p-2 tabular-nums">{c.data_referencia}</td>
+                    <td className="p-2">{c.fonte_recurso}</td>
+                    <td className="p-2">{c.tipo}</td>
+                    <td className="p-2 text-right tabular-nums">
+                      {brl(c.valor)}
+                    </td>
+                  </tr>
+                ))}
+                {(supplementary?.credits ?? []).length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={4}
+                      className="p-4 text-center text-muted-foreground"
+                    >
+                      Nenhum crédito suplementar no exercício.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
       <div className="rounded-xl border bg-card p-4 space-y-3">
@@ -619,6 +957,156 @@ function Content() {
           <DialogFooter>
             <Button onClick={submit} disabled={busy}>
               Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Liberação do contingenciamento (LRF art. 9º, §1º) */}
+      <Dialog
+        open={Boolean(unblockTarget)}
+        onOpenChange={(o) => !o && setUnblockTarget(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Liberar contingenciamento</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Bloqueado hoje: {brl(unblockTarget?.valor_bloqueado ?? 0)}. A
+              liberação devolve a dotação ao saldo empenhável.
+            </p>
+            <div>
+              <Label>Valor a liberar</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={unblockForm.valor}
+                onChange={(e) =>
+                  setUnblockForm((f) => ({ ...f, valor: e.target.value }))
+                }
+              />
+            </div>
+            <div>
+              <Label>Motivo</Label>
+              <Input
+                value={unblockForm.motivo}
+                onChange={(e) =>
+                  setUnblockForm((f) => ({ ...f, motivo: e.target.value }))
+                }
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={submitUnblock}
+              disabled={
+                busy ||
+                !(Number(unblockForm.valor) > 0) ||
+                unblockForm.motivo.trim().length < 3
+              }
+            >
+              Liberar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Remanejamento de crédito (Lei 4.320 art. 42-43) */}
+      <Dialog open={transferOpen} onOpenChange={setTransferOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remanejar crédito entre dotações</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Origem (anula)</Label>
+              <Select
+                value={transferForm.origem_id}
+                onValueChange={(v) =>
+                  setTransferForm((f) => ({ ...f, origem_id: v }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
+                <SelectContent>
+                  {items
+                    .filter((a) => a.status === "ativa")
+                    .map((a) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {a.unidade_orcamentaria} · {a.natureza_despesa} —{" "}
+                        {brl(a.saldo)}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Destino (suplementa)</Label>
+              <Select
+                value={transferForm.destino_id}
+                onValueChange={(v) =>
+                  setTransferForm((f) => ({ ...f, destino_id: v }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
+                <SelectContent>
+                  {items
+                    .filter(
+                      (a) =>
+                        a.status === "ativa" && a.id !== transferForm.origem_id,
+                    )
+                    .map((a) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {a.unidade_orcamentaria} · {a.natureza_despesa}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Valor</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={transferForm.valor}
+                onChange={(e) =>
+                  setTransferForm((f) => ({ ...f, valor: e.target.value }))
+                }
+              />
+            </div>
+            <div>
+              <Label>Justificativa</Label>
+              <Input
+                value={transferForm.justificativa}
+                onChange={(e) =>
+                  setTransferForm((f) => ({
+                    ...f,
+                    justificativa: e.target.value,
+                  }))
+                }
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              A origem nunca fica abaixo do já empenhado; as duas dotações têm
+              de ser do mesmo exercício e estar ativas.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={submitTransfer}
+              disabled={
+                busy ||
+                !transferForm.origem_id ||
+                !transferForm.destino_id ||
+                !(Number(transferForm.valor) > 0) ||
+                transferForm.justificativa.trim().length < 5
+              }
+            >
+              Remanejar
             </Button>
           </DialogFooter>
         </DialogContent>

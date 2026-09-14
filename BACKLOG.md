@@ -1690,6 +1690,30 @@ O0-14 papéis, O0-15 migração histórica, entre outras) e **encolhe sozinha**:
 também quando uma entrada da allowlist já tem tela, para a lista não fossilizar. Verificado
 por mutação (desligar os itens/aditivos da rota derruba com os quatro nomes).
 
+**O2-28/29/30 — Orçamento: execução, liberação do contingenciamento e créditos
+adicionais. ✅** Cinco funções órfãs ligadas a `/orcamento`, e três correções de conta.
+
+**Fluxo.** `descontingenciarDotacao` ganha o botão "Liberar" na dotação bloqueada — o
+contingenciamento era um caminho de mão única: bloqueava e **não havia como devolver** a
+dotação ao saldo empenhável (LRF art. 9º, §1º). `transferBudgetCredit` +
+`getBudgetCreditMovements` ganham "Remanejar" e a tabela de remanejamentos (Lei 4.320 art.
+42-43); `getSupplementaryCredits` ganha a tabela dos créditos suplementares já abertos — só
+existia a abertura, sem nenhuma vista do que fora aberto. `getBudgetExecution` ganha o
+quadro "Execução da despesa" por dotação.
+
+**Lógica.** (1) O que `getBudgetExecution` devolvia como `restos_a_pagar` era o **a pagar do
+exercício** (empenhado ainda não pago). Resto a pagar só nasce da **inscrição** no
+encerramento (Lei 4.320 art. 36) e vive na tabela própria; o nome errado contava a despesa
+corrente como resto e convidava a somar as duas — o que dobra a despesa. Agora `a_pagar` é o
+do exercício e `restos_a_pagar` lê os **inscritos**. (2) `saldo_dotacao` ignorava o
+contingenciamento: o saldo empenhável é orçado − empenhado − bloqueado. (3) Item (j) da
+auditoria: `saveBudgetAppropriation` validava a redução do orçado só contra o empenhado,
+mas o banco tem `valor_empenhado + valor_bloqueado <= valor_orcado` — reduzir uma dotação
+contingenciada estourava o check e o usuário via o **erro cru do Postgres**, sem saber que o
+caminho era liberar o bloqueio antes. Agora a recusa nomeia as duas parcelas e diz o que
+fazer. Três casos novos em `tests/sprint-budget-execution.test.mjs`, cada um verificado por
+mutação.
+
 ### Onda 5 — Apoio, controle e transparência (10-14 sem)
 
 Protocolo e processo eletrônico com ICP-Brasil · e-SIC/LAI · controle interno ·
