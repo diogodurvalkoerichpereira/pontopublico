@@ -47,6 +47,7 @@ import { Route as RhTabelasFiscaisRouteImport } from './routes/rh.tabelas-fiscai
 import { Route as RhSimulacoesRouteImport } from './routes/rh.simulacoes'
 import { Route as RhRubricasRouteImport } from './routes/rh.rubricas'
 import { Route as RhPrevidenciaRouteImport } from './routes/rh.previdencia'
+import { Route as RhPontoRouteImport } from './routes/rh.ponto'
 import { Route as RhPessoasRouteImport } from './routes/rh.pessoas'
 import { Route as RhMovimentacoesRouteImport } from './routes/rh.movimentacoes'
 import { Route as RhJornadasRouteImport } from './routes/rh.jornadas'
@@ -262,6 +263,11 @@ const RhPrevidenciaRoute = RhPrevidenciaRouteImport.update({
   path: '/previdencia',
   getParentRoute: () => RhRoute,
 } as any)
+const RhPontoRoute = RhPontoRouteImport.update({
+  id: '/ponto',
+  path: '/ponto',
+  getParentRoute: () => RhRoute,
+} as any)
 const RhPessoasRoute = RhPessoasRouteImport.update({
   id: '/pessoas',
   path: '/pessoas',
@@ -440,6 +446,7 @@ export interface FileRoutesByFullPath {
   '/rh/jornadas': typeof RhJornadasRoute
   '/rh/movimentacoes': typeof RhMovimentacoesRoute
   '/rh/pessoas': typeof RhPessoasRoute
+  '/rh/ponto': typeof RhPontoRoute
   '/rh/previdencia': typeof RhPrevidenciaRoute
   '/rh/rubricas': typeof RhRubricasRoute
   '/rh/simulacoes': typeof RhSimulacoesRoute
@@ -504,6 +511,7 @@ export interface FileRoutesByTo {
   '/rh/jornadas': typeof RhJornadasRoute
   '/rh/movimentacoes': typeof RhMovimentacoesRoute
   '/rh/pessoas': typeof RhPessoasRoute
+  '/rh/ponto': typeof RhPontoRoute
   '/rh/previdencia': typeof RhPrevidenciaRoute
   '/rh/rubricas': typeof RhRubricasRoute
   '/rh/simulacoes': typeof RhSimulacoesRoute
@@ -569,6 +577,7 @@ export interface FileRoutesById {
   '/rh/jornadas': typeof RhJornadasRoute
   '/rh/movimentacoes': typeof RhMovimentacoesRoute
   '/rh/pessoas': typeof RhPessoasRoute
+  '/rh/ponto': typeof RhPontoRoute
   '/rh/previdencia': typeof RhPrevidenciaRoute
   '/rh/rubricas': typeof RhRubricasRoute
   '/rh/simulacoes': typeof RhSimulacoesRoute
@@ -635,6 +644,7 @@ export interface FileRouteTypes {
     | '/rh/jornadas'
     | '/rh/movimentacoes'
     | '/rh/pessoas'
+    | '/rh/ponto'
     | '/rh/previdencia'
     | '/rh/rubricas'
     | '/rh/simulacoes'
@@ -699,6 +709,7 @@ export interface FileRouteTypes {
     | '/rh/jornadas'
     | '/rh/movimentacoes'
     | '/rh/pessoas'
+    | '/rh/ponto'
     | '/rh/previdencia'
     | '/rh/rubricas'
     | '/rh/simulacoes'
@@ -763,6 +774,7 @@ export interface FileRouteTypes {
     | '/rh/jornadas'
     | '/rh/movimentacoes'
     | '/rh/pessoas'
+    | '/rh/ponto'
     | '/rh/previdencia'
     | '/rh/rubricas'
     | '/rh/simulacoes'
@@ -1083,6 +1095,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RhPrevidenciaRouteImport
       parentRoute: typeof RhRoute
     }
+    '/rh/ponto': {
+      id: '/rh/ponto'
+      path: '/ponto'
+      fullPath: '/rh/ponto'
+      preLoaderRoute: typeof RhPontoRouteImport
+      parentRoute: typeof RhRoute
+    }
     '/rh/pessoas': {
       id: '/rh/pessoas'
       path: '/pessoas'
@@ -1293,6 +1312,7 @@ interface RhRouteChildren {
   RhJornadasRoute: typeof RhJornadasRoute
   RhMovimentacoesRoute: typeof RhMovimentacoesRoute
   RhPessoasRoute: typeof RhPessoasRoute
+  RhPontoRoute: typeof RhPontoRoute
   RhPrevidenciaRoute: typeof RhPrevidenciaRoute
   RhRubricasRoute: typeof RhRubricasRoute
   RhSimulacoesRoute: typeof RhSimulacoesRoute
@@ -1314,6 +1334,7 @@ const RhRouteChildren: RhRouteChildren = {
   RhJornadasRoute: RhJornadasRoute,
   RhMovimentacoesRoute: RhMovimentacoesRoute,
   RhPessoasRoute: RhPessoasRoute,
+  RhPontoRoute: RhPontoRoute,
   RhPrevidenciaRoute: RhPrevidenciaRoute,
   RhRubricasRoute: RhRubricasRoute,
   RhSimulacoesRoute: RhSimulacoesRoute,

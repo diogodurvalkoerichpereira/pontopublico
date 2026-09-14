@@ -1735,6 +1735,29 @@ inteiro** (remessa parcial paga uns e deixa outros de fora sem ninguém perceber
 arquivo, é esse rótulo que impede apresentá-lo como padrão oficial em licitação (regra do
 CLAUDE.md). Verificados por mutação, um caso cada.
 
+**O1-03f/g — Ponto probatório ganha tela: a prova existia e ninguém alcançava. ✅**
+O maior buraco de fluxo do projeto. A base do O1-03a — marcações **imutáveis**, numeradas
+por NSR e encadeadas por SHA-256, com trigger que recusa UPDATE e DELETE — estava construída,
+testada e **inalcançável**: nove funções de servidor sem nenhuma rota. Na prática o ponto do
+sistema era só a tela `/ponto`, que grava na tabela legada `time_entries`, user-scoped, sem
+NSR e sem encadeamento — ou seja, **sem valor probatório**. O alicerce estava pronto e o
+prédio inteiro apoiado na areia ao lado.
+
+Nova rota **`/rh/ponto` — "Ponto — registro probatório"** (menu de RH, `people.read`), ligando:
+`recordTimeClockPunch` (registrar, com o aviso de que a marcação é imutável e que correção se
+faz por nova marcação), `getTimeClockPunches` (NSR + hash do registro),
+`verifyTimeClockChain` (botão "Verificar cadeia", que diz se está íntegra ou em que NSR
+quebrou), `getTimeMirror` (espelho do mês, com feriado e intervalo aberto marcados),
+`getPunchReceipt` (comprovante com código verificador derivado do hash),
+`getTimeApuracao` (previsto × trabalhado × extras × faltas × saldo) e `depositTimeApuracao`
+(fecha o laço ponto→folha; as rubricas, o adicional e o divisor são escolha explícita do RH).
+`getHolidays`/`saveHoliday` entram no mesmo lugar, porque é o feriado que zera o previsto do
+dia no espelho e na apuração.
+
+**Conformidade preservada:** a tela abre com o aviso de que esta é base **interna** de prova —
+o **AFD/AEJ** da Portaria MTP 671/2021 e o comprovante oficial ao trabalhador dependem de
+homologação (O1-03b) e não são isto; o comprovante emitido diz o mesmo no rodapé.
+
 ### Onda 5 — Apoio, controle e transparência (10-14 sem)
 
 Protocolo e processo eletrônico com ICP-Brasil · e-SIC/LAI · controle interno ·

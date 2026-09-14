@@ -57,16 +57,6 @@ const ALLOWLIST = {
   depositVacationToPayroll: "O1-06b — depósito de férias sem tela",
   projectPayrollBases: "O1-11b — projeção de bases sem tela",
   getPensionRegimeRubrics: "O1-02e — rubricas do regime sem tela",
-  // Ponto.
-  recordTimeClockPunch: "O1-03f — marcação encadeada sem tela",
-  getTimeClockPunches: "O1-03f — lista de marcações sem tela",
-  verifyTimeClockChain: "O1-03f — verificação da cadeia sem tela",
-  getTimeMirror: "O1-03f — espelho de ponto sem tela",
-  getPunchReceipt: "O1-03f — comprovante ao trabalhador sem tela",
-  getTimeApuracao: "O1-03f — apuração valorada sem tela",
-  depositTimeApuracao: "O1-03f — depósito da apuração sem tela",
-  getHolidays: "O1-03g — calendário de feriados sem tela",
-  saveHoliday: "O1-03g — calendário de feriados sem tela",
   // Contabilidade.
   getAccountingEntries: "O2-33 — razão contábil sem tela",
   // Receita.

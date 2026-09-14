@@ -8,6 +8,7 @@ import {
   Users,
   FolderOpen,
   Clock,
+  Fingerprint,
   Hourglass,
   CalendarRange,
   Eye,
@@ -224,6 +225,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       to: "/rh/movimentacoes",
       label: "Movimentações",
       icon: ArrowRightLeft,
+      section: "Recursos Humanos",
+    });
+  }
+  if (hasTenantPermission("people.read")) {
+    items.push({
+      to: "/rh/ponto",
+      label: "Ponto — registro probatório",
+      icon: Fingerprint,
       section: "Recursos Humanos",
     });
   }
