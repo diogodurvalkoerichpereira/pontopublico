@@ -296,9 +296,36 @@ function Content() {
       {canReadCash && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="rounded-xl border bg-card p-4">
-            <h2 className="font-bold mb-2">Balanço patrimonial</h2>
+            <div className="mb-2 flex items-center justify-between gap-2 flex-wrap">
+              <h2 className="font-bold">Balanço patrimonial</h2>
+              {equity && (
+                <span
+                  className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                    equity.conferido
+                      ? "bg-emerald-500/10 text-emerald-600"
+                      : "bg-destructive/10 text-destructive"
+                  }`}
+                >
+                  {equity.conferido
+                    ? "Fecha (ativo = passivo + PL)"
+                    : "Não fecha (ativo ≠ passivo + PL)"}
+                </span>
+              )}
+            </div>
+            <p className="mb-2 text-xs text-muted-foreground">
+              Saldos patrimoniais acumulados até o exercício; o grupo 2.3 é
+              patrimônio líquido, não passivo exigível.
+            </p>
             <Row label="Ativo" value={equity?.ativo ?? 0} />
-            <Row label="Passivo" value={equity?.passivo ?? 0} />
+            <Row label="Passivo exigível" value={equity?.passivo ?? 0} />
+            <Row
+              label="PL escriturado (2.3)"
+              value={equity?.patrimonio_liquido_escriturado ?? 0}
+            />
+            <Row
+              label="Resultado do período"
+              value={equity?.resultado_patrimonial ?? 0}
+            />
             <Row
               label="Patrimônio líquido"
               value={equity?.patrimonio_liquido ?? 0}

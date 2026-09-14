@@ -168,17 +168,15 @@ async function empenhado() {
   );
 }
 
-test("empenhado -> liquidado -> pago", async () => {
+test("empenhado -> liquidado; a transição não paga (pagar é da ordem bancária)", async () => {
   const { id } = await empenhar(60000);
   await move(id, "liquidar");
   assert.equal(await statusOf(id), "liquidado");
-  await move(id, "pagar");
-  assert.equal(await statusOf(id), "pago");
-});
-
-test("pagar sem liquidar é recusado", async () => {
-  const { id } = await empenhar(10000);
-  await assert.rejects(move(id, "pagar"), /liquidado/);
+  // "pagar" não é mais ação desta função: pagar é saída de caixa, e só a ordem
+  // bancária debita a tesouraria. A transição marcava 'pago' sem mover o caixa,
+  // deixando a conciliação com uma diferença sem origem.
+  await assert.rejects(move(id, "pagar"));
+  assert.equal(await statusOf(id), "liquidado");
 });
 
 test("anular devolve o saldo à dotação", async () => {
@@ -193,6 +191,10 @@ test("anular devolve o saldo à dotação", async () => {
 test("empenho pago não pode ser anulado", async () => {
   const { id } = await empenhar(5000);
   await move(id, "liquidar");
-  await move(id, "pagar");
+  // Pago pela ordem bancária (simulado aqui: o estágio é o que importa).
+  await db.query(
+    "update public.budget_commitments set status='pago', pago_em=now() where id=$1",
+    [id],
+  );
   await assert.rejects(move(id, "anular"), /pago não pode ser anulado/);
 });

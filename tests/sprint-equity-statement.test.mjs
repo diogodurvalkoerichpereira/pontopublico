@@ -87,14 +87,14 @@ async function bundle(entry, name) {
 
 const ctx = () => ({ userId });
 
-// Lança um fato balanceado (débito numa conta, crédito noutra) no exercício 2026.
-async function post(historico, valor, contaD, contaC) {
+// Lança um fato balanceado (débito numa conta, crédito noutra) no exercício dado.
+async function post(historico, valor, contaD, contaC, exercicio = 2026) {
   const entryId = randomUUID();
   await db.query(
     `insert into public.accounting_entries
        (id, tenant_id, exercicio, data_lancamento, historico, valor)
-     values ($1,$2,2026,'2026-03-01',$3,$4)`,
-    [entryId, tenantId, historico, valor],
+     values ($1,$2,$5::int,make_date($5::int,3,1),$3,$4)`,
+    [entryId, tenantId, historico, valor, exercicio],
   );
   await db.query(
     `insert into public.accounting_entry_lines (id, tenant_id, entry_id, conta, lado, valor)
@@ -129,12 +129,17 @@ after(async () => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-test("classifica o razão por classe PCASP e apura o resultado patrimonial", async () => {
+test("separa o PL (2.3) do passivo, acumula o patrimonial e fecha a equação", async () => {
+  // --- Exercício ANTERIOR (2025): sobra patrimônio escriturado no PL (2.3).
+  // Dotação inicial: D caixa (1) 2000 / C patrimônio social (2.3) 2000.
+  await post("Patrimonio inicial", 2000, "1.1.1", "2.3.1", 2025);
+
+  // --- Exercício de referência (2026).
   // Arrecada receita: D caixa (1) 1000 / C VPA (4) 1000.
   await post("Arrecadacao", 1000, "1.1.1", "4.1.1");
   // Paga despesa: D VPD (3) 400 / C caixa (1) 400.
   await post("Despesa paga", 400, "3.1.1", "1.1.1");
-  // Assume obrigação: D imobilizado (1) 500 / C fornecedor passivo (2) 500.
+  // Assume obrigação: D imobilizado (1) 500 / C fornecedor passivo (2.1) 500.
   await post("Aquisicao a prazo", 500, "1.2.3", "2.1.1");
 
   const r = await fn.getEquityStatement({
@@ -142,13 +147,34 @@ test("classifica o razão por classe PCASP e apura o resultado patrimonial", asy
     context: ctx(),
   });
 
-  assert.equal(r.ativo, 1100); // 1000 - 400 + 500
+  // Ativo ACUMULADO: 2000 (2025) + 1000 − 400 + 500 = 3100. Sem acumular, o bem
+  // e o caixa de 2025 sumiriam do balanço de 2026.
+  assert.equal(r.ativo, 3100);
+  // Passivo exigível: só 2.1 (o grupo 2.3 é patrimônio líquido, não passivo).
   assert.equal(r.passivo, 500);
-  assert.equal(r.patrimonio_liquido, 600); // 1100 - 500
+  // PL escriturado em 2.3, acumulado dos exercícios anteriores.
+  assert.equal(r.patrimonio_liquido_escriturado, 2000);
   assert.equal(r.vpa, 1000);
   assert.equal(r.vpd, 400);
-  assert.equal(r.resultado_patrimonial, 600); // 1000 - 400
+  assert.equal(r.resultado_patrimonial, 600);
+  // PL do balanço = escriturado + resultado do período (ainda não transposto).
+  assert.equal(r.patrimonio_liquido, 2600);
+  // A equação patrimonial fecha: 3100 = 500 + 2600.
+  assert.equal(r.conferido, true);
+  // E o PL NÃO é mais idêntico ao resultado do período (era tautologia).
+  assert.notEqual(r.patrimonio_liquido, r.resultado_patrimonial);
+});
 
-  // Coerência: com PL inicial zero, o resultado do período é o próprio PL.
-  assert.equal(r.resultado_patrimonial, r.patrimonio_liquido);
+test("o exercício anterior enxerga só o que foi escriturado até ele", async () => {
+  const r2025 = await fn.getEquityStatement({
+    data: { tenant_id: tenantId, exercicio: 2025 },
+    context: ctx(),
+  });
+  assert.equal(r2025.ativo, 2000);
+  assert.equal(r2025.passivo, 0);
+  assert.equal(r2025.patrimonio_liquido_escriturado, 2000);
+  // Sem fato de resultado em 2025, o resultado do período é zero.
+  assert.equal(r2025.resultado_patrimonial, 0);
+  assert.equal(r2025.patrimonio_liquido, 2000);
+  assert.equal(r2025.conferido, true);
 });

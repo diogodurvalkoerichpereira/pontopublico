@@ -90,6 +90,7 @@ async function bundle(entry, name) {
   return import(out);
 }
 
+let contaId;
 const ctx = () => ({ userId });
 
 async function seedDotacao(acao) {
@@ -156,6 +157,14 @@ before(async () => {
   await db.query("insert into public.profiles (id) values ($1)", [userId]);
   Object.assign(fn, await bundle("src/lib/budget.functions.ts", "b.mjs"));
   Object.assign(fn, await bundle("src/lib/accounting.functions.ts", "a.mjs"));
+  Object.assign(fn, await bundle("src/lib/bank-orders.functions.ts", "ob.mjs"));
+  // Conta de tesouraria: o pagamento é da ordem bancária, que debita o caixa.
+  contaId = randomUUID();
+  await db.query(
+    `insert into public.treasury_accounts (id, tenant_id, nome, tipo, saldo_atual)
+     values ($1,$2,'Banco','banco',1000000)`,
+    [contaId, tenantId],
+  );
 });
 
 after(async () => {
@@ -190,7 +199,16 @@ test("com roteiro, empenho→liquidação→pagamento geram lançamentos balance
   const dot = await seedDotacao("2002");
   const { id } = await empenhar(dot, 3000);
   await move(id, "liquidar");
-  await move(id, "pagar");
+  // O pagamento é da OB (única via que move o caixa); gera o evento 'pagamento'.
+  await fn.emitBankOrder({
+    data: {
+      tenant_id: tenantId,
+      commitment_id: id,
+      account_id: contaId,
+      data_emissao: "2026-03-01",
+    },
+    context: ctx(),
+  });
   // 3 fatos -> 3 lançamentos.
   assert.equal(await entryCount(), antes + 3);
 

@@ -1612,6 +1612,24 @@ despesa não tinha como começar pela interface). Testes
 `tests/sprint-fiscal-execution.test.mjs`, verificados por mutação (remover cada guarda
 derruba). Pendências registradas da auditoria: ver "Auditoria financeira — pendências".
 
+**O2-27 — Balanço patrimonial acumulado e um único caminho de pagamento. ✅**
+Fecha os itens (a) e (c) da auditoria. `getEquityStatement` passa a apurar **saldo
+acumulado** (`e.exercicio <= $2`) das classes 1 e 2 em vez do movimento do exercício, e
+separa **2.3 (patrimônio líquido)** do passivo exigível — antes a classe 2 inteira virava
+passivo e o "patrimônio líquido" devolvido era, por construção, sempre igual ao resultado
+do período. O resultado patrimonial (classes 3 e 4) continua sendo **do exercício**
+(`e.exercicio = $2`), somado ao PL escriturado para compor o PL final; a função devolve
+`conferido` (|ativo − (passivo + PL)| < 0,005) e `/balancos` exibe o selo "Fecha (ativo =
+passivo + PL)" com as linhas de passivo exigível, PL escriturado (2.3) e resultado do
+período. `transitionBudgetCommitment` **perde a ação `pagar`**: o pagamento saiu de um
+caminho que marcava o empenho como pago sem debitar conta de tesouraria nem contabilizar,
+e agora é exclusivo de `emitBankOrder` — `/empenhos` troca o botão "Pagar" por "Pagar por
+OB", que encaminha a `/ordens-bancarias`. Testes: `tests/sprint-equity-statement.test.mjs`
+reescrito (dois exercícios, ativo 3100 = passivo 500 + PL 2600, e o PL deixa de coincidir
+com o resultado) e `sprint-accounting-routing`/`sprint-budget-execution`/
+`sprint-budget-stages` repontados para a via da ordem bancária, com o caso explícito de
+que `pagar` é recusado. Verificados por mutação.
+
 **Auditoria financeira — pendências (não corrigidas neste incremento).** Em ordem de
 gravidade: (a) `getEquityStatement` trata a classe 2 inteira como passivo (no PCASP 2.3 é o
 PL), então o "patrimônio líquido" devolvido é sempre igual ao resultado do período; e apura

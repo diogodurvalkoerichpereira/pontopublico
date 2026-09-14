@@ -157,7 +157,11 @@ test("balanço da execução: orçado × empenhado × liquidado × pago × resto
   // C: 10k só empenhado. D: 5k empenhado depois anulado (não conta).
   const a = await empenhar(30000);
   await move(a.id, "liquidar");
-  await move(a.id, "pagar");
+  // O pagamento é da ordem bancária; aqui só interessa o estágio no relatório.
+  await db.query(
+    "update public.budget_commitments set status='pago', pago_em='2026-03-01' where id=$1",
+    [a.id],
+  );
   const b = await empenhar(20000);
   await move(b.id, "liquidar");
   await empenhar(10000);

@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -200,10 +200,7 @@ function Content() {
     }
   };
 
-  const doTransition = async (
-    c: Commitment,
-    action: "liquidar" | "pagar" | "anular",
-  ) => {
+  const doTransition = async (c: Commitment, action: "liquidar" | "anular") => {
     if (!activeTenant) return;
     try {
       await transition({
@@ -322,12 +319,12 @@ function Content() {
                         </>
                       )}
                       {c.status === "liquidado" && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => doTransition(c, "pagar")}
-                        >
-                          <DollarSign className="size-4" /> Pagar
+                        // Pagar é saída de caixa: só a ordem bancária debita a
+                        // conta de tesouraria e contabiliza. Daqui, encaminha.
+                        <Button size="sm" variant="outline" asChild>
+                          <Link to="/ordens-bancarias">
+                            <DollarSign className="size-4" /> Pagar por OB
+                          </Link>
                         </Button>
                       )}
                       {(c.status === "empenhado" ||

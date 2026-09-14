@@ -787,12 +787,19 @@ export const partiallyCancelBudgetCommitment = createServerFn({
 const TransitionInput = z.object({
   tenant_id: z.string().uuid(),
   commitment_id: z.string().uuid(),
-  action: z.enum(["liquidar", "pagar", "anular"]),
+  action: z.enum(["liquidar", "anular"]),
   motivo: z.string().trim().max(500).optional(),
 });
 
 // Estágios da despesa (Lei 4.320): empenhado -> liquidado -> pago. Anular devolve
-// o saldo reservado à dotação. Molde de transitionPayrollCycle (lock + valida o
+// o saldo reservado à dotação.
+//
+// O PAGAMENTO NÃO ESTÁ AQUI, de propósito: pagar é sair dinheiro do caixa, e só a
+// ordem bancária (emitBankOrder) debita a conta de tesouraria e contabiliza a
+// saída. Esta função já teve uma ação "pagar" que marcava o empenho como pago sem
+// tocar a tesouraria — o saldo bancário não descia, a conciliação acusava uma
+// diferença sem origem e o empenho ficava impedido de receber OB (que exige
+// estágio 'liquidado'). Pagamento: /ordens-bancarias. Molde de transitionPayrollCycle (lock + valida o
 // estado de origem + carimba o marco).
 export const transitionBudgetCommitment = createServerFn({ method: "POST" })
   .middleware([requireAuth])
@@ -836,26 +843,6 @@ export const transitionBudgetCommitment = createServerFn({ method: "POST" })
           eventCode: "liquidacao",
           valor: Number(commitment.valor),
           historico: "Liquidação de empenho",
-          sourceRef: data.commitment_id,
-          actorId: context.userId,
-        });
-      } else if (data.action === "pagar") {
-        if (commitment.status !== "liquidado")
-          throw new Error("Só um empenho liquidado pode ser pago");
-        await client.query(
-          `update public.budget_commitments
-           set status = 'pago', pago_em = now(), pago_por = $3
-           where id = $1 and tenant_id = $2`,
-          [data.commitment_id, data.tenant_id, context.userId],
-        );
-        await contabilizarEvento({
-          client,
-          tenantId: data.tenant_id,
-          exercicio: commitment.exercicio,
-          dataLancamento: hoje,
-          eventCode: "pagamento",
-          valor: Number(commitment.valor),
-          historico: "Pagamento de empenho",
           sourceRef: data.commitment_id,
           actorId: context.userId,
         });
