@@ -157,16 +157,40 @@ export const payRestoAPagar = createServerFn({ method: "POST" })
       if (!resto) throw new Error("Resto a pagar não encontrado");
       if (resto.status !== "inscrito")
         throw new Error("Só um resto inscrito pode ser pago");
+      // O pagamento exige liquidação prévia (Lei 4.320 art. 62/63): trava o
+      // empenho de origem e recusa o que ainda não foi liquidado — o resto NÃO
+      // processado precisa ser liquidado antes de pagar. Sem esta guarda, o
+      // resto pagava empenho em qualquer estado (inclusive já pago ou anulado).
+      const commitment = (
+        await client.query<{ status: string }>(
+          `select status from public.budget_commitments
+           where id=$1 and tenant_id=$2 for update`,
+          [resto.commitment_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!commitment) throw new Error("Empenho do resto não encontrado");
+      if (commitment.status !== "liquidado")
+        throw new Error(
+          `Só um empenho liquidado pode ser pago (o empenho está ${commitment.status})`,
+        );
       await client.query(
         `update public.restos_a_pagar
          set status='pago', pago_em=$3::date, updated_at=now()
          where id=$1 and tenant_id=$2`,
         [data.resto_id, data.tenant_id, data.data_pagamento],
       );
+      // pago_em recebe a DATA DO PAGAMENTO (não now()): o balanço financeiro
+      // separa os exercícios por essa data.
       await client.query(
-        `update public.budget_commitments set status='pago'
+        `update public.budget_commitments
+         set status='pago', pago_em=$3::date, pago_por=$4
          where id=$1 and tenant_id=$2`,
-        [resto.commitment_id, data.tenant_id],
+        [
+          resto.commitment_id,
+          data.tenant_id,
+          data.data_pagamento,
+          context.userId,
+        ],
       );
       await recordAudit(client, {
         tenantId: data.tenant_id,
@@ -207,6 +231,21 @@ export const cancelRestoAPagar = createServerFn({ method: "POST" })
       if (!resto) throw new Error("Resto a pagar não encontrado");
       if (resto.status !== "inscrito")
         throw new Error("Só um resto inscrito pode ser cancelado");
+      // Trava o empenho e recusa cancelar o que já foi pago ou anulado: sem
+      // isto, o cancelamento do resto anulava um empenho PAGO, apagando a
+      // despesa dos relatórios com o dinheiro já fora do caixa.
+      const commitment = (
+        await client.query<{ status: string }>(
+          `select status from public.budget_commitments
+           where id=$1 and tenant_id=$2 for update`,
+          [resto.commitment_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!commitment) throw new Error("Empenho do resto não encontrado");
+      if (commitment.status === "pago")
+        throw new Error("Empenho já pago não pode ser anulado");
+      if (commitment.status === "anulado")
+        throw new Error("Empenho já está anulado");
       await client.query(
         `update public.restos_a_pagar
          set status='cancelado', updated_at=now()

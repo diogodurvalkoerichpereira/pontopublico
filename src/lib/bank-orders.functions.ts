@@ -159,6 +159,16 @@ export const emitBankOrder = createServerFn({ method: "POST" })
          where id = $1 and tenant_id = $2`,
         [data.commitment_id, data.tenant_id, context.userId],
       );
+      // Se o empenho estava inscrito em restos a pagar, a OB BAIXA o resto na
+      // mesma transação. Sem isto o mesmo empenho ficava "a pagar" nos restos
+      // depois de pago pela OB — e um pagamento posterior do resto contava o
+      // dispêndio duas vezes contra uma única saída de caixa.
+      await client.query(
+        `update public.restos_a_pagar
+         set status='pago', pago_em=$3::date, updated_at=now()
+         where commitment_id=$1 and tenant_id=$2 and status='inscrito'`,
+        [data.commitment_id, data.tenant_id, data.data_emissao],
+      );
       await contabilizarEvento({
         client,
         tenantId: data.tenant_id,
@@ -251,10 +261,23 @@ export const cancelBankOrder = createServerFn({ method: "POST" })
         )
       ).rows[0];
       if (!commitment) throw new Error("Empenho da OB não encontrado");
+      // O estorno só desfaz um pagamento que existe: o estado era lido e
+      // ignorado, e a OB devolvia a 'liquidado' um empenho anulado.
+      if (commitment.status !== "pago")
+        throw new Error(
+          `A OB só estorna empenho pago (o empenho está ${commitment.status})`,
+        );
       await client.query(
         `update public.budget_commitments
          set status = 'liquidado', pago_em = null, pago_por = null
          where id = $1 and tenant_id = $2`,
+        [order.commitment_id, data.tenant_id],
+      );
+      // Reabre o resto a pagar baixado pela OB (espelho da emissão).
+      await client.query(
+        `update public.restos_a_pagar
+         set status='inscrito', pago_em=null, updated_at=now()
+         where commitment_id=$1 and tenant_id=$2 and status='pago'`,
         [order.commitment_id, data.tenant_id],
       );
 

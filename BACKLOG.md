@@ -1591,6 +1591,44 @@ zera a receita de dívida ativa — derruba). Observação registrada: `settleAc
 baixa a CDA sem gerar pagamento no crédito (pré-existente; a arrecadação da CDA entra por
 `recordTaxPayment`/parcela, como já era).
 
+**O2-26 — Coerência restos a pagar × empenho × ordem bancária (auditoria financeira) ✅.**
+Auditoria do domínio despesa/receita/tesouraria e tributário/contábil encontrou pagamento e
+anulação de empenho por caminhos que não liam o estado do empenho. Corrigido:
+`payRestoAPagar` trava o empenho de origem e **exige liquidação prévia** (Lei 4.320 art.
+62/63) — antes pagava resto NÃO processado e até empenho anulado —, gravando `pago_em` com a
+**data do pagamento** (não `now()`), que é o que separa os exercícios no balanço financeiro;
+`cancelRestoAPagar` recusa anular empenho **pago** ou já anulado (o cancelamento do resto
+apagava dos relatórios uma despesa com o dinheiro fora do caixa); `emitBankOrder` **baixa o
+resto a pagar** do empenho na mesma transação e `cancelBankOrder` o reabre — sem isso o mesmo
+empenho ficava "a pagar" depois de pago e o dispêndio era contado duas vezes contra uma única
+saída de caixa; `cancelBankOrder` passa a exigir empenho `pago` (o estado era lido e
+ignorado); `getBudgetBalance` conta como restos a pagar **só os inscritos** (resto pago ou
+cancelado inflava o Anexo 1). `updateFiscalExecutionStatus` só aceita `quitada` com o
+**crédito satisfeito** (saldo ≤ 0), validado antes de gravar o andamento — o caminho baixava
+a CDA do estoque em cobrança sem um centavo em `tax_payments`. `/empenhos` ganha **"Novo
+empenho"** (`createBudgetCommitment`, que não estava ligado a tela nenhuma: a cadeia da
+despesa não tinha como começar pela interface). Testes
+`tests/sprint-restos-empenho-coerencia.test.mjs` (4 casos) e o caso corrigido em
+`tests/sprint-fiscal-execution.test.mjs`, verificados por mutação (remover cada guarda
+derruba). Pendências registradas da auditoria: ver "Auditoria financeira — pendências".
+
+**Auditoria financeira — pendências (não corrigidas neste incremento).** Em ordem de
+gravidade: (a) `getEquityStatement` trata a classe 2 inteira como passivo (no PCASP 2.3 é o
+PL), então o "patrimônio líquido" devolvido é sempre igual ao resultado do período; e apura
+só o movimento do exercício, sem saldo de abertura — ativo/passivo deveriam ser acumulados;
+(b) arrecadação (de receita e de tributo) não gera movimento de tesouraria nem lançamento
+contábil, o que mantém o caixa desconectado e faz `conciliado` da DFC ser quase sempre falso;
+(c) `transitionBudgetCommitment{action:"pagar"}` paga sem tocar a tesouraria — o pagamento
+deveria ser exclusivo da ordem bancária; (d) anulação de empenho **liquidado** não estorna o
+lançamento da liquidação, deixando o passivo com o credor no balanço; (e) pagamento avulso de
+crédito com parcelamento ativo estoura o check `tax_pago_teto`; (f) cancelamento de crédito
+ignora pagamentos já recebidos, CDA ativa e execução em curso; (g) duplicidade de IPTU/ISS é
+travada pela string `inscricao`, que é editável; (h) CND/CPEN compara documento sem
+normalizar e trata débito a vencer como impedimento; (i) DFC classifica o desembolso pelo
+exercício do empenho, não pela data do pagamento; (j) `valor_bloqueado` ignorado ao reduzir o
+orçado (erro cru do Postgres); (k) `saldo_apos` da tesouraria fica incoerente com lançamento
+retroativo.
+
 ### Onda 5 — Apoio, controle e transparência (10-14 sem)
 
 Protocolo e processo eletrônico com ICP-Brasil · e-SIC/LAI · controle interno ·

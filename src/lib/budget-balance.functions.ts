@@ -57,10 +57,12 @@ export const getBudgetBalance = createServerFn({ method: "POST" })
       nao_processados: string;
       total: string;
     }>(
+      // Só o estoque AINDA A PAGAR (inscrito): resto pago ou cancelado não é
+      // saldo de restos a pagar — contá-lo inflava o Anexo 1 do exercício.
       `select
-         coalesce(sum(valor) filter (where tipo='processado'),0)::text as processados,
-         coalesce(sum(valor) filter (where tipo='nao_processado'),0)::text as nao_processados,
-         coalesce(sum(valor),0)::text as total
+         coalesce(sum(valor) filter (where tipo='processado' and status='inscrito'),0)::text as processados,
+         coalesce(sum(valor) filter (where tipo='nao_processado' and status='inscrito'),0)::text as nao_processados,
+         coalesce(sum(valor) filter (where status='inscrito'),0)::text as total
        from public.restos_a_pagar
        where tenant_id=$1 and exercicio_origem=$2`,
       [data.tenant_id, data.exercicio],

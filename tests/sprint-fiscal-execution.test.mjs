@@ -200,9 +200,27 @@ test("execução quitada baixa a CDA; suspensa não mexe na CDA", async () => {
   });
   assert.equal(await cdaStatus(cdaSusp), "ativa");
 
-  // Quitar a execução baixa a CDA para 'quitada'.
+  // Quitar EXIGE crédito satisfeito: com saldo devedor em aberto, a execução não
+  // baixa a CDA. Sem esta guarda o andamento "quitada" apagava a dívida do estoque
+  // em cobrança sem um centavo registrado em tax_payments.
   const cdaQuit = await seedCda(900, "ativa");
   const rQuit = await file(cdaQuit);
+  await assert.rejects(
+    fn.updateFiscalExecutionStatus({
+      data: { tenant_id: tenantId, execution_id: rQuit.id, status: "quitada" },
+      context: ctx(),
+    }),
+    /saldo devedor/i,
+  );
+  assert.equal(await cdaStatus(cdaQuit), "ativa");
+
+  // Satisfeito o crédito (valor_pago = valor_lancado), a quitação baixa a CDA.
+  await db.query(
+    `update public.tax_credits c set valor_pago = c.valor_lancado, status='quitado'
+     from public.active_debt_certificates cda
+     where cda.id = $1 and c.id = cda.credit_id`,
+    [cdaQuit],
+  );
   await fn.updateFiscalExecutionStatus({
     data: { tenant_id: tenantId, execution_id: rQuit.id, status: "quitada" },
     context: ctx(),

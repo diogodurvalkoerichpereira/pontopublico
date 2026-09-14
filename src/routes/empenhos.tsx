@@ -8,6 +8,7 @@ import {
   DollarSign,
   Ban,
   Scissors,
+  Plus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -23,11 +24,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth-context";
 import {
+  getBudgetAppropriations,
   getBudgetCommitments,
   getCommitmentsByCredor,
   transitionBudgetCommitment,
   partiallyCancelBudgetCommitment,
+  createBudgetCommitment,
 } from "@/lib/budget.functions";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type CredorPos = {
   credor: string;
@@ -87,8 +97,25 @@ function Content() {
   const load = useServerFn(getBudgetCommitments);
   const transition = useServerFn(transitionBudgetCommitment);
   const partialCancel = useServerFn(partiallyCancelBudgetCommitment);
+  // Empenhar (Lei 4.320 art. 58): primeiro estagio da despesa. Sem esta acao a
+  // cadeia empenho -> liquidacao -> pagamento nao tem como comecar pela tela.
+  const create = useServerFn(createBudgetCommitment);
+  const loadApps = useServerFn(getBudgetAppropriations);
   const qc = useQueryClient();
   const canManage = hasTenantPermission("budget.manage");
+
+  const hoje = () => new Date().toISOString().slice(0, 10);
+  const [novoOpen, setNovoOpen] = useState(false);
+  const [form, setForm] = useState({
+    appropriation_id: "",
+    data_empenho: hoje(),
+    tipo: "ordinario",
+    credor: "",
+    historico: "",
+    valor: "",
+  });
+  const setF = (k: keyof typeof form, v: string) =>
+    setForm((f) => ({ ...f, [k]: v }));
 
   const [pcTarget, setPcTarget] = useState<Commitment | null>(null);
   const [pcValor, setPcValor] = useState("");
@@ -109,6 +136,24 @@ function Content() {
   const items = (data ?? []) as Commitment[];
   const credores = (byCredor?.credores ?? []) as CredorPos[];
 
+  // Dotacoes disponiveis para empenhar (saldo = orcado - empenhado - bloqueado).
+  const { data: appsData } = useQuery({
+    queryKey: ["budget-appropriations", activeTenant?.id],
+    enabled: Boolean(activeTenant) && canManage,
+    queryFn: () => loadApps({ data: { tenant_id: activeTenant!.id } }),
+  });
+  const dotacoes = (
+    (appsData?.appropriations ?? []) as Array<{
+      id: string;
+      exercicio: number;
+      unidade_orcamentaria: string;
+      natureza_despesa: string;
+      fonte_recurso: string;
+      saldo: string;
+      status: string;
+    }>
+  ).filter((a) => a.status === "ativa" && Number(a.saldo) > 0);
+
   const refresh = () => {
     qc.invalidateQueries({
       queryKey: ["budget-commitments", activeTenant?.id],
@@ -116,6 +161,43 @@ function Content() {
     qc.invalidateQueries({
       queryKey: ["commitments-by-credor", activeTenant?.id],
     });
+    // O empenho reserva saldo da dotacao: a tela de orcamento precisa relerar.
+    qc.invalidateQueries({
+      queryKey: ["budget-appropriations", activeTenant?.id],
+    });
+  };
+
+  const submitNovo = async () => {
+    if (!activeTenant) return;
+    setBusy(true);
+    try {
+      const r = await create({
+        data: {
+          tenant_id: activeTenant.id,
+          appropriation_id: form.appropriation_id,
+          data_empenho: form.data_empenho,
+          tipo: form.tipo as "ordinario" | "global" | "estimativo",
+          credor: form.credor.trim(),
+          historico: form.historico.trim(),
+          valor: Number(form.valor),
+        },
+      });
+      toast.success(`Empenho nº ${r.numero} emitido`);
+      setNovoOpen(false);
+      setForm({
+        appropriation_id: "",
+        data_empenho: hoje(),
+        tipo: "ordinario",
+        credor: "",
+        historico: "",
+        valor: "",
+      });
+      refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao empenhar");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const doTransition = async (
@@ -162,14 +244,30 @@ function Content() {
 
   return (
     <section className="space-y-6">
-      <div className="flex items-center gap-3">
-        <ReceiptText className="size-6 text-primary" />
-        <div>
-          <h1 className="text-2xl font-extrabold tracking-tight">Empenhos</h1>
-          <p className="text-sm text-muted-foreground">
-            Estágios da despesa (Lei 4.320): empenhado → liquidado → pago
-          </p>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <ReceiptText className="size-6 text-primary" />
+          <div>
+            <h1 className="text-2xl font-extrabold tracking-tight">Empenhos</h1>
+            <p className="text-sm text-muted-foreground">
+              Estágios da despesa (Lei 4.320): empenhado → liquidado → pago
+            </p>
+          </div>
         </div>
+        {canManage && (
+          <Button
+            variant="outline"
+            onClick={() => setNovoOpen(true)}
+            disabled={dotacoes.length === 0}
+            title={
+              dotacoes.length === 0
+                ? "Nenhuma dotação ativa com saldo — cadastre em Orçamento"
+                : undefined
+            }
+          >
+            <Plus className="size-4" /> Novo empenho
+          </Button>
+        )}
       </div>
 
       <div className="rounded-xl border bg-card overflow-x-auto">
@@ -341,6 +439,103 @@ function Content() {
               disabled={busy || !pcValor || pcMotivo.trim().length < 3}
             >
               Confirmar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Novo empenho (Lei 4.320 art. 58) — reserva saldo da dotação */}
+      <Dialog open={novoOpen} onOpenChange={setNovoOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Novo empenho</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Dotação orçamentária</Label>
+              <Select
+                value={form.appropriation_id}
+                onValueChange={(v) => setF("appropriation_id", v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione a dotação" />
+                </SelectTrigger>
+                <SelectContent>
+                  {dotacoes.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.exercicio} · {a.unidade_orcamentaria} ·{" "}
+                      {a.natureza_despesa} · fonte {a.fonte_recurso} — saldo{" "}
+                      {brl(a.saldo)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="mt-1 text-xs text-muted-foreground">
+                O empenho nunca excede o saldo (orçado − empenhado − bloqueado).
+              </p>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <Label>Data</Label>
+                <Input
+                  type="date"
+                  value={form.data_empenho}
+                  onChange={(e) => setF("data_empenho", e.target.value)}
+                />
+              </div>
+              <div>
+                <Label>Tipo</Label>
+                <Select
+                  value={form.tipo}
+                  onValueChange={(v) => setF("tipo", v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ordinario">Ordinário</SelectItem>
+                    <SelectItem value="global">Global</SelectItem>
+                    <SelectItem value="estimativo">Estimativo</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Valor</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={form.valor}
+                  onChange={(e) => setF("valor", e.target.value)}
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Credor</Label>
+              <Input
+                value={form.credor}
+                onChange={(e) => setF("credor", e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Histórico</Label>
+              <Input
+                value={form.historico}
+                onChange={(e) => setF("historico", e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={submitNovo}
+              disabled={
+                busy ||
+                !form.appropriation_id ||
+                form.credor.trim().length < 2 ||
+                form.historico.trim().length < 3 ||
+                !(Number(form.valor) > 0)
+              }
+            >
+              Empenhar
             </Button>
           </DialogFooter>
         </DialogContent>

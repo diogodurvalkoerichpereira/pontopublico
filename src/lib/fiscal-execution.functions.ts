@@ -133,6 +133,28 @@ export const updateFiscalExecutionStatus = createServerFn({ method: "POST" })
       if (!exec) throw new Error("Execução fiscal não encontrada");
       if (exec.status === "extinta" || exec.status === "quitada")
         throw new Error("Execução encerrada não muda de andamento");
+      // Quitar EXIGE crédito satisfeito (saldo ≤ 0) — mesma regra de
+      // settleActiveDebtCertificate. Sem isto o andamento "quitada" apagava a
+      // dívida do estoque em cobrança sem um centavo em tax_payments. Validado
+      // ANTES de gravar o andamento.
+      if (data.status === "quitada") {
+        const credito = (
+          await client.query<{ saldo: string }>(
+            `select (c.valor_lancado - c.valor_pago)::text as saldo
+             from public.active_debt_certificates cda
+             join public.tax_credits c
+               on c.id = cda.credit_id and c.tenant_id = cda.tenant_id
+             where cda.id=$1 and cda.tenant_id=$2
+             for update of c`,
+            [exec.cda_id, data.tenant_id],
+          )
+        ).rows[0];
+        if (!credito) throw new Error("Crédito da CDA não encontrado");
+        if (Number(credito.saldo) > 0)
+          throw new Error(
+            `A execução só quita com o crédito satisfeito (saldo devedor de ${Number(credito.saldo).toFixed(2)}). Registre a arrecadação antes, ou encerre como extinta.`,
+          );
+      }
       await client.query(
         `update public.fiscal_executions
          set status=$3, observacao=coalesce($4, observacao), updated_at=now()
@@ -144,8 +166,8 @@ export const updateFiscalExecutionStatus = createServerFn({ method: "POST" })
           data.observacao ?? null,
         ],
       );
-      // Execução quitada baixa a CDA: a dívida foi satisfeita na cobrança judicial,
-      // então sai do estoque em cobrança (o saldo consolidado só soma CDAs ativas).
+      // Satisfeito o crédito, a execução quitada baixa a CDA: sai do estoque em
+      // cobrança (o saldo consolidado só soma CDAs ativas).
       if (data.status === "quitada") {
         await client.query(
           `update public.active_debt_certificates set status='quitada'
