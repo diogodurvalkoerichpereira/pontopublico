@@ -1714,6 +1714,27 @@ caminho era liberar o bloqueio antes. Agora a recusa nomeia as duas parcelas e d
 fazer. Três casos novos em `tests/sprint-budget-execution.test.mjs`, cada um verificado por
 mutação.
 
+**O2-31/32 — Conciliação bancária e remessa da folha ganham tela; a remessa
+quebrava em produção. ✅** `getTreasuryReconciliations`/`reconcileTreasuryAccount` entram em
+`/tesouraria`: botão "Conciliar" por conta e a tabela com livro × extrato × diferença, com
+selo "Confere" quando fecha. Sem isso não havia como confrontar o saldo escriturado com o
+do banco — a prova de que o caixa corresponde ao dinheiro.
+
+`generateBankRemittance`/`getBankRemittances` entram em `/rh/ciclos`, no ciclo **fechado**,
+com o aviso em destaque de que **o arquivo não é CNAB 240** e nenhum banco o aceita (a
+lista de pendências vem de `conformance.ts`), e o download nomeado
+`rascunho-nao-cnab240-…`.
+
+**O módulo nunca tinha sido executado.** Não tinha tela e não tinha teste — e o primeiro
+teste escrito derrubou na hora: `select *` traz `reference_month` como `Date`, e o
+`.replace` do cabeçalho estourava `cycle.reference_month.replace is not a function` em
+**toda** chamada. Corrigido com `reference_month::text`. `tests/sprint-bank-remittance.test.mjs`
+(4 casos) passa a guardar: só folha fechada gera; vínculo sem conta ativa **recusa o arquivo
+inteiro** (remessa parcial paga uns e deixa outros de fora sem ninguém perceber); e o
+`layout_version` é `RASCUNHO-NAO-CNAB240-v1` — agora que existe um botão que baixa o
+arquivo, é esse rótulo que impede apresentá-lo como padrão oficial em licitação (regra do
+CLAUDE.md). Verificados por mutação, um caso cada.
+
 ### Onda 5 — Apoio, controle e transparência (10-14 sem)
 
 Protocolo e processo eletrônico com ICP-Brasil · e-SIC/LAI · controle interno ·

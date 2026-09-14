@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
+  Banknote,
   CheckCircle2,
   ClipboardCheck,
   FileLock2,
@@ -21,6 +22,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/lib/auth-context";
@@ -31,6 +33,10 @@ import {
   transitionPayrollCycle,
   getPayrollCycleByRubric,
 } from "@/lib/payroll-cycle.functions";
+import {
+  generateBankRemittance,
+  getBankRemittances,
+} from "@/lib/bank-remittance.functions";
 
 export const Route = createFileRoute("/rh/ciclos")({ component: Page });
 
@@ -68,6 +74,14 @@ function Content() {
   const [reasonOpen, setReasonOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  // O2-32 — remessa bancária da folha fechada. Existia no servidor sem tela: a
+  // folha fechava e não havia como produzir o arquivo de pagamento.
+  // ATENÇÃO: o formato NÃO é CNAB 240 — a tela diz isso em cima do botão, e o
+  // arquivo nasce rotulado RASCUNHO-NAO-CNAB240-v1 (ver src/lib/conformance.ts).
+  const gerarRemessa = useServerFn(generateBankRemittance);
+  const loadRemittances = useServerFn(getBankRemittances);
+  const [remessaOpen, setRemessaOpen] = useState(false);
+  const [bankCode, setBankCode] = useState("001");
 
   const { data } = useQuery({
     queryKey: ["payroll-cycles", activeTenant?.id],
@@ -167,6 +181,47 @@ function Content() {
       toast.error(
         error instanceof Error ? error.message : "Falha ao gerar prévia",
       );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const { data: remessas } = useQuery({
+    queryKey: ["bank-remittances", activeTenant?.id],
+    enabled: Boolean(activeTenant),
+    queryFn: () => loadRemittances({ data: { tenant_id: activeTenant!.id } }),
+  });
+
+  const submitRemessa = async () => {
+    if (!activeTenant || !selected) return;
+    setBusy(true);
+    try {
+      const r = await gerarRemessa({
+        data: {
+          tenant_id: activeTenant.id,
+          cycle_id: selected.id,
+          bank_code: bankCode,
+        },
+      });
+      // Download local do rascunho; o arquivo NÃO é aceito por banco nenhum.
+      const blob = new Blob([r.content], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `rascunho-nao-cnab240-${bankCode}-${selected.reference_month.slice(0, 7)}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      toast.success(
+        `Rascunho gerado: ${fmt(r.total)} — SHA-256 ${r.hash.slice(0, 12)}…`,
+      );
+      setRemessaOpen(false);
+      qc.invalidateQueries({
+        queryKey: ["bank-remittances", activeTenant.id],
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao gerar");
     } finally {
       setBusy(false);
     }
@@ -312,6 +367,16 @@ function Content() {
                           competência
                         </Button>
                       )}
+                    {selected.status === "fechada" && (
+                      <Button
+                        variant="outline"
+                        onClick={() => setRemessaOpen(true)}
+                        disabled={busy}
+                      >
+                        <Banknote className="mr-1 size-4" /> Remessa bancária
+                        (rascunho)
+                      </Button>
+                    )}
                     {selected.status === "fechada" &&
                       data?.permissions.reopen && (
                         <Button
@@ -498,6 +563,46 @@ function Content() {
               disabled={!runId || busy}
             >
               {busy ? "Gerando..." : "Gerar prévia"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={remessaOpen} onOpenChange={setRemessaOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Gerar remessa bancária (rascunho)</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm">
+              <strong>Este arquivo NÃO é CNAB 240.</strong> O formato é próprio
+              do projeto e <strong>nenhum banco o aceita</strong>. Falta: 240
+              posições fixas, header/trailer de lote, segmentos A/B/C, código de
+              convênio e dígitos verificadores — e homologação junto a uma
+              instituição bancária. Serve para conferência interna do valor e do
+              rateio por conta, não para transmissão.
+            </div>
+            <div>
+              <Label>Código do banco (3 dígitos)</Label>
+              <Input
+                value={bankCode}
+                maxLength={3}
+                onChange={(e) =>
+                  setBankCode(e.target.value.replace(/\D/g, "").slice(0, 3))
+                }
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Todos os vínculos da folha precisam de conta bancária ativa nesse
+              banco; caso contrário a geração é recusada.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={submitRemessa}
+              disabled={busy || !/^\d{3}$/.test(bankCode)}
+            >
+              Gerar rascunho
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -67,11 +67,7 @@ const ALLOWLIST = {
   depositTimeApuracao: "O1-03f — depósito da apuração sem tela",
   getHolidays: "O1-03g — calendário de feriados sem tela",
   saveHoliday: "O1-03g — calendário de feriados sem tela",
-  // Tesouraria e contabilidade.
-  getTreasuryReconciliations: "O2-31 — conciliação bancária sem tela",
-  reconcileTreasuryAccount: "O2-31 — conciliação bancária sem tela",
-  generateBankRemittance: "O2-32 — remessa bancária sem tela",
-  getBankRemittances: "O2-32 — remessa bancária sem tela",
+  // Contabilidade.
   getAccountingEntries: "O2-33 — razão contábil sem tela",
   // Receita.
   getRevenueExecution: "O4-17 — execução da receita sem tela",

@@ -30,6 +30,10 @@ import {
   transferBetweenAccounts,
   getTreasuryLedger,
 } from "@/lib/treasury.functions";
+import {
+  getTreasuryReconciliations,
+  reconcileTreasuryAccount,
+} from "@/lib/treasury-reconciliation.functions";
 
 import { AppShell } from "@/components/AppShell";
 
@@ -76,6 +80,19 @@ function Content() {
   const recordMovement = useServerFn(recordTreasuryMovement);
   const transfer = useServerFn(transferBetweenAccounts);
   const loadLedger = useServerFn(getTreasuryLedger);
+  // O2-31 — conciliação bancária. Existia no servidor sem tela: não havia como
+  // confrontar o saldo do livro com o do extrato, que é a prova de que o caixa
+  // escriturado corresponde ao dinheiro em banco.
+  const loadReconciliations = useServerFn(getTreasuryReconciliations);
+  const conciliar = useServerFn(reconcileTreasuryAccount);
+  const [reconcileAccount, setReconcileAccount] = useState<Account | null>(
+    null,
+  );
+  const [reconcileForm, setReconcileForm] = useState({
+    data_referencia: new Date().toISOString().slice(0, 10),
+    saldo_extrato: "",
+    observacao: "",
+  });
   const qc = useQueryClient();
 
   const [ledgerAccount, setLedgerAccount] = useState<{
@@ -128,8 +145,50 @@ function Content() {
     .filter((a) => a.status === "ativa")
     .reduce((s, a) => s + Number(a.saldo_atual), 0);
 
-  const refresh = () =>
+  const { data: reconciliations } = useQuery({
+    queryKey: ["treasury-reconciliations", activeTenant?.id],
+    enabled: Boolean(activeTenant),
+    queryFn: () =>
+      loadReconciliations({ data: { tenant_id: activeTenant!.id } }),
+  });
+  const nomeConta = (id: string) =>
+    accounts.find((a) => a.id === id)?.nome ?? id.slice(0, 8);
+
+  const refresh = () => {
     qc.invalidateQueries({ queryKey: ["treasury-accounts", activeTenant?.id] });
+    qc.invalidateQueries({
+      queryKey: ["treasury-reconciliations", activeTenant?.id],
+    });
+  };
+
+  const submitReconcile = async () => {
+    if (!activeTenant || !reconcileAccount) return;
+    setBusy(true);
+    try {
+      const r = await conciliar({
+        data: {
+          tenant_id: activeTenant.id,
+          account_id: reconcileAccount.id,
+          data_referencia: reconcileForm.data_referencia,
+          saldo_extrato: Number(reconcileForm.saldo_extrato),
+          observacao: reconcileForm.observacao.trim() || null,
+        },
+      });
+      toast.success(
+        Math.abs(r.diferenca) < 0.005
+          ? `Conciliada sem diferença (livro ${brl(r.saldo_livro)})`
+          : `Conciliada com diferença de ${brl(r.diferenca)} (extrato - livro)`,
+      );
+      setReconcileAccount(null);
+      refresh();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Falha ao conciliar",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const openAccount = () => {
     setNome("");
@@ -311,6 +370,23 @@ function Content() {
                   >
                     Extrato
                   </Button>
+                  {canManage && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="ml-2"
+                      onClick={() => {
+                        setReconcileAccount(a);
+                        setReconcileForm({
+                          data_referencia: hoje(),
+                          saldo_extrato: a.saldo_atual,
+                          observacao: "",
+                        });
+                      }}
+                    >
+                      <ArrowDownUp className="size-4" /> Conciliar
+                    </Button>
+                  )}
                 </td>
               </tr>
             ))}
@@ -327,6 +403,122 @@ function Content() {
           </tbody>
         </table>
       </div>
+
+      {/* Conciliação bancária (O2-15) */}
+      <div className="rounded-xl border bg-card overflow-x-auto">
+        <h2 className="font-bold p-3">Conciliação bancária</h2>
+        <table className="w-full text-sm">
+          <thead className="border-b bg-muted/40 text-left">
+            <tr>
+              <th className="p-3 font-semibold">Data</th>
+              <th className="p-3 font-semibold">Conta</th>
+              <th className="p-3 font-semibold text-right">Saldo do livro</th>
+              <th className="p-3 font-semibold text-right">Saldo do extrato</th>
+              <th className="p-3 font-semibold text-right">Diferença</th>
+              <th className="p-3 font-semibold">Observação</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(reconciliations?.reconciliations ?? []).map((r) => (
+              <tr key={r.id} className="border-b last:border-0">
+                <td className="p-3 tabular-nums">{r.data_referencia}</td>
+                <td className="p-3">{nomeConta(r.account_id)}</td>
+                <td className="p-3 text-right tabular-nums">
+                  {brl(r.saldo_livro)}
+                </td>
+                <td className="p-3 text-right tabular-nums">
+                  {brl(r.saldo_extrato)}
+                </td>
+                <td className="p-3 text-right tabular-nums">
+                  {Math.abs(Number(r.diferenca)) < 0.005 ? (
+                    <Badge variant="default">Confere</Badge>
+                  ) : (
+                    <Badge variant="destructive">{brl(r.diferenca)}</Badge>
+                  )}
+                </td>
+                <td className="p-3 text-muted-foreground">
+                  {r.observacao ?? "—"}
+                </td>
+              </tr>
+            ))}
+            {(reconciliations?.reconciliations ?? []).length === 0 && (
+              <tr>
+                <td
+                  colSpan={6}
+                  className="p-6 text-center text-muted-foreground"
+                >
+                  Nenhuma conciliação registrada.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Conciliar conta */}
+      <Dialog
+        open={Boolean(reconcileAccount)}
+        onOpenChange={(o) => !o && setReconcileAccount(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Conciliar — {reconcileAccount?.nome}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Saldo do livro hoje: {brl(reconcileAccount?.saldo_atual ?? 0)}. A
+              diferença registrada é extrato - livro.
+            </p>
+            <div>
+              <Label>Data de referência</Label>
+              <Input
+                type="date"
+                value={reconcileForm.data_referencia}
+                onChange={(e) =>
+                  setReconcileForm((f) => ({
+                    ...f,
+                    data_referencia: e.target.value,
+                  }))
+                }
+              />
+            </div>
+            <div>
+              <Label>Saldo do extrato bancário</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={reconcileForm.saldo_extrato}
+                onChange={(e) =>
+                  setReconcileForm((f) => ({
+                    ...f,
+                    saldo_extrato: e.target.value,
+                  }))
+                }
+              />
+            </div>
+            <div>
+              <Label>Observação</Label>
+              <Input
+                value={reconcileForm.observacao}
+                onChange={(e) =>
+                  setReconcileForm((f) => ({
+                    ...f,
+                    observacao: e.target.value,
+                  }))
+                }
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={submitReconcile}
+              disabled={busy || reconcileForm.saldo_extrato.trim() === ""}
+            >
+              Conciliar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Extrato da conta */}
       <Dialog

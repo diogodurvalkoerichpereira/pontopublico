@@ -41,7 +41,11 @@ export const generateBankRemittance = createServerFn({ method: "POST" })
     return withTransaction(async (c) => {
       const cycle = (
         await c.query<any>(
-          `select * from public.payroll_cycles where id=$1 and tenant_id=$2 and status='fechada' for update`,
+          // reference_month é `date`: o driver devolve Date, e o layout precisa
+          // do texto. Sem o ::text o `.replace` abaixo estourava em toda chamada.
+          `select *, reference_month::text as reference_month_text
+             from public.payroll_cycles
+            where id=$1 and tenant_id=$2 and status='fechada' for update`,
           [data.cycle_id, data.tenant_id],
         )
       ).rows[0];
@@ -63,7 +67,7 @@ export const generateBankRemittance = createServerFn({ method: "POST" })
         0,
       );
       const content = [
-        `0${data.bank_code}${pad(cycle.reference_month.replace(/-/g, ""), 8)}`,
+        `0${data.bank_code}${pad(cycle.reference_month_text.replace(/-/g, ""), 8)}`,
         ...detail,
         `9${pad(rows.length, 6)}${pad(Math.round(total * 100), 18)}`,
       ].join("\r\n");
