@@ -1668,6 +1668,28 @@ ser _vencido e não suspenso_ (CTN art. 205); o que está a vencer aparece no ex
 `tests/sprint-tax-clearance.test.mjs`, verificados por mutação (voltar a comparação crua
 derruba 1; voltar o "a vencer" como exigível derruba 2).
 
+**O3-13 — Contratos: itens, aditivos e origem ganham tela, e uma rede contra a
+função órfã. ✅** Três módulos de contratação estavam completos, testados e
+**inalcançáveis**: `getContractItems`/`addContractItem` (O3-08), `getContractAmendments`/
+`registerContractAmendment` (O3-07) e `linkContractToProcurement` (O3-09). Um contrato não
+tinha como ser detalhado em linhas, aditado dentro do limite de 25% (Lei 14.133 art. 125)
+nem ligado à licitação que o originou. `/contratos` ganha o painel "Itens e aditivos" por
+contrato, com as duas tabelas, os diálogos de item e de termo aditivo e o vínculo ao
+processo — a lista de processos já vem filtrada por _homologada + mesma modalidade_, que é
+o que o servidor exige, para não oferecer opção que será recusada.
+
+Junto, a rede permanente: **`tests/ui-wiring-coverage.test.mjs`**, irmão de
+`authorization-coverage`. Varre por AST todo `export const … = createServerFn` em
+`src/lib/*.functions.ts` e **falha o CI** quando o nome não aparece em `src/routes`,
+`src/components` ou `src/lib/*.tsx`. Uma função de servidor correta e sem tela é um passo do
+processo que o usuário não tem como executar, e não quebra teste nenhum — o módulo parece
+pronto e a cadeia está cortada. A ALLOWLIST registra as 42 pendências restantes, cada uma
+com o item de BACKLOG que a resolve (O1-03f ponto, O1-08b empenho da folha, O2-30 créditos
+adicionais, O2-31 conciliação bancária, O2-33 razão contábil, O4-17 execução da receita,
+O0-14 papéis, O0-15 migração histórica, entre outras) e **encolhe sozinha**: o teste falha
+também quando uma entrada da allowlist já tem tela, para a lista não fossilizar. Verificado
+por mutação (desligar os itens/aditivos da rota derruba com os quatro nomes).
+
 ### Onda 5 — Apoio, controle e transparência (10-14 sem)
 
 Protocolo e processo eletrônico com ICP-Brasil · e-SIC/LAI · controle interno ·

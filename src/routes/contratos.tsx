@@ -37,6 +37,16 @@ import {
   attestContractMeasurement,
   cancelContractMeasurement,
 } from "@/lib/contract-measurements.functions";
+import {
+  getContractItems,
+  addContractItem,
+} from "@/lib/contract-items.functions";
+import {
+  getContractAmendments,
+  registerContractAmendment,
+} from "@/lib/contract-amendments.functions";
+import { linkContractToProcurement } from "@/lib/contract-procurement.functions";
+import { getProcurementProcesses } from "@/lib/procurement.functions";
 
 import { AppShell } from "@/components/AppShell";
 
@@ -109,6 +119,33 @@ function Content() {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
+  // O3-07/08/09 — itens, aditivos e licitação de origem. Existiam no servidor
+  // sem nenhuma tela: um contrato não tinha como ser detalhado, aditado nem
+  // ligado ao processo que o originou.
+  const loadItems = useServerFn(getContractItems);
+  const doAddItem = useServerFn(addContractItem);
+  const loadAmendments = useServerFn(getContractAmendments);
+  const doAmend = useServerFn(registerContractAmendment);
+  const doLinkProcess = useServerFn(linkContractToProcurement);
+  const loadProcesses = useServerFn(getProcurementProcesses);
+  const [detalhes, setDetalhes] = useState<Contract | null>(null);
+  const [itemOpen, setItemOpen] = useState(false);
+  const [itemForm, setItemForm] = useState({
+    descricao: "",
+    unidade: "un",
+    quantidade: "",
+    preco_unitario: "",
+  });
+  const [aditivoOpen, setAditivoOpen] = useState(false);
+  const [aditivoForm, setAditivoForm] = useState({
+    tipo: "valor",
+    valor_acrescimo: "",
+    nova_vigencia_fim: "",
+    justificativa: "",
+    data_aditivo: new Date().toISOString().slice(0, 10),
+  });
+  const [vinculoOpen, setVinculoOpen] = useState(false);
+  const [processId, setProcessId] = useState("");
   const [measureContract, setMeasureContract] = useState<Contract | null>(null);
   const [mForm, setMForm] = useState({
     competencia: new Date().toISOString().slice(0, 7),
@@ -164,6 +201,160 @@ function Content() {
     vigencia_fim: string;
     dias_para_vencer: number;
   }>;
+
+  const { data: itemsData } = useQuery({
+    queryKey: ["contract-items", activeTenant?.id, detalhes?.id],
+    enabled: Boolean(activeTenant && detalhes),
+    queryFn: () =>
+      loadItems({
+        data: { tenant_id: activeTenant!.id, contract_id: detalhes!.id },
+      }),
+  });
+  const { data: amendmentsData } = useQuery({
+    queryKey: ["contract-amendments", activeTenant?.id, detalhes?.id],
+    enabled: Boolean(activeTenant && detalhes),
+    queryFn: () =>
+      loadAmendments({
+        data: { tenant_id: activeTenant!.id, contract_id: detalhes!.id },
+      }),
+  });
+  const { data: processesData } = useQuery({
+    queryKey: ["procurement-processes", activeTenant?.id],
+    enabled: Boolean(activeTenant),
+    queryFn: () => loadProcesses({ data: { tenant_id: activeTenant!.id } }),
+  });
+  const contractItems = (itemsData?.items ?? []) as Array<{
+    id: string;
+    numero: number;
+    descricao: string;
+    unidade: string;
+    quantidade: string;
+    preco_unitario: string;
+    valor_total: string;
+  }>;
+  const amendments = (amendmentsData?.amendments ?? []) as Array<{
+    id: string;
+    numero: number;
+    tipo: string;
+    valor_acrescimo: string;
+    nova_vigencia_fim: string | null;
+    justificativa: string;
+    data_aditivo: string;
+  }>;
+  // Só uma licitação homologada da mesma modalidade pode originar o contrato —
+  // filtrar aqui evita oferecer uma opção que o servidor vai recusar.
+  const processosElegiveis = (
+    (processesData?.processes ?? []) as Array<{
+      id: string;
+      numero: string;
+      ano: number;
+      modalidade: string;
+      objeto: string;
+      status: string;
+    }>
+  ).filter(
+    (p) =>
+      p.status === "homologada" &&
+      p.modalidade === (detalhes?.modalidade ?? ""),
+  );
+
+  const refreshDetalhes = () => {
+    qc.invalidateQueries({ queryKey: ["contracts", activeTenant?.id] });
+    qc.invalidateQueries({ queryKey: ["contracts-summary", activeTenant?.id] });
+    qc.invalidateQueries({
+      queryKey: ["contract-items", activeTenant?.id, detalhes?.id],
+    });
+    qc.invalidateQueries({
+      queryKey: ["contract-amendments", activeTenant?.id, detalhes?.id],
+    });
+  };
+
+  const submitItem = async () => {
+    if (!activeTenant || !detalhes) return;
+    setBusy(true);
+    try {
+      const r = await doAddItem({
+        data: {
+          tenant_id: activeTenant.id,
+          contract_id: detalhes.id,
+          descricao: itemForm.descricao.trim(),
+          unidade: itemForm.unidade.trim(),
+          quantidade: Number(itemForm.quantidade),
+          preco_unitario: Number(itemForm.preco_unitario),
+        },
+      });
+      toast.success(`Item ${r.numero} incluído: ${brl(r.valor_total)}`);
+      setItemOpen(false);
+      setItemForm({
+        descricao: "",
+        unidade: "un",
+        quantidade: "",
+        preco_unitario: "",
+      });
+      refreshDetalhes();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao incluir");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitAditivo = async () => {
+    if (!activeTenant || !detalhes) return;
+    setBusy(true);
+    try {
+      const tipo = aditivoForm.tipo as "valor" | "prazo" | "valor_prazo";
+      const r = await doAmend({
+        data: {
+          tenant_id: activeTenant.id,
+          contract_id: detalhes.id,
+          tipo,
+          valor_acrescimo:
+            tipo === "prazo" ? 0 : Number(aditivoForm.valor_acrescimo),
+          nova_vigencia_fim:
+            tipo === "valor" ? null : aditivoForm.nova_vigencia_fim,
+          justificativa: aditivoForm.justificativa.trim(),
+          data_aditivo: aditivoForm.data_aditivo,
+        },
+      });
+      toast.success(
+        `Aditivo ${r.numero} registrado — contrato passa a ${brl(r.valor_total)}`,
+      );
+      setAditivoOpen(false);
+      setAditivoForm((f) => ({
+        ...f,
+        valor_acrescimo: "",
+        nova_vigencia_fim: "",
+        justificativa: "",
+      }));
+      refreshDetalhes();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao aditar");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitVinculo = async () => {
+    if (!activeTenant || !detalhes || !processId) return;
+    setBusy(true);
+    try {
+      await doLinkProcess({
+        data: {
+          tenant_id: activeTenant.id,
+          contract_id: detalhes.id,
+          process_id: processId,
+        },
+      });
+      toast.success("Contrato vinculado à licitação de origem");
+      setVinculoOpen(false);
+      refreshDetalhes();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao vincular");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const { data: measurements } = useQuery({
     queryKey: ["contract-measurements", activeTenant?.id, expanded],
@@ -445,6 +636,15 @@ function Content() {
                     >
                       {expanded === c.id ? "Ocultar" : "Medições"}
                     </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        setDetalhes((d) => (d?.id === c.id ? null : c))
+                      }
+                    >
+                      {detalhes?.id === c.id ? "Ocultar" : "Itens e aditivos"}
+                    </Button>
                     {canManage && c.status === "vigente" && (
                       <Button
                         size="sm"
@@ -508,6 +708,139 @@ function Content() {
           </tbody>
         </table>
       </div>
+
+      {detalhes && (
+        <div className="rounded-xl border bg-card">
+          <div className="flex items-center justify-between gap-3 flex-wrap p-3">
+            <h2 className="font-bold">
+              Contrato {detalhes.numero}/{detalhes.ano} — itens, aditivos e
+              origem
+            </h2>
+            {canManage && detalhes.status === "vigente" && (
+              <div className="flex gap-2 flex-wrap">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setItemOpen(true)}
+                >
+                  <Plus className="size-4" /> Item
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setAditivoOpen(true)}
+                >
+                  <Plus className="size-4" /> Aditivo
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setProcessId(processosElegiveis[0]?.id ?? "");
+                    setVinculoOpen(true);
+                  }}
+                  disabled={processosElegiveis.length === 0}
+                >
+                  Vincular licitação
+                </Button>
+              </div>
+            )}
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2 p-3 pt-0">
+            <div className="rounded-lg border overflow-x-auto">
+              <div className="p-2 text-sm font-semibold border-b bg-muted/40">
+                Itens ({contractItems.length}) — soma{" "}
+                {brl(
+                  contractItems.reduce((s, i) => s + Number(i.valor_total), 0),
+                )}{" "}
+                de {brl(detalhes.valor_total)}
+              </div>
+              <table className="w-full text-sm">
+                <thead className="border-b text-left">
+                  <tr>
+                    <th className="p-2 font-semibold">#</th>
+                    <th className="p-2 font-semibold">Descrição</th>
+                    <th className="p-2 font-semibold text-right">Qtd</th>
+                    <th className="p-2 font-semibold text-right">Unitário</th>
+                    <th className="p-2 font-semibold text-right">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {contractItems.map((i) => (
+                    <tr key={i.id} className="border-b last:border-0">
+                      <td className="p-2 tabular-nums">{i.numero}</td>
+                      <td className="p-2">{i.descricao}</td>
+                      <td className="p-2 text-right tabular-nums">
+                        {Number(i.quantidade)} {i.unidade}
+                      </td>
+                      <td className="p-2 text-right tabular-nums">
+                        {brl(i.preco_unitario)}
+                      </td>
+                      <td className="p-2 text-right tabular-nums">
+                        {brl(i.valor_total)}
+                      </td>
+                    </tr>
+                  ))}
+                  {contractItems.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={5}
+                        className="p-4 text-center text-muted-foreground"
+                      >
+                        Contrato sem itens detalhados.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div className="rounded-lg border overflow-x-auto">
+              <div className="p-2 text-sm font-semibold border-b bg-muted/40">
+                Termos aditivos ({amendments.length}) — limite de 25% do valor
+                original (Lei 14.133 art. 125)
+              </div>
+              <table className="w-full text-sm">
+                <thead className="border-b text-left">
+                  <tr>
+                    <th className="p-2 font-semibold">#</th>
+                    <th className="p-2 font-semibold">Tipo</th>
+                    <th className="p-2 font-semibold text-right">Valor</th>
+                    <th className="p-2 font-semibold">Nova vigência</th>
+                    <th className="p-2 font-semibold">Data</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {amendments.map((a) => (
+                    <tr key={a.id} className="border-b last:border-0">
+                      <td className="p-2 tabular-nums">{a.numero}</td>
+                      <td className="p-2">{a.tipo.replace("_", " + ")}</td>
+                      <td className="p-2 text-right tabular-nums">
+                        {Number(a.valor_acrescimo) === 0
+                          ? "—"
+                          : brl(a.valor_acrescimo)}
+                      </td>
+                      <td className="p-2 tabular-nums">
+                        {a.nova_vigencia_fim ?? "—"}
+                      </td>
+                      <td className="p-2 tabular-nums">{a.data_aditivo}</td>
+                    </tr>
+                  ))}
+                  {amendments.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={5}
+                        className="p-4 text-center text-muted-foreground"
+                      >
+                        Nenhum termo aditivo.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       {expanded && (
         <div className="rounded-xl border bg-card overflow-x-auto">
@@ -619,6 +952,209 @@ function Content() {
           </table>
         </div>
       )}
+
+      <Dialog open={itemOpen} onOpenChange={setItemOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Novo item do contrato</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Descrição</Label>
+              <Input
+                value={itemForm.descricao}
+                onChange={(e) =>
+                  setItemForm((f) => ({ ...f, descricao: e.target.value }))
+                }
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <Label>Unidade</Label>
+                <Input
+                  value={itemForm.unidade}
+                  onChange={(e) =>
+                    setItemForm((f) => ({ ...f, unidade: e.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <Label>Quantidade</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={itemForm.quantidade}
+                  onChange={(e) =>
+                    setItemForm((f) => ({ ...f, quantidade: e.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <Label>Preço unitário</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={itemForm.preco_unitario}
+                  onChange={(e) =>
+                    setItemForm((f) => ({
+                      ...f,
+                      preco_unitario: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              A soma dos itens não pode exceder o valor total do contrato.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={submitItem}
+              disabled={
+                busy ||
+                itemForm.descricao.trim().length < 2 ||
+                !(Number(itemForm.quantidade) > 0) ||
+                !(Number(itemForm.preco_unitario) > 0)
+              }
+            >
+              Incluir item
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={aditivoOpen} onOpenChange={setAditivoOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Termo aditivo</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Tipo</Label>
+              <Select
+                value={aditivoForm.tipo}
+                onValueChange={(v) =>
+                  setAditivoForm((f) => ({ ...f, tipo: v }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="valor">Valor</SelectItem>
+                  <SelectItem value="prazo">Prazo</SelectItem>
+                  <SelectItem value="valor_prazo">Valor e prazo</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {aditivoForm.tipo !== "prazo" && (
+              <div>
+                <Label>Acréscimo (negativo = supressão)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={aditivoForm.valor_acrescimo}
+                  onChange={(e) =>
+                    setAditivoForm((f) => ({
+                      ...f,
+                      valor_acrescimo: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+            )}
+            {aditivoForm.tipo !== "valor" && (
+              <div>
+                <Label>Nova vigência (fim)</Label>
+                <Input
+                  type="date"
+                  value={aditivoForm.nova_vigencia_fim}
+                  onChange={(e) =>
+                    setAditivoForm((f) => ({
+                      ...f,
+                      nova_vigencia_fim: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+            )}
+            <div>
+              <Label>Data do aditivo</Label>
+              <Input
+                type="date"
+                value={aditivoForm.data_aditivo}
+                onChange={(e) =>
+                  setAditivoForm((f) => ({
+                    ...f,
+                    data_aditivo: e.target.value,
+                  }))
+                }
+              />
+            </div>
+            <div>
+              <Label>Justificativa</Label>
+              <Input
+                value={aditivoForm.justificativa}
+                onChange={(e) =>
+                  setAditivoForm((f) => ({
+                    ...f,
+                    justificativa: e.target.value,
+                  }))
+                }
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={submitAditivo}
+              disabled={
+                busy ||
+                aditivoForm.justificativa.trim().length < 5 ||
+                (aditivoForm.tipo !== "prazo" &&
+                  !(Number(aditivoForm.valor_acrescimo) !== 0)) ||
+                (aditivoForm.tipo !== "valor" && !aditivoForm.nova_vigencia_fim)
+              }
+            >
+              Registrar aditivo
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={vinculoOpen} onOpenChange={setVinculoOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Licitação de origem</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Processo homologado</Label>
+              <Select value={processId} onValueChange={setProcessId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
+                <SelectContent>
+                  {processosElegiveis.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.numero}/{p.ano} — {p.objeto.slice(0, 50)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Só uma licitação homologada e da mesma modalidade do contrato pode
+              originá-lo (Lei 14.133).
+            </p>
+          </div>
+          <DialogFooter>
+            <Button onClick={submitVinculo} disabled={busy || !processId}>
+              Vincular
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
