@@ -1903,6 +1903,36 @@ para rota renomeada ou removida — o painel simplesmente nunca apareceria) e pa
 incompleto. Verificado por mutação: apontar uma entrada para rota inexistente derruba,
 nomeando-a.
 
+**O2-35 — Catálogo de classificação orçamentária: fonte, natureza, função. ✅**
+Função, subfunção, natureza da despesa e fonte de recurso eram **campo livre**: o usuário
+digitava o código de cabeça em toda dotação. Dois erros que só aparecem no relatório, quando
+já é tarde — código inexistente por digitação (o agrupamento cria uma linha para uma
+classificação que não existe) e o **mesmo** código com grafias diferentes ("3.1.90.11" e
+"319011"), que o agrupamento trata como coisas distintas e soma em lugares separados.
+
+Migration cria `budget_reference_codes` e semeia o padrão: **funções e subfunções**
+(Portaria MOG 42/1999), **natureza da despesa** em quatro níveis — categoria, grupo,
+modalidade, elemento (Portaria Interministerial STN/SOF 163/2001) — e **fontes/destinações
+de recursos** (Portaria Conjunta STN/SOF 20/2021). Duas camadas: `tenant_id` nulo é o padrão
+que acompanha o sistema; o ente acrescenta as suas, e o próprio prevalece quando o código
+coincide.
+
+É catálogo de **referência**, não declaração de conformidade (regra do CLAUDE.md): o
+Tribunal de Contas do ente pode exigir detalhamento próprio, sobretudo na fonte. Por isso o
+`<SelectClassificacao>` tem busca e **aceita o que for digitado fora do catálogo** — um
+seletor fechado bloquearia esse ente. E `/orcamento` ganha "Código do catálogo", para
+cadastrar o que o TCE exigir. `<ComporNaturezaDespesa>` monta a natureza pelas quatro
+partes, sempre no mesmo formato `c.g.mm.ee`, e desmonta o código gravado de volta nas partes
+ao editar.
+
+Varredura por AST do resto do sistema: os únicos campos livres que tinham lista fechada eram
+**três de fonte de recurso** (cota de desembolso, crédito suplementar e previsão de receita),
+todos convertidos. Rede permanente `tests/campos-com-opcoes.test.mjs`: falha o CI quando um
+`<Input>` de texto é ligado a campo com catálogo ou a um `*_id` (ninguém digita um UUID).
+`tests/sprint-budget-catalog.test.mjs` (5 casos) afere que o padrão chega a qualquer ente,
+que o código de um ente **não vaza** para outro e que regravar atualiza em vez de duplicar.
+Verificados por mutação.
+
 ### Onda 5 — Apoio, controle e transparência (10-14 sem)
 
 Protocolo e processo eletrônico com ICP-Brasil · e-SIC/LAI · controle interno ·

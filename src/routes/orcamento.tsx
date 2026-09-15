@@ -10,6 +10,7 @@ import {
   Unlock,
   TrendingUp,
   ArrowLeftRight,
+  ListPlus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -71,6 +72,12 @@ const MESES = [
 ];
 
 import { AppShell } from "@/components/AppShell";
+import {
+  SelectClassificacao,
+  type TipoClassificacao,
+} from "@/components/SelectClassificacao";
+import { ComporNaturezaDespesa } from "@/components/ComporNaturezaDespesa";
+import { saveBudgetCatalogCode } from "@/lib/budget-catalog.functions";
 
 export const Route = createFileRoute("/orcamento")({ component: Page });
 
@@ -136,6 +143,16 @@ function Content() {
     null,
   );
   const [unblockForm, setUnblockForm] = useState({ valor: "", motivo: "" });
+  // O2-35 — o catálogo que acompanha o sistema é referência nacional; o Tribunal
+  // de Contas do ente pode exigir código próprio, sobretudo na fonte de recurso.
+  // Sem esta tela, esse ente ficaria preso ao que veio de fábrica.
+  const salvarCodigo = useServerFn(saveBudgetCatalogCode);
+  const [catalogoOpen, setCatalogoOpen] = useState(false);
+  const [novoCodigo, setNovoCodigo] = useState({
+    tipo: "fonte_recurso",
+    codigo: "",
+    nome: "",
+  });
   const [transferOpen, setTransferOpen] = useState(false);
   const [transferForm, setTransferForm] = useState({
     origem_id: "",
@@ -231,6 +248,36 @@ function Content() {
     qc.invalidateQueries({
       queryKey: ["budget-appropriations", activeTenant?.id],
     });
+
+  const submitCodigo = async () => {
+    if (!activeTenant) return;
+    setBusy(true);
+    try {
+      await salvarCodigo({
+        data: {
+          tenant_id: activeTenant.id,
+          tipo: novoCodigo.tipo as
+            | "funcao"
+            | "subfuncao"
+            | "natureza_categoria"
+            | "natureza_grupo"
+            | "natureza_modalidade"
+            | "natureza_elemento"
+            | "fonte_recurso",
+          codigo: novoCodigo.codigo.trim(),
+          nome: novoCodigo.nome.trim(),
+        },
+      });
+      toast.success("Código incluído no catálogo do ente");
+      setCatalogoOpen(false);
+      setNovoCodigo((c) => ({ ...c, codigo: "", nome: "" }));
+      qc.invalidateQueries({ queryKey: ["budget-catalog", activeTenant.id] });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao incluir");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const submitBlock = async () => {
     if (!activeTenant || !blockTarget) return;
@@ -453,17 +500,23 @@ function Content() {
     }
   };
 
+  // O2-35 — função, subfunção e fonte saem do catálogo (com busca); a natureza
+  // é composta pelas quatro partes. Os três restantes seguem livres porque não
+  // têm lista nacional: unidade, programa e ação são definidos na LOA de cada
+  // ente.
   const campos: Array<[keyof typeof form, string]> = [
     ["exercicio", "Exercício"],
     ["unidade_orcamentaria", "Unidade orçamentária"],
-    ["funcao", "Função"],
-    ["subfuncao", "Subfunção"],
     ["programa", "Programa"],
     ["acao", "Ação"],
-    ["natureza_despesa", "Natureza da despesa"],
-    ["fonte_recurso", "Fonte de recurso"],
     ["valor_orcado", "Valor orçado"],
   ];
+  const classificacoes: Array<[keyof typeof form, TipoClassificacao, string]> =
+    [
+      ["funcao", "funcao", "Função"],
+      ["subfuncao", "subfuncao", "Subfunção"],
+      ["fonte_recurso", "fonte_recurso", "Fonte de recurso"],
+    ];
 
   return (
     <section className="space-y-6">
@@ -490,6 +543,9 @@ function Content() {
             </Button>
             <Button variant="outline" onClick={() => setOpen(true)}>
               <Plus className="size-4" /> Nova dotação
+            </Button>
+            <Button variant="outline" onClick={() => setCatalogoOpen(true)}>
+              <ListPlus className="size-4" /> Código do catálogo
             </Button>
           </div>
         )}
@@ -903,15 +959,12 @@ function Content() {
                 }
               />
             </div>
-            <div>
-              <Label>Fonte de recurso</Label>
-              <Input
-                value={quota.fonte_recurso}
-                onChange={(e) =>
-                  setQuota((q) => ({ ...q, fonte_recurso: e.target.value }))
-                }
-              />
-            </div>
+            <SelectClassificacao
+              tipo="fonte_recurso"
+              label="Fonte de recurso"
+              value={quota.fonte_recurso}
+              onChange={(c) => setQuota((q) => ({ ...q, fonte_recurso: c }))}
+            />
             <div className="col-span-2">
               <Label>Valor programado</Label>
               <Input
@@ -953,10 +1006,107 @@ function Content() {
                 />
               </div>
             ))}
+            {classificacoes.map(([k, tipo, label]) => (
+              <SelectClassificacao
+                key={k}
+                tipo={tipo}
+                label={label}
+                value={form[k]}
+                onChange={(codigo) => set(k, codigo)}
+              />
+            ))}
+            <div className="sm:col-span-2">
+              <ComporNaturezaDespesa
+                value={form.natureza_despesa}
+                onChange={(codigo) => set("natureza_despesa", codigo)}
+              />
+            </div>
           </div>
           <DialogFooter>
             <Button onClick={submit} disabled={busy}>
               Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={catalogoOpen} onOpenChange={setCatalogoOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Código próprio do ente</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              O catálogo que acompanha o sistema é de referência (Portaria MOG
+              42/1999, Portaria 163/2001 e Portaria Conjunta STN/SOF 20/2021).
+              Se o seu Tribunal de Contas exige outro código, cadastre-o aqui —
+              ele passa a aparecer na lista, marcado como “do ente”.
+            </p>
+            <div>
+              <Label>Nível</Label>
+              <Select
+                value={novoCodigo.tipo}
+                onValueChange={(v) => setNovoCodigo((c) => ({ ...c, tipo: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="fonte_recurso">
+                    Fonte de recurso
+                  </SelectItem>
+                  <SelectItem value="funcao">Função</SelectItem>
+                  <SelectItem value="subfuncao">Subfunção</SelectItem>
+                  <SelectItem value="natureza_categoria">
+                    Natureza — categoria econômica
+                  </SelectItem>
+                  <SelectItem value="natureza_grupo">
+                    Natureza — grupo
+                  </SelectItem>
+                  <SelectItem value="natureza_modalidade">
+                    Natureza — modalidade de aplicação
+                  </SelectItem>
+                  <SelectItem value="natureza_elemento">
+                    Natureza — elemento
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <Label>Código</Label>
+                <Input
+                  value={novoCodigo.codigo}
+                  onChange={(e) =>
+                    setNovoCodigo((c) => ({ ...c, codigo: e.target.value }))
+                  }
+                />
+              </div>
+              <div className="col-span-2">
+                <Label>Nome</Label>
+                <Input
+                  value={novoCodigo.nome}
+                  onChange={(e) =>
+                    setNovoCodigo((c) => ({ ...c, nome: e.target.value }))
+                  }
+                />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Cadastrar um código que já existe no padrão nacional substitui o
+              nome dele, para este ente.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={submitCodigo}
+              disabled={
+                busy ||
+                novoCodigo.codigo.trim().length < 1 ||
+                novoCodigo.nome.trim().length < 2
+              }
+            >
+              Incluir no catálogo
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1215,18 +1365,14 @@ function Content() {
               </Select>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label>Fonte de recurso</Label>
-                <Input
-                  value={suppForm.fonte_recurso}
-                  onChange={(e) =>
-                    setSuppForm((f) => ({
-                      ...f,
-                      fonte_recurso: e.target.value,
-                    }))
-                  }
-                />
-              </div>
+              <SelectClassificacao
+                tipo="fonte_recurso"
+                label="Fonte de recurso"
+                value={suppForm.fonte_recurso}
+                onChange={(c) =>
+                  setSuppForm((f) => ({ ...f, fonte_recurso: c }))
+                }
+              />
               <div>
                 <Label>Valor</Label>
                 <Input

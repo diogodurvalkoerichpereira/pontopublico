@@ -25,6 +25,7 @@ import {
 } from "@/lib/revenue.functions";
 
 import { AppShell } from "@/components/AppShell";
+import { SelectClassificacao } from "@/components/SelectClassificacao";
 import { SelectContaTesouraria } from "@/components/SelectContaTesouraria";
 
 export const Route = createFileRoute("/receitas")({ component: Page });
@@ -403,13 +404,12 @@ function Content() {
                 />
               </div>
             </div>
-            <div>
-              <Label>Fonte de recurso</Label>
-              <Input
-                value={form.fonte_recurso}
-                onChange={(e) => set("fonte_recurso", e.target.value)}
-              />
-            </div>
+            <SelectClassificacao
+              tipo="fonte_recurso"
+              label="Fonte de recurso"
+              value={form.fonte_recurso}
+              onChange={(c) => set("fonte_recurso", c)}
+            />
             <div>
               <Label>Descrição</Label>
               <Input
