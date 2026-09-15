@@ -1822,6 +1822,31 @@ limites (`sum(valor_acrescimo)` e `sum(valor_total)`) passam a filtrar `status='
 motivo. Seis casos novos em `sprint-contract-amendments` e dois em `sprint-contract-items`,
 com quatro mutações verificadas.
 
+**O0-17 — `/atas` caía em produção: a resposta lida no formato errado. ✅**
+A tela estourava `(...).filter is not a function` e o React derrubava a página inteira —
+nada de ata era acessível. `getProcurementProcesses` devolve `{ processes, canManage }`
+(um **objeto**), e `/atas` fazia `(processData ?? []).filter(...)`, lendo o objeto como
+lista.
+
+**Duas defesas falharam juntas**, e é isso que torna a classe perigosa: (1) `?? []` cobre
+`null`/`undefined`, **não** formato errado — o objeto não é nulo, passa direto e estoura no
+`.filter`; (2) o `as Array<…>` **calou o TypeScript** exatamente onde ele teria avisado, e
+por isso `npm run typecheck`, o build e os 431 testes ficavam todos verdes enquanto a
+página quebrava no navegador do usuário. Nenhum teste de servidor pega isso: a função de
+servidor está correta. O defeito mora na costura entre as duas pontas, que era onde não
+havia rede nenhuma.
+
+Corrigido para `processData?.processes ?? []` e varrida a aplicação inteira: **nenhuma
+outra ocorrência** — as 8 primeiras suspeitas eram o padrão correto (`dados?.dados ?? []`).
+Nova rede permanente `tests/response-shape-coverage.test.mjs` (terceiro irmão de
+`authorization-coverage` e `ui-wiring-coverage`): lê por AST a forma de retorno de cada
+`createServerFn` (293 objeto, 9 array, 11 indeterminadas de 313) e **falha o CI** quando
+uma variável de `useQuery` vinda de função que devolve objeto é usada como lista. Tem um
+segundo caso que guarda o próprio detector — se uma refatoração fizer a leitura do retorno
+parar de funcionar, o primeiro teste ficaria verde sem checar nada. Verificado por mutação:
+reintroduzir o defeito derruba com o nome do arquivo e da função; desarmar o detector
+derruba o segundo.
+
 ### Onda 5 — Apoio, controle e transparência (10-14 sem)
 
 Protocolo e processo eletrônico com ICP-Brasil · e-SIC/LAI · controle interno ·

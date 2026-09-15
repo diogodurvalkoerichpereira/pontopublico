@@ -153,16 +153,14 @@ function Content() {
   const registrations = (data?.registrations ?? []) as Registration[];
   const items = (data?.items ?? []) as Item[];
   const canManage = data?.canManage ?? false;
+  // getProcurementProcesses devolve { processes, canManage } — um OBJETO. Ler
+  // `processData` como lista e chamar `.filter` estourava
+  // "(...).filter is not a function" e derrubava a tela inteira. O `?? []` não
+  // protegia: ele cobre nulo, não formato errado, e o `as Array<...>` calava o
+  // TypeScript justamente onde ele teria avisado.
   const homologadas = useMemo(
     () =>
-      (
-        (processData ?? []) as Array<{
-          id: string;
-          numero: string;
-          ano: number;
-          status: string;
-        }>
-      ).filter((p) => p.status === "homologada"),
+      (processData?.processes ?? []).filter((p) => p.status === "homologada"),
     [processData],
   );
 
