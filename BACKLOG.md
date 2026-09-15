@@ -329,17 +329,19 @@ verificado por mutação.
 
 ### O1-02d — UI de previdência (RPPS) ✅
 
-P1 · feito (parcial). Rota `rh.previdencia.tsx` (menu RH → Previdência,
+P1 · feito. Rota `rh.previdencia.tsx` (menu RH → Previdência,
 `people.read`): lista/cria/edita regimes (RPPS/RGPS) e mapeia as rubricas de
 contribuição por regime, consumindo `getPensionWorkspace` (agregador novo:
 regimes + catálogo de rubricas ativas + mapa regime→rubricas), `savePensionRegime`
 e `setPensionRegimeRubrics`. O agregador tem teste de comportamento
-(`tests/sprint-pension-workspace.test.mjs`) verificado por mutação. **Ainda
-pendente nesta linha** (registrado, sem bloquear): seletor de regime em
-`rh.pessoas.tsx` (gravar `employment_links.pension_regime_id` pela tela) e a tela
-do write-path de tabelas fiscais do ente (O1-02a já tem back-end). Eventual
-`base_code='rpps'` (widen do CHECK de `payroll_rubric_incidences`) se uma rubrica
-de RPPS precisar compor base própria.
+(`tests/sprint-pension-workspace.test.mjs`) verificado por mutação. As duas
+pendências desta linha fecharam: `rh.pessoas.tsx` já grava
+`employment_links.pension_regime_id` pelo seletor "Regime previdenciário" no
+vínculo, e `rh.tabelas-fiscais.tsx` dá tela ao write-path de tabelas fiscais do
+ente (O1-02a) — rascunho → versão publicada, consumindo `getFiscalTables`/
+`saveFiscalTable`/`saveFiscalTableVersion`. Eventual `base_code='rpps'` (widen do
+CHECK de `payroll_rubric_incidences`) se uma rubrica de RPPS precisar compor base
+própria.
 
 ### ✅ O1-03a — Registro de ponto imutável e encadeado (base probatória)
 
@@ -393,7 +395,7 @@ feriado vira extra). `getTimeApuracao` puxa a jornada semanal do vínculo
 `weekly_hours` distribuído seg-sex (`defaultExpectedByWeekday`). Sem migration.
 Teste `tests/sprint-time-apuracao.test.mjs`, verificado por mutação.
 
-### O1-03f — Banco de horas persistente ✅ (escala diária segue pendente)
+### O1-03f — Banco de horas persistente ✅
 
 P1. **Banco de horas feito.** `time_bank_entries` (migration
 `20260909590000_o1_03f_time_bank.sql`) é o razão do saldo do ponto por vínculo e
@@ -424,8 +426,23 @@ o sábado voltar a previsto 0 e o extra reaparecer).
 manual usa (DRY). A tela **/rh/apuracao** ganhou o botão "Lançar no banco" por
 servidor. Teste `tests/sprint-bank-from-apuracao.test.mjs` verificado por mutação
 (gravar 0 em vez do saldo apurado derruba).
-**Pendente nesta linha** (registrado): escala **rotativa** (ciclo de N dias) e
-aposentar a leitura user-scoped de `time_entries` em favor das marcações multi-tenant.
+**Escala rotativa (ciclo de N dias) — feito.** `employment_rotating_schedules`
+(migration `20260915150000_o1_03f_rotating_schedule.sql`) guarda, por vínculo, um
+ciclo de N dias ancorado numa data (`cycle_start_date` = dia 0) com os minutos
+previstos de cada dia do ciclo (`minutes_by_day`) — serve turno que não repete por
+semana calendário (ex.: 12x36 = ciclo de 2 dias), o refinamento que a escala
+semanal (acima) deixava para depois. `expectedMinutesForRotating` (`time-mirror.ts`,
+pura) indexa o dia do ciclo pela distância em dias desde a âncora (módulo sempre
+não-negativo, funciona para data anterior à âncora); `apurarJornada` a consulta com
+**precedência sobre a semanal e o padrão** quando configurada. `getEmploymentRotatingSchedules`/
+`saveEmploymentRotatingSchedule`/`deleteEmploymentRotatingSchedule`
+(`work-schedule.functions.ts`, `people.read`/`people.manage`) e a seção "Escala
+rotativa" na tela **/rh/jornadas** (âncora + N campos de minuto + remover). Teste
+`tests/sprint-rotating-schedule.test.mjs` verificado por mutação (ignorar
+`rotatingSchedule` faz o dia do ciclo cair na semanal — derruba).
+**Pendente nesta linha** (registrado, sem bloquear): aposentar a leitura
+user-scoped de `time_entries` em favor das marcações multi-tenant
+(`time_clock_punches`).
 
 **O1-03h — Posição atual do banco de horas por servidor ✅.** `getTimeBankBalances`
 (`time-bank.functions.ts`) devolve, por vínculo, o **saldo acumulado da última competência

@@ -113,6 +113,12 @@ export interface ApuracaoConfig {
   expectedMinutesByWeekday: number[];
   /** Tolerância legal por dia (CLT art. 58 §1). Desvio até aqui é desconsiderado. */
   toleranceMinutesPerDay: number;
+  /**
+   * Escala rotativa (ciclo de N dias, O1-03f parte 3): quando presente, tem
+   * PRECEDÊNCIA sobre `expectedMinutesByWeekday` — o previsto do dia vem do ciclo,
+   * não do dia da semana (turno em ciclo não repete por semana calendário).
+   */
+  rotatingSchedule?: RotatingScheduleRow;
 }
 
 export interface ApuracaoDay {
@@ -161,7 +167,9 @@ export function apurarJornada(
     const weekday = weekdayOf(day.date);
     const expectedMinutes = day.isHoliday
       ? 0
-      : (config.expectedMinutesByWeekday[weekday] ?? 0);
+      : config.rotatingSchedule
+        ? expectedMinutesForRotating(config.rotatingSchedule, day.date)
+        : (config.expectedMinutesByWeekday[weekday] ?? 0);
     const deviation = day.workedMinutes - expectedMinutes;
     const withinTolerance =
       Math.abs(deviation) <= config.toleranceMinutesPerDay;
@@ -225,4 +233,36 @@ export function expectedByWeekdayFor(
     Number(schedule.minutes_fri),
     Number(schedule.minutes_sat),
   ];
+}
+
+/**
+ * Escala rotativa (ciclo de N dias, O1-03f parte 3): `cycle_start_date` ancora o
+ * dia 0 do ciclo; `minutes_by_day[i]` é o previsto do i-ésimo dia do ciclo. Serve
+ * turno que não repete por semana calendário (ex.: 12x36 = ciclo de 2 dias).
+ */
+export interface RotatingScheduleRow {
+  cycle_start_date: string; // YYYY-MM-DD
+  minutes_by_day: number[];
+}
+
+/** Dia-calendário (UTC, meia-noite) do dia `YYYY-MM-DD`, em dias desde a época. */
+function dayNumber(date: string): number {
+  return Math.floor(new Date(`${date}T00:00:00Z`).getTime() / 86_400_000);
+}
+
+/**
+ * Previsto (minutos) do dia `date` pela escala rotativa: a distância em dias
+ * desde `cycle_start_date`, módulo o comprimento do ciclo, indexa `minutes_by_day`.
+ * Data anterior à âncora funciona igual (módulo sempre não-negativo) — o ciclo é
+ * infinito nos dois sentidos a partir da âncora.
+ */
+export function expectedMinutesForRotating(
+  schedule: RotatingScheduleRow,
+  date: string,
+): number {
+  const n = schedule.minutes_by_day.length;
+  if (n === 0) return 0;
+  const diff = dayNumber(date) - dayNumber(schedule.cycle_start_date);
+  const idx = ((diff % n) + n) % n;
+  return Number(schedule.minutes_by_day[idx] ?? 0);
 }

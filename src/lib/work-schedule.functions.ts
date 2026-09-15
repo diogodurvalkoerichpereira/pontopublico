@@ -1,7 +1,8 @@
-// O1-03f — Escala semanal customizada por vinculo (jornada diaria). Guarda os
-// minutos previstos de cada dia da semana (domingo..sabado) por vinculo, que a
-// apuracao (time-clock.functions) consome. Sem escala, a apuracao cai no padrao
-// por `weekly_hours` (seg-sex). Reusa people.read / people.manage.
+// O1-03f — Escala semanal customizada por vinculo (jornada diaria), e a escala
+// ROTATIVA (ciclo de N dias, parte 3, mais abaixo). Guarda os minutos previstos de
+// cada dia da semana (domingo..sabado) por vinculo, que a apuracao
+// (time-clock.functions) consome. Sem escala, a apuracao cai no padrao por
+// `weekly_hours` (seg-sex). Reusa people.read / people.manage.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { parseInput } from "./input-validation";
@@ -131,6 +132,167 @@ export const saveEmploymentWeeklySchedule = createServerFn({ method: "POST" })
         resource: "employment_weekly_schedules",
         recordId: data.employment_link_id,
         after: { minutes: data.minutes },
+      });
+      return { employment_link_id: data.employment_link_id };
+    });
+  });
+
+// O1-03f (parte 3) — Escala ROTATIVA (ciclo de N dias): serve turno que não repete
+// por semana calendário (ex.: 12x36). Tem precedência sobre a escala semanal e o
+// padrão por `weekly_hours` na apuração (time-clock.functions.ts).
+
+type RotatingRow = {
+  employment_link_id: string;
+  cycle_start_date: string;
+  cycle_length_days: number;
+  minutes_by_day: number[];
+};
+
+/** Vínculos ativos do ente e a escala rotativa configurada (quando houver), para
+ *  edição. Guard people.read. */
+export const getEmploymentRotatingSchedules = createServerFn({
+  method: "POST",
+})
+  .middleware([requireAuth])
+  .validator((data: unknown) => parseInput(TenantInput, data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "people.read");
+    const links = await query<{
+      id: string;
+      registration_number: string | null;
+      full_name: string;
+    }>(
+      `select l.id, l.registration_number, p.full_name
+       from public.employment_links l
+       join public.persons p on p.id = l.person_id
+       where l.tenant_id = $1 and l.status = 'ativo'
+       order by p.full_name`,
+      [data.tenant_id],
+    );
+    const rows = await query<RotatingRow>(
+      `select employment_link_id, cycle_start_date::text, cycle_length_days,
+              minutes_by_day
+       from public.employment_rotating_schedules
+       where tenant_id = $1`,
+      [data.tenant_id],
+    );
+    const byLink = new Map(rows.map((r) => [r.employment_link_id, r]));
+    return {
+      canManage: access.permissions.includes("people.manage"),
+      servidores: links.map((link) => {
+        const row = byLink.get(link.id);
+        return {
+          employment_link_id: link.id,
+          registration_number: link.registration_number,
+          full_name: link.full_name,
+          rotating: row
+            ? {
+                cycle_start_date: row.cycle_start_date,
+                cycle_length_days: row.cycle_length_days,
+                minutes_by_day: row.minutes_by_day.map(Number),
+              }
+            : null,
+        };
+      }),
+    };
+  });
+
+const SaveRotatingInput = z.object({
+  tenant_id: z.string().uuid(),
+  employment_link_id: z.string().uuid(),
+  cycle_start_date: z.string().date(),
+  // Minutos previstos por dia do ciclo, índice 0 = dia da âncora.
+  minutes_by_day: z.array(z.number().int().min(0).max(1440)).min(1).max(60),
+});
+
+/** Salva (upsert) a escala rotativa de um vínculo. Guard people.manage. */
+export const saveEmploymentRotatingSchedule = createServerFn({
+  method: "POST",
+})
+  .middleware([requireAuth])
+  .validator((data: unknown) => parseInput(SaveRotatingInput, data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "people.manage");
+    return withTransaction(async (client) => {
+      const link = (
+        await client.query<{ id: string }>(
+          "select id from public.employment_links where id=$1 and tenant_id=$2",
+          [data.employment_link_id, data.tenant_id],
+        )
+      ).rows[0];
+      if (!link) throw new Error("Vínculo inválido para esta entidade");
+      await client.query(
+        `insert into public.employment_rotating_schedules
+           (tenant_id, employment_link_id, cycle_start_date, cycle_length_days,
+            minutes_by_day, created_by)
+         values ($1,$2,$3,$4,$5,$6)
+         on conflict (tenant_id, employment_link_id) do update
+           set cycle_start_date = excluded.cycle_start_date,
+               cycle_length_days = excluded.cycle_length_days,
+               minutes_by_day = excluded.minutes_by_day,
+               updated_at = now()`,
+        [
+          data.tenant_id,
+          data.employment_link_id,
+          data.cycle_start_date,
+          data.minutes_by_day.length,
+          data.minutes_by_day,
+          context.userId,
+        ],
+      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "save_rotating_schedule",
+        resource: "employment_rotating_schedules",
+        recordId: data.employment_link_id,
+        after: {
+          cycle_start_date: data.cycle_start_date,
+          minutes_by_day: data.minutes_by_day,
+        },
+      });
+      return { employment_link_id: data.employment_link_id };
+    });
+  });
+
+const DeleteRotatingInput = z.object({
+  tenant_id: z.string().uuid(),
+  employment_link_id: z.string().uuid(),
+});
+
+/** Remove a escala rotativa do vínculo (volta a valer a semanal/padrão). Guard
+ *  people.manage. */
+export const deleteEmploymentRotatingSchedule = createServerFn({
+  method: "POST",
+})
+  .middleware([requireAuth])
+  .validator((data: unknown) => parseInput(DeleteRotatingInput, data))
+  .handler(async ({ data, context }) => {
+    const access = await loadTenantAccess(context.userId, data.tenant_id);
+    requireTenantPermission(access, "people.manage");
+    return withTransaction(async (client) => {
+      const existing = (
+        await client.query<{ id: string }>(
+          `select id from public.employment_rotating_schedules
+           where tenant_id=$1 and employment_link_id=$2 for update`,
+          [data.tenant_id, data.employment_link_id],
+        )
+      ).rows[0];
+      if (!existing)
+        throw new Error("Este vínculo não tem escala rotativa configurada");
+      await client.query(
+        `delete from public.employment_rotating_schedules
+         where tenant_id=$1 and employment_link_id=$2`,
+        [data.tenant_id, data.employment_link_id],
+      );
+      await recordAudit(client, {
+        tenantId: data.tenant_id,
+        actorId: context.userId,
+        action: "delete_rotating_schedule",
+        resource: "employment_rotating_schedules",
+        recordId: data.employment_link_id,
       });
       return { employment_link_id: data.employment_link_id };
     });

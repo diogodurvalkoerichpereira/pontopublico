@@ -21,6 +21,7 @@ import {
   type MirrorPunch,
   type HolidayRule,
   type WeeklyScheduleRow,
+  type RotatingScheduleRow,
 } from "./time-mirror";
 
 const RecordInput = z.object({
@@ -361,6 +362,15 @@ async function loadApuracao(
      where tenant_id=$1 and employment_link_id=$2`,
     [tenantId, employmentLinkId],
   );
+  const rotating = await queryOne<{
+    cycle_start_date: string;
+    minutes_by_day: number[];
+  }>(
+    `select cycle_start_date::text, minutes_by_day
+     from public.employment_rotating_schedules
+     where tenant_id=$1 and employment_link_id=$2`,
+    [tenantId, employmentLinkId],
+  );
   const { days } = buildTimeMirror(punches, timeZone, holidays);
   const apuracao = apurarJornada(days, {
     expectedMinutesByWeekday: expectedByWeekdayFor(
@@ -368,6 +378,12 @@ async function loadApuracao(
       Number(link.weekly_hours ?? 0),
     ),
     toleranceMinutesPerDay: toleranceMinutes,
+    rotatingSchedule: rotating
+      ? {
+          cycle_start_date: rotating.cycle_start_date,
+          minutes_by_day: rotating.minutes_by_day.map(Number),
+        }
+      : undefined,
   });
   return { apuracao, baseSalary: Number(link.base_salary ?? 0) };
 }
@@ -599,6 +615,27 @@ export const getApuracaoResumoMensal = createServerFn({ method: "POST" })
     const scheduleByLink = new Map(
       scheduleRows.map((r) => [r.employment_link_id, r]),
     );
+    // Escalas rotativas do ente, de uma vez, indexadas por vinculo — precedencia
+    // sobre a semanal.
+    const rotatingRows = await query<{
+      employment_link_id: string;
+      cycle_start_date: string;
+      minutes_by_day: number[];
+    }>(
+      `select employment_link_id, cycle_start_date::text, minutes_by_day
+       from public.employment_rotating_schedules
+       where tenant_id = $1`,
+      [data.tenant_id],
+    );
+    const rotatingByLink = new Map<string, RotatingScheduleRow>(
+      rotatingRows.map((r) => [
+        r.employment_link_id,
+        {
+          cycle_start_date: r.cycle_start_date,
+          minutes_by_day: r.minutes_by_day.map(Number),
+        },
+      ]),
+    );
 
     const servidores = links.map((link) => {
       const punches = punchesByLink.get(link.id) ?? [];
@@ -609,6 +646,7 @@ export const getApuracaoResumoMensal = createServerFn({ method: "POST" })
           Number(link.weekly_hours ?? 0),
         ),
         toleranceMinutesPerDay: data.tolerance_minutes,
+        rotatingSchedule: rotatingByLink.get(link.id),
       });
       return {
         employment_link_id: link.id,
