@@ -25,6 +25,7 @@ import {
 } from "@/lib/revenue.functions";
 
 import { AppShell } from "@/components/AppShell";
+import { SelectContaTesouraria } from "@/components/SelectContaTesouraria";
 
 export const Route = createFileRoute("/receitas")({ component: Page });
 
@@ -81,6 +82,9 @@ function Content() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [collectTarget, setCollectTarget] = useState<Revenue | null>(null);
   const [collectForm, setCollectForm] = useState({ valor: "", historico: "" });
+  // O4-18 — arrecadar exige dizer em que conta o dinheiro entrou: é o que credita
+  // a tesouraria e faz o caixa acompanhar a receita.
+  const [contaArrecadacao, setContaArrecadacao] = useState("");
   const [form, setForm] = useState({
     exercicio: String(new Date().getFullYear()),
     natureza_receita: "",
@@ -168,19 +172,20 @@ function Content() {
   };
 
   const submitCollect = async () => {
-    if (!activeTenant || !collectTarget) return;
+    if (!activeTenant || !collectTarget || !contaArrecadacao) return;
     setBusy(true);
     try {
       await collect({
         data: {
           tenant_id: activeTenant.id,
           revenue_id: collectTarget.id,
+          account_id: contaArrecadacao,
           data_arrecadacao: hoje(),
           valor: Number(collectForm.valor),
           historico: collectForm.historico.trim(),
         },
       });
-      toast.success("Arrecadação registrada");
+      toast.success("Arrecadação registrada e creditada na conta");
       setCollectTarget(null);
       setCollectForm({ valor: "", historico: "" });
       refresh();
@@ -440,6 +445,10 @@ function Content() {
             <DialogTitle>Arrecadar — {collectTarget?.descricao}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
+            <SelectContaTesouraria
+              value={contaArrecadacao}
+              onChange={setContaArrecadacao}
+            />
             <div>
               <Label>Valor arrecadado</Label>
               <Input
@@ -464,7 +473,7 @@ function Content() {
           <DialogFooter>
             <Button
               onClick={submitCollect}
-              disabled={busy || !collectForm.valor}
+              disabled={busy || !collectForm.valor || !contaArrecadacao}
             >
               Registrar arrecadação
             </Button>

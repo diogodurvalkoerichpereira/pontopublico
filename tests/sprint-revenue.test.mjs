@@ -19,6 +19,7 @@ import { createTestDb } from "./helpers/pglite.mjs";
 let db;
 let tenantId;
 let userId;
+let contaId;
 const fn = {};
 
 const dir = mkdtempSync(join(tmpdir(), "revenue-test-"));
@@ -107,6 +108,13 @@ before(async () => {
     [userId, `a-${userId}@t.local`],
   );
   await db.query("insert into public.profiles (id) values ($1)", [userId]);
+  // O4-18 — arrecadar credita uma conta de tesouraria: o teste precisa de uma.
+  contaId = randomUUID();
+  await db.query(
+    `insert into public.treasury_accounts (id, tenant_id, nome, tipo, status)
+     values ($1,$2,'Conta Unica','banco','ativa')`,
+    [contaId, tenantId],
+  );
   Object.assign(fn, await bundle("src/lib/revenue.functions.ts", "r.mjs"));
   revenueId = (
     await fn.saveBudgetRevenue({
@@ -135,6 +143,7 @@ test("a arrecadação incrementa o valor arrecadado e reduz o saldo", async () =
     data: {
       tenant_id: tenantId,
       revenue_id: revenueId,
+      account_id: contaId,
       data_arrecadacao: "2026-03-10",
       valor: 30000,
       historico: "Arrecadacao ISS marco",
@@ -145,6 +154,7 @@ test("a arrecadação incrementa o valor arrecadado e reduz o saldo", async () =
     data: {
       tenant_id: tenantId,
       revenue_id: revenueId,
+      account_id: contaId,
       data_arrecadacao: "2026-04-10",
       valor: 20000,
       historico: "Arrecadacao ISS abril",
@@ -178,4 +188,147 @@ test("previsão não pode cair abaixo do já arrecadado", async () => {
     }),
     /menor que o já arrecadado/,
   );
+});
+
+// --- O4-18: arrecadar toca o caixa ----------------------------------------
+//
+// Antes, arrecadar só incrementava `valor_arrecadado`. O dinheiro não entrava
+// em conta nenhuma: o caixa ficava parado em zero enquanto o relatório mostrava
+// receita, e toda ordem bancária era recusada por saldo insuficiente — porque o
+// dinheiro arrecadado nunca chegou à conta. Os três sintomas tinham esta causa.
+
+const saldoDaConta = async () =>
+  Number(
+    (
+      await db.query(
+        "select saldo_atual::text as v from public.treasury_accounts where id=$1",
+        [contaId],
+      )
+    ).rows[0].v,
+  );
+
+test("arrecadar credita a conta de tesouraria e registra o movimento", async () => {
+  const antes = await saldoDaConta();
+  const r = await fn.recordRevenueCollection({
+    data: {
+      tenant_id: tenantId,
+      revenue_id: revenueId,
+      account_id: contaId,
+      data_arrecadacao: "2026-05-10",
+      valor: 1500,
+      historico: "Arrecadacao que entra no caixa",
+    },
+    context: ctx(),
+  });
+
+  assert.equal(await saldoDaConta(), antes + 1500, "o caixa acompanha");
+  assert.equal(r.saldo_apos, antes + 1500);
+
+  const mov = (
+    await db.query(
+      `select tipo, valor::text as valor, saldo_apos::text as saldo_apos
+       from public.treasury_movements
+       where tenant_id=$1 and account_id=$2
+       order by created_at desc limit 1`,
+      [tenantId, contaId],
+    )
+  ).rows[0];
+  assert.equal(mov.tipo, "ingresso");
+  assert.equal(Number(mov.valor), 1500);
+  assert.equal(Number(mov.saldo_apos), antes + 1500);
+});
+
+test("a arrecadacao fica ligada a conta que recebeu", async () => {
+  // Sem esta coluna não há como conferir depois em qual conta cada arrecadação
+  // entrou — a conciliação bancária ficaria sem contraparte.
+  const linha = (
+    await db.query(
+      `select account_id from public.revenue_collections
+       where tenant_id=$1 order by created_at desc limit 1`,
+      [tenantId],
+    )
+  ).rows[0];
+  assert.equal(linha.account_id, contaId);
+});
+
+test("conta encerrada nao recebe arrecadacao", async () => {
+  const encerrada = randomUUID();
+  await db.query(
+    `insert into public.treasury_accounts (id, tenant_id, nome, tipo, status)
+     values ($1,$2,'Conta encerrada','banco','encerrada')`,
+    [encerrada, tenantId],
+  );
+  await assert.rejects(
+    fn.recordRevenueCollection({
+      data: {
+        tenant_id: tenantId,
+        revenue_id: revenueId,
+        account_id: encerrada,
+        data_arrecadacao: "2026-05-11",
+        valor: 10,
+        historico: "Nao deve entrar",
+      },
+      context: ctx(),
+    }),
+    /Conta encerrada não movimenta/,
+  );
+});
+
+test("conta inexistente barra a arrecadacao antes de gravar qualquer coisa", async () => {
+  // A chave estrangeira recusa a conta inexistente já no insert, antes do
+  // incremento do arrecadado: nada fica gravado.
+  //
+  // NOTA sobre o que este teste NÃO prova: o stub de `withTransaction` destes
+  // testes não faz ROLLBACK (roda tudo no mesmo cliente do PGlite). A
+  // atomicidade real — desfazer o incremento quando a falha vem DEPOIS dele,
+  // como no caso da conta encerrada — é do `withTransaction` de produção, não
+  // deste arranjo. Aqui a garantia é de ordem: a conta é validada antes.
+  const antes = Number(
+    (
+      await db.query(
+        "select valor_arrecadado::text as v from public.budget_revenues where id=$1",
+        [revenueId],
+      )
+    ).rows[0].v,
+  );
+  const colecoesAntes = Number(
+    (
+      await db.query(
+        "select count(*)::text as n from public.revenue_collections where tenant_id=$1",
+        [tenantId],
+      )
+    ).rows[0].n,
+  );
+  await assert.rejects(
+    fn.recordRevenueCollection({
+      data: {
+        tenant_id: tenantId,
+        revenue_id: revenueId,
+        account_id: randomUUID(),
+        data_arrecadacao: "2026-05-12",
+        valor: 999,
+        historico: "Conta inexistente",
+      },
+      context: ctx(),
+    }),
+    /account_id_fkey|Conta não encontrada|não existe/,
+  );
+  const depois = Number(
+    (
+      await db.query(
+        "select valor_arrecadado::text as v from public.budget_revenues where id=$1",
+        [revenueId],
+      )
+    ).rows[0].v,
+  );
+  const colecoesDepois = Number(
+    (
+      await db.query(
+        "select count(*)::text as n from public.revenue_collections where tenant_id=$1",
+        [tenantId],
+      )
+    ).rows[0].n,
+  );
+  assert.equal(depois, antes, "o arrecadado nao subiu");
+  assert.equal(colecoesDepois, colecoesAntes, "nenhuma arrecadacao gravada");
 });

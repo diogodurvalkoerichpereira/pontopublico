@@ -19,6 +19,7 @@ import { createTestDb } from "./helpers/pglite.mjs";
 let db;
 let tenantId;
 let userId;
+let contaId;
 const fn = {};
 
 const dir = mkdtempSync(join(tmpdir(), "taxes-test-"));
@@ -120,6 +121,13 @@ before(async () => {
     [userId, `a-${userId}@t.local`],
   );
   await db.query("insert into public.profiles (id) values ($1)", [userId]);
+  // O4-18 — arrecadar credita uma conta de tesouraria: o teste precisa de uma.
+  contaId = randomUUID();
+  await db.query(
+    `insert into public.treasury_accounts (id, tenant_id, nome, tipo, status)
+     values ($1,$2,'Conta Unica','banco','ativa')`,
+    [contaId, tenantId],
+  );
   Object.assign(fn, await bundle("src/lib/taxes.functions.ts", "t.mjs"));
 });
 
@@ -135,6 +143,7 @@ test("arrecadação reduz o saldo e quita quando zera", async () => {
     data: {
       tenant_id: tenantId,
       credit_id: id,
+      account_id: contaId,
       data_pagamento: "2026-02-10",
       valor: 400,
     },
@@ -146,6 +155,7 @@ test("arrecadação reduz o saldo e quita quando zera", async () => {
     data: {
       tenant_id: tenantId,
       credit_id: id,
+      account_id: contaId,
       data_pagamento: "2026-03-10",
       valor: 600,
     },
@@ -159,6 +169,7 @@ test("arrecadação reduz o saldo e quita quando zera", async () => {
       data: {
         tenant_id: tenantId,
         credit_id: id,
+        account_id: contaId,
         data_pagamento: "2026-04-10",
         valor: 1,
       },
@@ -175,6 +186,7 @@ test("pagamento acima do saldo é recusado", async () => {
       data: {
         tenant_id: tenantId,
         credit_id: id,
+        account_id: contaId,
         data_pagamento: "2026-02-10",
         valor: 501,
       },
@@ -192,6 +204,7 @@ test("inscrição em dívida ativa só de vencido com saldo", async () => {
       data: {
         tenant_id: tenantId,
         credit_id: id,
+        account_id: contaId,
         data_referencia: "2026-03-01",
       },
       context: ctx(),

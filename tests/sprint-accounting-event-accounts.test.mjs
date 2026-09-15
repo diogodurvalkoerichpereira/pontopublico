@@ -130,7 +130,17 @@ after(async () => {
 
 test("lista todos os eventos; grava e atualiza o roteiro (um por evento); recusa evento desconhecido", async () => {
   const antes = await list();
-  assert.equal(antes.roteiros.length, 9); // 4 do O2-06 + 3 da baixa de bem (O3-11c) + 2 da reavaliação (O3-11d)
+  // 4 do O2-06 + 3 da baixa de bem (O3-11c) + 2 da reavaliação (O3-11d)
+  // + 2 da arrecadação (O4-18).
+  assert.equal(antes.roteiros.length, 11);
+  // A arrecadação é a ENTRADA de dinheiro: sem roteiro para ela, a receita
+  // recebida não vira lançamento e os balanços nascem só com a despesa.
+  const codigos = antes.roteiros.map((r) => r.event_code);
+  assert.ok(codigos.includes("arrecadacao"), "arrecadacao listada");
+  assert.ok(
+    codigos.includes("arrecadacao_estorno"),
+    "arrecadacao_estorno listada",
+  );
   assert.ok(antes.roteiros.every((r) => r.configurado === false));
   assert.equal(antes.canManage, true);
 

@@ -34,6 +34,7 @@ import {
 import { getTaxCredits } from "@/lib/taxes.functions";
 
 import { AppShell } from "@/components/AppShell";
+import { SelectContaTesouraria } from "@/components/SelectContaTesouraria";
 
 export const Route = createFileRoute("/parcelamentos")({ component: Page });
 
@@ -95,6 +96,8 @@ function Content() {
 
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [parcelaAPagar, setParcelaAPagar] = useState<Installment | null>(null);
+  const [contaPagamento, setContaPagamento] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [form, setForm] = useState({
     credit_id: "",
@@ -175,17 +178,21 @@ function Content() {
     }
   };
 
-  const doPay = async (i: Installment) => {
-    if (!activeTenant) return;
+  // O4-18 — parcela paga é dinheiro que entrou: sem dizer em que conta, a
+  // tesouraria continuaria sem enxergar a arrecadação por parcelamento.
+  const doPay = async () => {
+    if (!activeTenant || !parcelaAPagar || !contaPagamento) return;
     try {
       await pay({
         data: {
           tenant_id: activeTenant.id,
-          installment_id: i.id,
+          installment_id: parcelaAPagar.id,
+          account_id: contaPagamento,
           data_pagamento: hoje(),
         },
       });
-      toast.success("Parcela paga");
+      toast.success("Parcela paga e creditada na conta");
+      setParcelaAPagar(null);
       refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Falha ao pagar");
@@ -371,7 +378,7 @@ function Content() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => doPay(i)}
+                          onClick={() => setParcelaAPagar(i)}
                         >
                           <HandCoins className="size-4" /> Pagar
                         </Button>
@@ -440,6 +447,30 @@ function Content() {
           <DialogFooter>
             <Button onClick={submitCreate} disabled={busy || !form.credit_id}>
               Parcelar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={Boolean(parcelaAPagar)}
+        onOpenChange={(o) => !o && setParcelaAPagar(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Pagar parcela {parcelaAPagar?.numero} —{" "}
+              {parcelaAPagar ? brl(parcelaAPagar.valor) : ""}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <SelectContaTesouraria
+              value={contaPagamento}
+              onChange={setContaPagamento}
+            />
+          </div>
+          <DialogFooter>
+            <Button onClick={doPay} disabled={!contaPagamento}>
+              Confirmar pagamento
             </Button>
           </DialogFooter>
         </DialogContent>

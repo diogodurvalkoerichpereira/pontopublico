@@ -14,6 +14,8 @@ import {
   loadTenantAccess,
   requireTenantPermission,
 } from "./tenant-access.server";
+import { applyMovement } from "./treasury.server";
+import { contabilizarEvento } from "./accounting.server";
 
 const GetInput = z.object({
   tenant_id: z.string().uuid(),
@@ -193,10 +195,17 @@ export const createInstallmentPlan = createServerFn({ method: "POST" })
 const PayInput = z.object({
   tenant_id: z.string().uuid(),
   installment_id: z.string().uuid(),
+  // A conta que recebeu o dinheiro. Obrigatória pelo mesmo motivo dos outros
+  // dois caminhos de arrecadação: parcela paga é dinheiro que entrou.
+  account_id: z.string().uuid(),
   data_pagamento: z.string().date(),
 });
 
 // Paga uma parcela: arrecada o valor no crédito; a última quita crédito e plano.
+//
+// O4-18 — é o TERCEIRO caminho de arrecadação, e precisa creditar a tesouraria
+// como os outros dois. Deixar só este de fora reabriria o mesmo buraco por uma
+// porta lateral: o ente que cobra por parcelamento veria o caixa parado.
 export const payInstallment = createServerFn({ method: "POST" })
   .middleware([requireAuth])
   .validator((data: unknown) => parseInput(PayInput, data))
@@ -245,8 +254,9 @@ export const payInstallment = createServerFn({ method: "POST" })
       // de crédito inscrito é receita de dívida ativa.
       await client.query(
         `insert into public.tax_payments
-           (id, tenant_id, credit_id, data_pagamento, valor, created_by, origem)
-         values ($1,$2,$3,$4,$5,$6,
+           (id, tenant_id, credit_id, account_id, data_pagamento, valor,
+            created_by, origem)
+         values ($1,$2,$3,$7,$4,$5,$6,
            (select case when status='divida_ativa' then 'divida_ativa' else 'corrente' end
             from public.tax_credits where id=$3 and tenant_id=$2))`,
         [
@@ -256,8 +266,30 @@ export const payInstallment = createServerFn({ method: "POST" })
           data.data_pagamento,
           Number(parcela.valor),
           context.userId,
+          data.account_id,
         ],
       );
+      const saldoConta = await applyMovement(client, {
+        tenantId: data.tenant_id,
+        accountId: data.account_id,
+        tipo: "ingresso",
+        dataMovimento: data.data_pagamento,
+        valor: Number(parcela.valor),
+        historico: "Arrecadação de parcela de parcelamento tributário",
+        transferRef: null,
+        actorId: context.userId,
+      });
+      await contabilizarEvento({
+        client,
+        tenantId: data.tenant_id,
+        exercicio: Number(data.data_pagamento.slice(0, 4)),
+        dataLancamento: data.data_pagamento,
+        eventCode: "arrecadacao",
+        valor: Number(parcela.valor),
+        historico: "Arrecadação de parcela de parcelamento tributário",
+        sourceRef: data.installment_id,
+        actorId: context.userId,
+      });
       const novoPago = Number(
         (Number(credit.valor_pago) + Number(parcela.valor)).toFixed(2),
       );

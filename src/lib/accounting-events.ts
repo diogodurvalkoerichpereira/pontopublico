@@ -3,7 +3,9 @@
 // (servidor) compartilhem a mesma fonte única sem cruzar a barreira cliente/servidor.
 // O3-11c acrescenta os três da baixa de bem (depreciação acumulada,
 // desincorporação do líquido como VPD, alienação como VPA). O3-11d acrescenta os
-// dois da reavaliação (ganho/perda de valor justo, sem saída do acervo).
+// dois da reavaliação (ganho/perda de valor justo, sem saída do acervo). O4-18
+// acrescenta os dois da arrecadação — a entrada de dinheiro, que até então não
+// era escriturada nem entrava em conta de tesouraria.
 export const ACCOUNTING_EVENT_CODES = [
   "empenho",
   "empenho_anulacao",
@@ -14,5 +16,7 @@ export const ACCOUNTING_EVENT_CODES = [
   "baixa_bem_alienacao",
   "reavaliacao_positiva",
   "reavaliacao_negativa",
+  "arrecadacao",
+  "arrecadacao_estorno",
 ] as const;
 export type AccountingEventCode = (typeof ACCOUNTING_EVENT_CODES)[number];

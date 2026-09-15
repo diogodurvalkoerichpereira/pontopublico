@@ -12,6 +12,8 @@ import {
   loadTenantAccess,
   requireTenantPermission,
 } from "./tenant-access.server";
+import { applyMovement } from "./treasury.server";
+import { contabilizarEvento } from "./accounting.server";
 
 const GetInput = z.object({
   tenant_id: z.string().uuid(),
@@ -142,12 +144,22 @@ export const saveBudgetRevenue = createServerFn({ method: "POST" })
 const CollectInput = z.object({
   tenant_id: z.string().uuid(),
   revenue_id: z.string().uuid(),
+  // A conta que recebeu o dinheiro. Obrigatória: arrecadar sem dizer onde
+  // entrou é o que mantinha o caixa desconectado da receita.
+  account_id: z.string().uuid(),
   data_arrecadacao: z.string().date(),
   valor: z.number().positive().max(1_000_000_000_000),
   historico: z.string().trim().min(3).max(500),
 });
 
-// Registra a arrecadação e incrementa o valor_arrecadado da receita (atômico).
+// O4-18 — Arrecadar é um ato só, em três frentes, na MESMA transação:
+//   1. registra a arrecadação e incrementa o `valor_arrecadado` da receita;
+//   2. **credita a conta de tesouraria** (o dinheiro entra no caixa);
+//   3. escritura o evento `arrecadacao`.
+//
+// Antes só o passo 1 acontecia. O caixa ficava parado em zero enquanto os
+// relatórios mostravam receita arrecadada, e toda ordem bancária era recusada
+// por saldo insuficiente — o dinheiro nunca havia chegado à conta.
 export const recordRevenueCollection = createServerFn({ method: "POST" })
   .middleware([requireAuth])
   .validator((data: unknown) => parseInput(CollectInput, data))
@@ -168,12 +180,14 @@ export const recordRevenueCollection = createServerFn({ method: "POST" })
       const id = randomUUID();
       await client.query(
         `insert into public.revenue_collections
-           (id, tenant_id, revenue_id, data_arrecadacao, valor, historico, created_by)
-         values ($1,$2,$3,$4,$5,$6,$7)`,
+           (id, tenant_id, revenue_id, account_id, data_arrecadacao, valor,
+            historico, created_by)
+         values ($1,$2,$3,$4,$5,$6,$7,$8)`,
         [
           id,
           data.tenant_id,
           data.revenue_id,
+          data.account_id,
           data.data_arrecadacao,
           data.valor,
           data.historico,
@@ -186,15 +200,43 @@ export const recordRevenueCollection = createServerFn({ method: "POST" })
          where id=$1 and tenant_id=$2`,
         [data.revenue_id, data.tenant_id, data.valor],
       );
+      const saldo = await applyMovement(client, {
+        tenantId: data.tenant_id,
+        accountId: data.account_id,
+        tipo: "ingresso",
+        dataMovimento: data.data_arrecadacao,
+        valor: data.valor,
+        historico: `Arrecadação: ${data.historico}`,
+        transferRef: null,
+        actorId: context.userId,
+      });
+      // Sem roteiro cadastrado o helper devolve null e nada é escriturado: o
+      // ente que ainda não configurou a contabilidade continua arrecadando.
+      await contabilizarEvento({
+        client,
+        tenantId: data.tenant_id,
+        exercicio: Number(data.data_arrecadacao.slice(0, 4)),
+        dataLancamento: data.data_arrecadacao,
+        eventCode: "arrecadacao",
+        valor: data.valor,
+        historico: `Arrecadação de receita: ${data.historico}`,
+        sourceRef: id,
+        actorId: context.userId,
+      });
       await recordAudit(client, {
         tenantId: data.tenant_id,
         actorId: context.userId,
         action: "collect",
         resource: "revenue_collections",
         recordId: id,
-        after: { revenue_id: data.revenue_id, valor: data.valor },
+        after: {
+          revenue_id: data.revenue_id,
+          account_id: data.account_id,
+          valor: data.valor,
+          saldo_apos: saldo,
+        },
       });
-      return { id };
+      return { id, saldo_apos: saldo };
     });
   });
 

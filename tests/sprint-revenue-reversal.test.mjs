@@ -19,6 +19,7 @@ import { createTestDb } from "./helpers/pglite.mjs";
 let db;
 let tenantId;
 let userId;
+let contaId;
 const fn = {};
 
 const dir = mkdtempSync(join(tmpdir(), "revenue-reversal-test-"));
@@ -109,6 +110,7 @@ const collect = (revenueId, valor) =>
     data: {
       tenant_id: tenantId,
       revenue_id: revenueId,
+      account_id: contaId,
       data_arrecadacao: "2026-03-10",
       valor,
       historico: "Arrecadacao",
@@ -148,6 +150,13 @@ before(async () => {
     [userId, `a-${userId}@t.local`],
   );
   await db.query("insert into public.profiles (id) values ($1)", [userId]);
+  // O4-18 — arrecadar credita uma conta de tesouraria: o teste precisa de uma.
+  contaId = randomUUID();
+  await db.query(
+    `insert into public.treasury_accounts (id, tenant_id, nome, tipo, status)
+     values ($1,$2,'Conta Unica','banco','ativa')`,
+    [contaId, tenantId],
+  );
   Object.assign(fn, await bundle("src/lib/revenue.functions.ts", "rev.mjs"));
 });
 

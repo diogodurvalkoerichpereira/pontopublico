@@ -12,6 +12,8 @@ import {
   loadTenantAccess,
   requireTenantPermission,
 } from "./tenant-access.server";
+import { applyMovement } from "./treasury.server";
+import { contabilizarEvento } from "./accounting.server";
 
 const GetInput = z.object({
   tenant_id: z.string().uuid(),
@@ -248,11 +250,19 @@ export const launchTaxCredit = createServerFn({ method: "POST" })
 const PayInput = z.object({
   tenant_id: z.string().uuid(),
   credit_id: z.string().uuid(),
+  // A conta que recebeu o dinheiro. Obrigatória: arrecadar sem dizer onde
+  // entrou é o que mantinha o caixa desconectado da receita tributária.
+  account_id: z.string().uuid(),
   data_pagamento: z.string().date(),
   valor: z.number().positive().max(1_000_000_000_000),
 });
 
 // Arrecada o tributo: soma ao pago (nunca acima do saldo); quita quando zera.
+//
+// O4-18 — e, na MESMA transação, credita a conta de tesouraria e escritura o
+// evento `arrecadacao`. Antes o crédito era baixado e o dinheiro não entrava em
+// conta nenhuma: o caixa ficava em zero enquanto o relatório mostrava tributo
+// arrecadado, e toda ordem bancária era recusada por saldo insuficiente.
 export const recordTaxPayment = createServerFn({ method: "POST" })
   .middleware([requireAuth])
   .validator((data: unknown) => parseInput(PayInput, data))
@@ -292,12 +302,14 @@ export const recordTaxPayment = createServerFn({ method: "POST" })
         credit.status === "divida_ativa" ? "divida_ativa" : "corrente";
       await client.query(
         `insert into public.tax_payments
-           (id, tenant_id, credit_id, data_pagamento, valor, origem, created_by)
-         values ($1,$2,$3,$4,$5,$6,$7)`,
+           (id, tenant_id, credit_id, account_id, data_pagamento, valor, origem,
+            created_by)
+         values ($1,$2,$3,$4,$5,$6,$7,$8)`,
         [
           id,
           data.tenant_id,
           data.credit_id,
+          data.account_id,
           data.data_pagamento,
           data.valor,
           origem,
@@ -311,15 +323,47 @@ export const recordTaxPayment = createServerFn({ method: "POST" })
          where id=$1 and tenant_id=$2`,
         [data.credit_id, data.tenant_id, novoPago, quitado],
       );
+      const saldoConta = await applyMovement(client, {
+        tenantId: data.tenant_id,
+        accountId: data.account_id,
+        tipo: "ingresso",
+        dataMovimento: data.data_pagamento,
+        valor: data.valor,
+        historico: `Arrecadação de tributo (${origem})`,
+        transferRef: null,
+        actorId: context.userId,
+      });
+      // Sem roteiro cadastrado o helper devolve null e nada é escriturado.
+      await contabilizarEvento({
+        client,
+        tenantId: data.tenant_id,
+        exercicio: Number(data.data_pagamento.slice(0, 4)),
+        dataLancamento: data.data_pagamento,
+        eventCode: "arrecadacao",
+        valor: data.valor,
+        historico: `Arrecadação de tributo (${origem})`,
+        sourceRef: id,
+        actorId: context.userId,
+      });
       await recordAudit(client, {
         tenantId: data.tenant_id,
         actorId: context.userId,
         action: "pay",
         resource: "tax_credits",
         recordId: data.credit_id,
-        after: { valor: data.valor, quitado },
+        after: {
+          valor: data.valor,
+          quitado,
+          account_id: data.account_id,
+          saldo_apos: saldoConta,
+        },
       });
-      return { id, quitado, saldo: Number((saldo - data.valor).toFixed(2)) };
+      return {
+        id,
+        quitado,
+        saldo: Number((saldo - data.valor).toFixed(2)),
+        saldo_conta: saldoConta,
+      };
     });
   });
 

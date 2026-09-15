@@ -60,6 +60,7 @@ import { checkTaxClearance } from "@/lib/tax-clearance.functions";
 import { launchItbi } from "@/lib/itbi.functions";
 
 import { AppShell } from "@/components/AppShell";
+import { SelectContaTesouraria } from "@/components/SelectContaTesouraria";
 
 export const Route = createFileRoute("/tributos")({ component: Page });
 
@@ -159,6 +160,8 @@ function Content() {
   const [payOpen, setPayOpen] = useState(false);
   const [payCredit, setPayCredit] = useState<Credit | null>(null);
   const [payValor, setPayValor] = useState("");
+  // O4-18 — a conta que recebeu o tributo.
+  const [payConta, setPayConta] = useState("");
 
   const [iptuOpen, setIptuOpen] = useState(false);
   const [iptuLote, setIptuLote] = useState(false);
@@ -288,18 +291,19 @@ function Content() {
   };
 
   const submitPay = async () => {
-    if (!activeTenant || !payCredit) return;
+    if (!activeTenant || !payCredit || !payConta) return;
     setBusy(true);
     try {
       await pay({
         data: {
           tenant_id: activeTenant.id,
           credit_id: payCredit.id,
+          account_id: payConta,
           data_pagamento: hoje(),
           valor: Number(payValor),
         },
       });
-      toast.success("Arrecadação registrada");
+      toast.success("Arrecadação registrada e creditada na conta");
       setPayOpen(false);
       refresh();
     } catch (error) {
@@ -930,6 +934,7 @@ function Content() {
               {payCredit?.tributo} {payCredit?.exercicio} — saldo{" "}
               {payCredit ? brl(payCredit.saldo) : ""}
             </p>
+            <SelectContaTesouraria value={payConta} onChange={setPayConta} />
             <div>
               <Label>Valor</Label>
               <Input
@@ -941,7 +946,7 @@ function Content() {
             </div>
           </div>
           <DialogFooter>
-            <Button onClick={submitPay} disabled={busy}>
+            <Button onClick={submitPay} disabled={busy || !payConta}>
               Registrar
             </Button>
           </DialogFooter>

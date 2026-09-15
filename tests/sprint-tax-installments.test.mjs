@@ -20,6 +20,7 @@ import { createTestDb } from "./helpers/pglite.mjs";
 let db;
 let tenantId;
 let userId;
+let contaId;
 const fn = {};
 
 const dir = mkdtempSync(join(tmpdir(), "tax-inst-test-"));
@@ -121,6 +122,13 @@ before(async () => {
     [userId, `a-${userId}@t.local`],
   );
   await db.query("insert into public.profiles (id) values ($1)", [userId]);
+  // O4-18 — arrecadar credita uma conta de tesouraria: o teste precisa de uma.
+  contaId = randomUUID();
+  await db.query(
+    `insert into public.treasury_accounts (id, tenant_id, nome, tipo, status)
+     values ($1,$2,'Conta Unica','banco','ativa')`,
+    [contaId, tenantId],
+  );
   Object.assign(
     fn,
     await bundle("src/lib/tax-installments.functions.ts", "ti.mjs"),
@@ -140,6 +148,7 @@ test("rateia saldo em 3 parcelas com soma exata e quita ao fim", async () => {
     data: {
       tenant_id: tenantId,
       credit_id: creditId,
+      account_id: contaId,
       numero_parcelas: 3,
       data_acordo: "2025-01-10",
       primeiro_vencimento: "2025-02-10",
@@ -171,6 +180,7 @@ test("rateia saldo em 3 parcelas com soma exata e quita ao fim", async () => {
       data: {
         tenant_id: tenantId,
         installment_id: parcelas[i].id,
+        account_id: contaId,
         data_pagamento: "2025-02-11",
       },
       context: ctx(),
@@ -208,6 +218,7 @@ test("só crédito em dívida ativa é parcelável e parcela não paga duas veze
       data: {
         tenant_id: tenantId,
         credit_id: lancadoId,
+        account_id: contaId,
         numero_parcelas: 2,
         data_acordo: "2025-01-10",
         primeiro_vencimento: "2025-02-10",
@@ -222,6 +233,7 @@ test("só crédito em dívida ativa é parcelável e parcela não paga duas veze
     data: {
       tenant_id: tenantId,
       credit_id: creditId,
+      account_id: contaId,
       numero_parcelas: 2,
       data_acordo: "2025-01-10",
       primeiro_vencimento: "2025-02-10",
@@ -234,6 +246,7 @@ test("só crédito em dívida ativa é parcelável e parcela não paga duas veze
       data: {
         tenant_id: tenantId,
         credit_id: creditId,
+        account_id: contaId,
         numero_parcelas: 3,
         data_acordo: "2025-01-11",
         primeiro_vencimento: "2025-03-10",
@@ -253,6 +266,7 @@ test("só crédito em dívida ativa é parcelável e parcela não paga duas veze
     data: {
       tenant_id: tenantId,
       installment_id: primeira.id,
+      account_id: contaId,
       data_pagamento: "2025-02-11",
     },
     context: ctx(),
@@ -262,6 +276,7 @@ test("só crédito em dívida ativa é parcelável e parcela não paga duas veze
       data: {
         tenant_id: tenantId,
         installment_id: primeira.id,
+        account_id: contaId,
         data_pagamento: "2025-02-12",
       },
       context: ctx(),

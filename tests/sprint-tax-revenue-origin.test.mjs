@@ -22,6 +22,7 @@ import { createTestDb } from "./helpers/pglite.mjs";
 let db;
 let tenantId;
 let userId;
+let contaId;
 const fn = {};
 
 const dir = mkdtempSync(join(tmpdir(), "tax-origin-test-"));
@@ -113,6 +114,7 @@ const pay = (creditId, valor, data = "2026-04-10") =>
     data: {
       tenant_id: tenantId,
       credit_id: creditId,
+      account_id: contaId,
       data_pagamento: data,
       valor,
     },
@@ -138,6 +140,13 @@ before(async () => {
     [userId, `a-${userId}@t.local`],
   );
   await db.query("insert into public.profiles (id) values ($1)", [userId]);
+  // O4-18 — arrecadar credita uma conta de tesouraria: o teste precisa de uma.
+  contaId = randomUUID();
+  await db.query(
+    `insert into public.treasury_accounts (id, tenant_id, nome, tipo, status)
+     values ($1,$2,'Conta Unica','banco','ativa')`,
+    [contaId, tenantId],
+  );
   Object.assign(fn, await bundle("src/lib/taxes.functions.ts", "tx.mjs"));
   Object.assign(
     fn,
@@ -169,6 +178,7 @@ test("pagamento grava a origem; consolida corrente × dívida ativa por tributo 
     data: {
       tenant_id: tenantId,
       credit_id: parcelado,
+      account_id: contaId,
       numero_parcelas: 2,
       data_acordo: "2026-03-01",
       primeiro_vencimento: "2026-04-05",
@@ -183,6 +193,7 @@ test("pagamento grava a origem; consolida corrente × dívida ativa por tributo 
     data: {
       tenant_id: tenantId,
       installment_id: parcelas[0].id,
+      account_id: contaId,
       data_pagamento: "2026-04-05",
     },
     context: ctx(),

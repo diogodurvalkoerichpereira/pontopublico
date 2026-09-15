@@ -1847,6 +1847,37 @@ parar de funcionar, o primeiro teste ficaria verde sem checar nada. Verificado p
 reintroduzir o defeito derruba com o nome do arquivo e da função; desarmar o detector
 derruba o segundo.
 
+**O4-18 — Arrecadação passa a tocar o caixa e a contabilidade. ✅** Fecha o item (b) da
+auditoria financeira, o último dos três críticos. Receita e tributo arrecadados
+incrementavam `valor_arrecadado`/`valor_pago` e **não entravam em conta nenhuma**: nenhum
+`treasury_movements`, nenhum lançamento contábil. Três sintomas que pareciam problemas
+distintos tinham esta única causa: o caixa ficava parado em zero enquanto os relatórios
+mostravam receita; **toda ordem bancária era recusada por saldo insuficiente**, porque o
+dinheiro arrecadado nunca chegou à conta; e o `conciliado` da DFC era falso quase sempre,
+já que o fluxo de entrada não existia como movimento.
+
+`applyMovement` era função **privada** de `treasury.functions.ts` — e por isso a
+arrecadação não tinha como usá-la. Extraída para `src/lib/treasury.server.ts` (a regra do
+CLAUDE.md: helper de servidor não se exporta de `.functions.ts`). Os **três** caminhos de
+arrecadação passam a creditar a tesouraria e escriturar o evento `arrecadacao` na mesma
+transação: `recordRevenueCollection`, `recordTaxPayment` e `payInstallment` — deixar o
+terceiro de fora reabriria o buraco por uma porta lateral, no ente que cobra por
+parcelamento. `account_id` é **obrigatório** nos três: arrecadar sem dizer onde o dinheiro
+entrou era exatamente o defeito. Migration acrescenta os eventos `arrecadacao` e
+`arrecadacao_estorno` ao check e a coluna `account_id` em `revenue_collections`/
+`tax_payments` (nula nos registros históricos — eles não tocaram caixa nenhum e não há como
+adivinhar a conta). Sem roteiro contábil cadastrado, `contabilizarEvento` devolve null e
+nada é escriturado: o ente que ainda não configurou a contabilidade continua arrecadando —
+o movimento de tesouraria, esse, acontece sempre.
+
+Nas telas, novo `<SelectContaTesouraria>` compartilhado pelos três diálogos (`/receitas`,
+`/tributos`, `/parcelamentos`), para que um deles não volte a divergir dos outros; avisa
+quando não há conta ativa cadastrada. Quatro casos novos em `tests/sprint-revenue.test.mjs`
+(o caixa acompanha; o movimento fica ligado à conta; conta encerrada recusa; conta
+inexistente barra antes de gravar) — este último documenta o que **não** prova: o stub de
+`withTransaction` dos testes não faz ROLLBACK, então a atomicidade real é do
+`withTransaction` de produção, não deste arranjo. Verificado por mutação.
+
 ### Onda 5 — Apoio, controle e transparência (10-14 sem)
 
 Protocolo e processo eletrônico com ICP-Brasil · e-SIC/LAI · controle interno ·

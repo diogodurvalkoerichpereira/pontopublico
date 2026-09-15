@@ -21,6 +21,7 @@ import { createTestDb } from "./helpers/pglite.mjs";
 let db;
 let tenantId;
 let userId;
+let contaId;
 const fn = {};
 
 const dir = mkdtempSync(join(tmpdir(), "tax-payments-test-"));
@@ -122,6 +123,13 @@ before(async () => {
     [userId, `a-${userId}@t.local`],
   );
   await db.query("insert into public.profiles (id) values ($1)", [userId]);
+  // O4-18 — arrecadar credita uma conta de tesouraria: o teste precisa de uma.
+  contaId = randomUUID();
+  await db.query(
+    `insert into public.treasury_accounts (id, tenant_id, nome, tipo, status)
+     values ($1,$2,'Conta Unica','banco','ativa')`,
+    [contaId, tenantId],
+  );
   Object.assign(fn, await bundle("src/lib/taxes.functions.ts", "tax.mjs"));
 });
 
@@ -136,6 +144,7 @@ async function pay(creditId, valor, data) {
     data: {
       tenant_id: tenantId,
       credit_id: creditId,
+      account_id: contaId,
       valor,
       data_pagamento: data,
     },
