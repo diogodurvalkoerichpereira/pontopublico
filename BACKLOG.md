@@ -1878,6 +1878,31 @@ inexistente barra antes de gravar) — este último documenta o que **não** pro
 `withTransaction` dos testes não faz ROLLBACK, então a atomicidade real é do
 `withTransaction` de produção, não deste arranjo. Verificado por mutação.
 
+**O6-05 — Menu recolhível e "Como fazer" em cada tela. ✅** Duas melhorias de uso,
+pedidas depois de o sistema entrar no ar.
+
+**Menu.** O lateral tem 11 seções e passava de uma tela de altura: chegar a "Inteligência"
+exigia rolar por tudo. Cada cabeçalho de grupo virou botão com seta; o estado vive em
+`localStorage`, para o menu não se reabrir a cada navegação. Duas decisões que evitam o
+efeito colateral óbvio: o grupo da **página aberta nunca aparece fechado** (o usuário
+perderia de vista onde está) e, com a barra recolhida em ícones, não há sanfona — não há
+cabeçalho para clicar.
+
+**"Como fazer".** Cada tela ganha um painel recolhido no topo com o roteiro das suas
+operações — cadastrar, lançar, inscrever, alterar, cancelar — em `src/lib/ajuda-telas.ts`
+(**37 telas**). O painel mora no `AppShell`, que já sabe a rota: nenhuma das 60 rotas
+precisou ser tocada, e rota com parâmetro (`/contratos/abc`) aproveita a ajuda da tela-mãe.
+O texto é o que o usuário precisa saber **antes** de clicar — a ordem dos passos, o
+pré-requisito que costuma faltar ("sem conta de tesouraria cadastrada não há como
+arrecadar"), e o que não tem volta ("a marcação de ponto não tem edição nem exclusão") —,
+nunca o que a tela já diz sozinha: repetir o óbvio faz o painel deixar de ser lido.
+
+Texto de ajuda é a documentação que apodrece mais rápido, porque nada quebra quando ela
+fica errada. `tests/ajuda-telas.test.mjs` fecha as duas frentes: ajuda **órfã** (escrita
+para rota renomeada ou removida — o painel simplesmente nunca apareceria) e passo
+incompleto. Verificado por mutação: apontar uma entrada para rota inexistente derruba,
+nomeando-a.
+
 ### Onda 5 — Apoio, controle e transparência (10-14 sem)
 
 Protocolo e processo eletrônico com ICP-Brasil · e-SIC/LAI · controle interno ·

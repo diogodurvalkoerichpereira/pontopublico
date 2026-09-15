@@ -1,6 +1,7 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { ComoFazer } from "@/components/ComoFazer";
 import {
   LogOut,
   FileText,
@@ -609,6 +610,36 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return acc;
   }, {});
 
+  // Grupos recolhíveis: o menu tem 11 seções e passava de uma tela de altura,
+  // então chegar a "Inteligência" exigia rolar por tudo. O estado vive em
+  // localStorage para o menu não se reabrir a cada navegação.
+  const [gruposFechados, setGruposFechados] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const salvo = window.localStorage.getItem("menu-grupos-fechados");
+      return salvo ? (JSON.parse(salvo) as string[]) : [];
+    } catch {
+      // localStorage pode lançar (janela anônima, cookies bloqueados); o menu
+      // aberto é o padrão seguro.
+      return [];
+    }
+  });
+  const alternarGrupo = (secao: string) =>
+    setGruposFechados((atual) => {
+      const proximo = atual.includes(secao)
+        ? atual.filter((s) => s !== secao)
+        : [...atual, secao];
+      try {
+        window.localStorage.setItem(
+          "menu-grupos-fechados",
+          JSON.stringify(proximo),
+        );
+      } catch {
+        // Sem persistência o menu ainda funciona nesta sessão.
+      }
+      return proximo;
+    });
+
   const homeTo = isAdmin ? "/admin/usuarios" : isRh ? "/rh" : "/app";
 
   // Iniciais a partir do e-mail
@@ -822,43 +853,62 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           }}
         >
           <nav className="flex-1 overflow-y-auto pt-3">
-            {Object.entries(sections).map(([section, secItems], idx) => (
-              <div key={section}>
-                {sidebarOpen ? (
-                  <p
-                    className={`mb-1 px-5 py-1.5 text-[10px] font-bold uppercase tracking-widest ${idx > 0 ? "mt-3 border-t" : ""}`}
-                    style={{
-                      color: "rgba(230,224,240,0.4)",
-                      borderColor: idx > 0 ? AMBER : undefined,
-                    }}
-                  >
-                    {section}
-                  </p>
-                ) : idx > 0 ? (
-                  <div
-                    className="my-1 border-t"
-                    style={{ borderColor: AMBER }}
-                  />
-                ) : null}
-                <div className="space-y-0.5">
-                  {secItems.map((item) => (
-                    <NavLinkItem
-                      key={item.to}
-                      item={item}
-                      active={isActive(item.to)}
-                      collapsed={!sidebarOpen}
-                      onNavigate={() => {
-                        if (
-                          typeof window !== "undefined" &&
-                          window.innerWidth < 768
-                        )
-                          setSidebarOpen(false);
+            {Object.entries(sections).map(([section, secItems], idx) => {
+              // O grupo da página aberta nunca aparece fechado: o usuário
+              // perderia de vista onde está.
+              const temAtivo = secItems.some((i) => isActive(i.to));
+              const fechado =
+                sidebarOpen && !temAtivo && gruposFechados.includes(section);
+              return (
+                <div key={section}>
+                  {sidebarOpen ? (
+                    <button
+                      type="button"
+                      onClick={() => alternarGrupo(section)}
+                      aria-expanded={!fechado}
+                      className={`mb-1 flex w-full items-center justify-between px-5 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-colors ${idx > 0 ? "mt-3 border-t" : ""}`}
+                      style={{
+                        color: "rgba(230,224,240,0.4)",
+                        borderColor: idx > 0 ? AMBER : undefined,
                       }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.color = "rgba(230,224,240,0.85)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.color = "rgba(230,224,240,0.4)";
+                      }}
+                    >
+                      <span>{section}</span>
+                      <ChevronDown
+                        className={`size-3.5 flex-shrink-0 transition-transform ${fechado ? "-rotate-90" : ""}`}
+                      />
+                    </button>
+                  ) : idx > 0 ? (
+                    <div
+                      className="my-1 border-t"
+                      style={{ borderColor: AMBER }}
                     />
-                  ))}
+                  ) : null}
+                  <div className={`space-y-0.5 ${fechado ? "hidden" : ""}`}>
+                    {secItems.map((item) => (
+                      <NavLinkItem
+                        key={item.to}
+                        item={item}
+                        active={isActive(item.to)}
+                        collapsed={!sidebarOpen}
+                        onNavigate={() => {
+                          if (
+                            typeof window !== "undefined" &&
+                            window.innerWidth < 768
+                          )
+                            setSidebarOpen(false);
+                        }}
+                      />
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </nav>
 
           <div style={{ borderTop: `1px solid ${AMBER}` }}>
@@ -910,7 +960,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             ))}
           </div>
 
-          <main className="flex-1 overflow-auto p-4 md:p-6">{children}</main>
+          <main className="flex-1 overflow-auto p-4 md:p-6">
+            <ComoFazer />
+            {children}
+          </main>
         </div>
       </div>
     </div>
