@@ -1933,6 +1933,25 @@ todos convertidos. Rede permanente `tests/campos-com-opcoes.test.mjs`: falha o C
 que o código de um ente **não vaza** para outro e que regravar atualiza em vez de duplicar.
 Verificados por mutação.
 
+**O6-05b — O grupo do menu da página aberta não fechava. ✅** Defeito introduzido pelo
+próprio O6-05. A regra era `!temAtivo && fechados.includes(secao)`: o grupo que contém a
+página aberta era forçado a ficar visível. A intenção era não deixar o usuário perder de
+vista onde está — mas o efeito prático era o cabeçalho desse grupo **não responder ao
+clique**. Estando numa tela de folha, clicar em "Folha de Pagamento" não fazia nada, e um
+menu que não responde parece quebrado. Proteger o usuário de si mesmo custou mais do que o
+problema que evitava.
+
+As duas coisas passam a ser resolvidas em lugares diferentes: **o clique sempre vence**, e a
+abertura automática acontece só quando a **navegação** entra num grupo fechado — que é
+quando o item ativo ficaria escondido de verdade.
+
+A decisão saiu do componente para `src/lib/menu-grupos.ts`, um módulo puro, porque foi ali
+que o erro morava e o projeto **não tem renderizador de DOM** para testar o `AppShell`.
+`tests/menu-grupos.test.mjs` (7 casos) cobre o caso quebrado, o reabrir, o isolamento entre
+grupos, a ausência de sanfona com a barra em ícones, e a abertura pela navegação — que
+devolve a mesma referência quando nada muda, para não disparar re-render a cada troca de
+tela. Verificado por mutação: repor o `!temAtivo` derruba exatamente o primeiro caso.
+
 ### Onda 5 — Apoio, controle e transparência (10-14 sem)
 
 Protocolo e processo eletrônico com ICP-Brasil · e-SIC/LAI · controle interno ·

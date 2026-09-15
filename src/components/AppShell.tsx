@@ -3,6 +3,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { ComoFazer } from "@/components/ComoFazer";
 import {
+  abrirGrupoDaNavegacao,
+  alternarGrupoFechado,
+  grupoFechado,
+} from "@/lib/menu-grupos";
+import {
   LogOut,
   FileText,
   ShieldCheck,
@@ -613,6 +618,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // Grupos recolhíveis: o menu tem 11 seções e passava de uma tela de altura,
   // então chegar a "Inteligência" exigia rolar por tudo. O estado vive em
   // localStorage para o menu não se reabrir a cada navegação.
+  //
+  // O clique SEMPRE vence, inclusive no grupo da página aberta. A primeira
+  // versão forçava esse grupo a ficar aberto para o usuário não perder de vista
+  // onde estava — mas isso fazia o cabeçalho dele não responder ao clique, que é
+  // pior: o menu parecia quebrado. A intenção se resolve no lugar certo, abaixo:
+  // o grupo se abre sozinho quando a NAVEGAÇÃO entra nele.
   const [gruposFechados, setGruposFechados] = useState<string[]>(() => {
     if (typeof window === "undefined") return [];
     try {
@@ -624,21 +635,36 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       return [];
     }
   });
+  const persistirGrupos = (proximo: string[]) => {
+    try {
+      window.localStorage.setItem(
+        "menu-grupos-fechados",
+        JSON.stringify(proximo),
+      );
+    } catch {
+      // Sem persistência o menu ainda funciona nesta sessão.
+    }
+    return proximo;
+  };
   const alternarGrupo = (secao: string) =>
+    setGruposFechados((atual) =>
+      persistirGrupos(alternarGrupoFechado(atual, secao)),
+    );
+
+  // Navegar para uma tela de um grupo fechado abre esse grupo — senão o item
+  // ativo ficaria escondido e o usuário perderia a referência de onde está.
+  // Vale só na navegação: fechar pelo cabeçalho continua fechando.
+  const secaoAtiva = Object.entries(sections).find(([, secItems]) =>
+    secItems.some((i) => isActive(i.to)),
+  )?.[0];
+  useEffect(() => {
+    if (!secaoAtiva) return;
     setGruposFechados((atual) => {
-      const proximo = atual.includes(secao)
-        ? atual.filter((s) => s !== secao)
-        : [...atual, secao];
-      try {
-        window.localStorage.setItem(
-          "menu-grupos-fechados",
-          JSON.stringify(proximo),
-        );
-      } catch {
-        // Sem persistência o menu ainda funciona nesta sessão.
-      }
-      return proximo;
+      const proximo = abrirGrupoDaNavegacao(atual, secaoAtiva);
+      return proximo === atual ? atual : persistirGrupos([...proximo]);
     });
+    // Só quando a navegação muda de seção — não a cada clique no cabeçalho.
+  }, [secaoAtiva]);
 
   const homeTo = isAdmin ? "/admin/usuarios" : isRh ? "/rh" : "/app";
 
@@ -854,11 +880,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         >
           <nav className="flex-1 overflow-y-auto pt-3">
             {Object.entries(sections).map(([section, secItems], idx) => {
-              // O grupo da página aberta nunca aparece fechado: o usuário
-              // perderia de vista onde está.
-              const temAtivo = secItems.some((i) => isActive(i.to));
-              const fechado =
-                sidebarOpen && !temAtivo && gruposFechados.includes(section);
+              const fechado = grupoFechado({
+                barraAberta: sidebarOpen,
+                secao: section,
+                fechados: gruposFechados,
+              });
               return (
                 <div key={section}>
                   {sidebarOpen ? (
